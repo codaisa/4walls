@@ -1,0 +1,25 @@
+{
+  "name": "4walls",
+  "private": true,
+  "version": "0.1.0",
+  "description": "4Walls — 3D multiplayer arena bomb battler for the browser",
+  "packageManager": "pnpm@10.34.9",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @4walls/web --filter @4walls/game-server dev",
+    "dev:web": "pnpm --filter @4walls/web dev",
+    "dev:server": "pnpm --filter @4walls/game-server dev",
+    "build": "pnpm --filter @4walls/web build",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "start": "pnpm --filter @4walls/game-server start:prod",
+    "e2e": "pnpm --filter @4walls/web e2e"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
+    "meshoptimizer": "^1.3.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

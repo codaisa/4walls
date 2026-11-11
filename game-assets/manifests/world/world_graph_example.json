@@ -1,0 +1,33 @@
+{
+  "note": "Art-side example of how chunks chain into a continuous world. Generation logic lives in the game, not here.",
+  "regions": [
+    {
+      "biome": "volcanic_lands",
+      "chunks": [
+        "vol_exploration_01",
+        "vol_exploration_01*mirrored",
+        "vol_boss_arena_01 (planned)"
+      ]
+    },
+    {
+      "biome": "transition:volcanic_lands>enchanted_forest",
+      "chunks": [
+        "trans_vol_forest_01"
+      ]
+    },
+    {
+      "biome": "enchanted_forest",
+      "chunks": [
+        "for_exploration_01 (planned)"
+      ]
+    }
+  ],
+  "rules": {
+    "chunkSize": [
+      16,
+      16
+    ],
+    "connectors": "edge cells listed in each chunk's 'connections'; neighbours must open the matching cells",
+    "transitions": "a biome change always goes through a transition chunk whose west/east regions match each biome"
+  }
+}

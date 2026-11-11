@@ -1,0 +1,116 @@
+{
+  "id": "trans_vol_forest_01",
+  "biome": "transition:volcanic_lands>enchanted_forest",
+  "type": "transition",
+  "dimensions": [
+    16,
+    16
+  ],
+  "tileSize": 1,
+  "origin": "south-west corner; cell (x, y) center = (x + 0.5, y + 0.5)",
+  "rowsOrder": "north (y=15) to south (y=0)",
+  "layout": [
+    "RrRrRTrbFbFbFbFb",
+    "r.:.,mm.mgggg.gF",
+    "R~..mTmm.gMgg.gb",
+    "r..C.m.SmgggbggF",
+    "R:.~.m.mgg.Fg.gb",
+    "r..m..Tm.gMg.ggF",
+    "R.~.m.mmgNggg.gb",
+    "..:..m.mmgg.gg..",
+    "..2.mm.m.gg.ggg.",
+    "R:.m.mTmgg.b.ggF",
+    "r.~..m.mggMggg.b",
+    "R..C.m.mg.gFgggF",
+    "r.:.,mmTmgg.Mggb",
+    "R~..m.m.mgggg.gF",
+    "r..:.m.mgg.bgg.b",
+    "RrRrRrbFbFbFbFbF"
+  ],
+  "legend": {
+    "ground": {
+      ":": "vol_ground_basalt_b",
+      "~": "vol_ground_cracked",
+      ",": "vol_ground_ash",
+      "L": "vol_lava_tile",
+      "m": "trans_ground_mossy",
+      "g": "for_ground_grass"
+    },
+    "objects": {
+      "P": "vol_solid_column",
+      "C": "crate_wood",
+      "c": "crate_wood_damaged",
+      "S": "stone_block",
+      "s": "stone_block_damaged",
+      "R": "vol_rock_a",
+      "r": "vol_rock_b",
+      "O": "vol_obsidian_cluster",
+      "V": "hz_fire_vent_active",
+      "v": "hz_fire_vent_idle",
+      "w": "hz_fire_vent_warning",
+      "B": "bomb_classic",
+      "1": "pu_bomb_up",
+      "2": "pu_fire_up",
+      "3": "pu_speed_up",
+      "T": "trans_dead_tree",
+      "M": "for_mushroom_giant",
+      "F": "for_tree_round",
+      "b": "for_bush",
+      "N": "sign_post_forest"
+    },
+    "default": "region ground (see regions)"
+  },
+  "connections": {
+    "west": {
+      "cells": [
+        [
+          0,
+          7
+        ],
+        [
+          0,
+          8
+        ]
+      ],
+      "to": [
+        "volcanic_lands"
+      ],
+      "gate": "gate_arch_vol_forest"
+    },
+    "east": {
+      "cells": [
+        [
+          15,
+          7
+        ],
+        [
+          15,
+          8
+        ]
+      ],
+      "to": [
+        "enchanted_forest"
+      ],
+      "gate": null
+    }
+  },
+  "assets": [
+    "crate_wood",
+    "for_bush",
+    "for_ground_grass",
+    "for_mushroom_giant",
+    "for_tree_round",
+    "pu_fire_up",
+    "sign_post_forest",
+    "stone_block",
+    "trans_dead_tree",
+    "trans_ground_mossy",
+    "vol_ground_ash",
+    "vol_ground_basalt_b",
+    "vol_ground_cracked",
+    "vol_rock_a",
+    "vol_rock_b"
+  ],
+  "model": "/assets/world-chunks/trans_vol_forest_01.glb",
+  "preview": "previews/environments/phase1_world_overview.png"
+}

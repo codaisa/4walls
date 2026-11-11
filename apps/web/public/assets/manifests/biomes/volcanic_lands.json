@@ -1,0 +1,57 @@
+{
+  "id": "volcanic_lands",
+  "name": "Terras Vulcânicas",
+  "palette": {
+    "ground": "#5b4c66",
+    "accent": "#ff5a0a",
+    "secondary": "#a38877",
+    "sky": "#2a1a1e"
+  },
+  "ground": [
+    "vol_ground_basalt_a",
+    "vol_ground_basalt_b",
+    "vol_ground_cracked",
+    "vol_ground_ash",
+    "vol_lava_tile"
+  ],
+  "solid": [
+    "vol_solid_column",
+    "vol_rock_a",
+    "vol_rock_b"
+  ],
+  "destructible": [
+    "crate_wood",
+    "stone_block"
+  ],
+  "props": [
+    "vol_obsidian_cluster"
+  ],
+  "hazards": [
+    "hz_fire_vent_idle",
+    "hz_fire_vent_warning",
+    "hz_fire_vent_active",
+    "hz_fire_vent_disabled"
+  ],
+  "enemies": [
+    "magmite (in game)",
+    "lava_monster (planned)"
+  ],
+  "boss": {
+    "id": "golem_vulcanico",
+    "status": "planned (Phase 6)",
+    "arena": "vol_boss_arena_01 (planned)"
+  },
+  "landmark": "erupting caldera (planned)",
+  "transitions": [
+    {
+      "to": "enchanted_forest",
+      "via": "trans_vol_forest_01",
+      "assets": [
+        "trans_ground_mossy",
+        "trans_dead_tree",
+        "gate_arch_vol_forest"
+      ]
+    }
+  ],
+  "music": "volcano"
+}

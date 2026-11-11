@@ -1,0 +1,40 @@
+{
+  "palettes": {
+    "rubro": {
+      "primary": "#ff5a3c",
+      "secondary": "#ffd23f",
+      "accent": "#2a2130",
+      "outfit": "#c2412b"
+    },
+    "celeste": {
+      "primary": "#2fb8ff",
+      "secondary": "#e8f7ff",
+      "accent": "#1f3a66",
+      "outfit": "#2479c7"
+    },
+    "lima": {
+      "primary": "#7ddc3a",
+      "secondary": "#fff3a0",
+      "accent": "#2e4a1d",
+      "outfit": "#4f9a2a"
+    },
+    "ametista": {
+      "primary": "#b46bff",
+      "secondary": "#ffd6ff",
+      "accent": "#3a2160",
+      "outfit": "#7b3fd1"
+    },
+    "sol": {
+      "primary": "#ffb02e",
+      "secondary": "#fff1d0",
+      "accent": "#6a2e14",
+      "outfit": "#e2701c"
+    }
+  },
+  "slots": [
+    "primary",
+    "secondary",
+    "accent",
+    "outfit"
+  ]
+}

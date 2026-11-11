@@ -1,0 +1,106 @@
+{
+  "id": "vol_exploration_01",
+  "biome": "volcanic_lands",
+  "type": "exploration",
+  "dimensions": [
+    16,
+    16
+  ],
+  "tileSize": 1,
+  "origin": "south-west corner; cell (x, y) center = (x + 0.5, y + 0.5)",
+  "rowsOrder": "north (y=15) to south (y=0)",
+  "layout": [
+    "RrRPRrRRrRPRrRRr",
+    "r..:.,,.:.CC.:.R",
+    "R.P..~...O..C.Pr",
+    "r.C:.LLL..S...rR",
+    "R..PLLLL.C..1..r",
+    "rC..~LL..:.CC..R",
+    "R.P..~..P.V..P.r",
+    "r..S..~..B..~...",
+    "RO...:.2..P.....",
+    "r..CC..:..s..C.R",
+    "R.PT...P.....P.r",
+    "r.:..O..c..~3..R",
+    "R..P.SS..P...wPr",
+    "r..,,..C..S..:.R",
+    "r..P....:..O...R",
+    "RrRrRPRrRRrRPRrR"
+  ],
+  "legend": {
+    "ground": {
+      ":": "vol_ground_basalt_b",
+      "~": "vol_ground_cracked",
+      ",": "vol_ground_ash",
+      "L": "vol_lava_tile",
+      "m": "trans_ground_mossy",
+      "g": "for_ground_grass"
+    },
+    "objects": {
+      "P": "vol_solid_column",
+      "C": "crate_wood",
+      "c": "crate_wood_damaged",
+      "S": "stone_block",
+      "s": "stone_block_damaged",
+      "R": "vol_rock_a",
+      "r": "vol_rock_b",
+      "O": "vol_obsidian_cluster",
+      "V": "hz_fire_vent_active",
+      "v": "hz_fire_vent_idle",
+      "w": "hz_fire_vent_warning",
+      "B": "bomb_classic",
+      "1": "pu_bomb_up",
+      "2": "pu_fire_up",
+      "3": "pu_speed_up",
+      "T": "trans_dead_tree",
+      "M": "for_mushroom_giant",
+      "F": "for_tree_round",
+      "b": "for_bush",
+      "N": "sign_post_forest"
+    },
+    "default": "region ground (see regions)"
+  },
+  "connections": {
+    "east": {
+      "cells": [
+        [
+          15,
+          7
+        ],
+        [
+          15,
+          8
+        ]
+      ],
+      "to": [
+        "transition:volcanic_lands>enchanted_forest",
+        "volcanic_lands"
+      ],
+      "gate": "gate_arch_vol_forest"
+    }
+  },
+  "assets": [
+    "bomb_classic",
+    "crate_wood",
+    "crate_wood_damaged",
+    "hz_fire_vent_active",
+    "hz_fire_vent_warning",
+    "pu_bomb_up",
+    "pu_fire_up",
+    "pu_speed_up",
+    "stone_block",
+    "stone_block_damaged",
+    "trans_dead_tree",
+    "vol_ground_ash",
+    "vol_ground_basalt_a",
+    "vol_ground_basalt_b",
+    "vol_ground_cracked",
+    "vol_lava_tile",
+    "vol_obsidian_cluster",
+    "vol_rock_a",
+    "vol_rock_b",
+    "vol_solid_column"
+  ],
+  "model": "/assets/world-chunks/vol_exploration_01.glb",
+  "preview": "previews/environments/phase1_world_overview.png"
+}

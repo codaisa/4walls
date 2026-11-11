@@ -1,0 +1,100 @@
+[
+    {
+        "id":  "dark_rock",
+        "library":  "Poly Haven",
+        "kind":  "texture",
+        "url":  "https://polyhaven.com/a/dark_rock",
+        "authors":  [
+                        "Amal Kumar"
+                    ],
+        "license":  "CC0 1.0",
+        "commercial":  true,
+        "attribution":  "not required",
+        "files":  [
+                      "dark_rock_diff_1k.jpg",
+                      "dark_rock_nor_gl_1k.jpg",
+                      "dark_rock_rough_1k.jpg"
+                  ],
+        "resolution":  "1k",
+        "downloaded":  "2026-11-11"
+    },
+    {
+        "id":  "brown_planks_03",
+        "library":  "Poly Haven",
+        "kind":  "texture",
+        "url":  "https://polyhaven.com/a/brown_planks_03",
+        "authors":  [
+                        "Rob Tuytel"
+                    ],
+        "license":  "CC0 1.0",
+        "commercial":  true,
+        "attribution":  "not required",
+        "files":  [
+                      "brown_planks_03_diff_1k.jpg",
+                      "brown_planks_03_nor_gl_1k.jpg",
+                      "brown_planks_03_rough_1k.jpg"
+                  ],
+        "resolution":  "1k",
+        "downloaded":  "2026-11-11"
+    },
+    {
+        "id":  "mossy_rock",
+        "library":  "Poly Haven",
+        "kind":  "texture",
+        "url":  "https://polyhaven.com/a/mossy_rock",
+        "authors":  [
+                        "Rob Tuytel"
+                    ],
+        "license":  "CC0 1.0",
+        "commercial":  true,
+        "attribution":  "not required",
+        "files":  [
+                      "mossy_rock_diff_1k.jpg",
+                      "mossy_rock_nor_gl_1k.jpg",
+                      "mossy_rock_rough_1k.jpg"
+                  ],
+        "resolution":  "1k",
+        "downloaded":  "2026-11-11"
+    },
+    {
+        "id":  "belfast_sunset_puresky",
+        "library":  "Poly Haven",
+        "kind":  "hdri",
+        "url":  "https://polyhaven.com/a/belfast_sunset_puresky",
+        "authors":  [
+                        "Greg Zaal",
+                        "Dimitrios Savva",
+                        "Jarod Guest"
+                    ],
+        "license":  "CC0 1.0",
+        "commercial":  true,
+        "attribution":  "not required",
+        "files":  [
+                      "belfast_sunset_puresky_1k.hdr"
+                  ],
+        "resolution":  "1k",
+        "downloaded":  "2026-11-11"
+    },
+    {
+        "id":  "Lava004",
+        "library":  "ambientCG",
+        "kind":  "texture",
+        "url":  "https://ambientcg.com/view?id=Lava004",
+        "authors":  [
+                        "ambientCG (Lennart Demes)"
+                    ],
+        "license":  "CC0 1.0",
+        "commercial":  true,
+        "attribution":  "not required",
+        "files":  [
+                      "Lava004_1K-JPG_Color.jpg",
+                      "Lava004_1K-JPG_Displacement.jpg",
+                      "Lava004_1K-JPG_Emission.jpg",
+                      "Lava004_1K-JPG_NormalGL.jpg",
+                      "Lava004_1K-JPG_Roughness.jpg"
+                  ],
+        "resolution":  "1K",
+        "downloaded":  "2026-11-11",
+        "note":  "Pack also shipped .blend/.usdc/.tres/.mtlx/NormalDX/preview files; removed unused (only the JPG maps are kept)."
+    }
+]

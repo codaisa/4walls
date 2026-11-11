@@ -1,0 +1,36 @@
+# Production: game server + Caddy (automatic HTTPS / wss via Let's Encrypt).
+#   1. Point your domain's DNS (A/AAAA record) at this machine; open ports 80 and 443.
+#   2. DOMAIN=jogo.seudominio.com docker compose up -d --build
+#   3. Open https://jogo.seudominio.com
+services:
+  game:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: "2567"
+      DATA_FILE: /data/accounts.json
+    volumes:
+      - game-data:/data
+    expose:
+      - "2567"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - game
+    environment:
+      DOMAIN: ${DOMAIN:?defina DOMAIN, ex.: DOMAIN=jogo.exemplo.com}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  game-data:
+  caddy-data:
+  caddy-config:

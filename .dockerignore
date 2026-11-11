@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+.git
+.claude
+.turbo
+coverage
+playwright-report
+test-results
+game-assets
+tools
+apps/game-server/data
+**/*.log

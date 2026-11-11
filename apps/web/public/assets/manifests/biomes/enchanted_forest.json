@@ -1,0 +1,29 @@
+{
+  "id": "enchanted_forest",
+  "name": "Floresta Encantada",
+  "palette": {
+    "ground": "#6fae3e",
+    "accent": "#d83a52",
+    "secondary": "#7cc24a",
+    "sky": "#132219"
+  },
+  "ground": [
+    "for_ground_grass"
+  ],
+  "props": [
+    "for_tree_round",
+    "for_bush",
+    "for_mushroom_giant"
+  ],
+  "destructible": [
+    "crate_wood"
+  ],
+  "status": "transition pieces done; full kit in art Phase 5",
+  "transitions": [
+    {
+      "to": "volcanic_lands",
+      "via": "trans_vol_forest_01"
+    }
+  ],
+  "music": "forest"
+}

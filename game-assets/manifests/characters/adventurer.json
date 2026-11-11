@@ -1,0 +1,61 @@
+{
+  "id": "adventurer",
+  "category": "character",
+  "skeleton": "4W_Rig",
+  "bones": [
+    "root",
+    "hips",
+    "chest",
+    "head",
+    "upper_arm.L",
+    "forearm.L",
+    "hand.L",
+    "thigh.L",
+    "shin.L",
+    "foot.L",
+    "upper_arm.R",
+    "forearm.R",
+    "hand.R",
+    "thigh.R",
+    "shin.R",
+    "foot.R"
+  ],
+  "attachments": {
+    "headgear": "head",
+    "face": "head",
+    "back": "chest",
+    "neck": "chest",
+    "waist": "hips",
+    "hand.L": "hand.L",
+    "hand.R": "hand.R"
+  },
+  "model": "/assets/characters/base/adventurer_base.glb",
+  "tris": 7396,
+  "animations": [
+    "Idle",
+    "Walk",
+    "Run",
+    "PlaceBomb",
+    "Hit",
+    "Victory",
+    "Defeat",
+    "Cast"
+  ],
+  "materialSlots": {
+    "Helmet": "primary",
+    "Glove": "secondary",
+    "Accent": "accent",
+    "Outfit": "outfit",
+    "Suit": "fixed (under-suit)"
+  },
+  "defaults": {
+    "headgear": "helmet_classic",
+    "face": "face_happy",
+    "clothing": "outfit_jumpsuit",
+    "back": null,
+    "accessories": []
+  },
+  "height": 1.22,
+  "origin": "center of the feet",
+  "license": "original (4Walls)"
+}

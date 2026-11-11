@@ -1,0 +1,231 @@
+{
+  "totalKbBefore": 8777,
+  "totalKbAfter": 5221,
+  "assets": [
+    {
+      "asset": "blocks/crate_wood.glb",
+      "kbBefore": 271,
+      "kbAfter": 170
+    },
+    {
+      "asset": "blocks/crate_wood_damaged.glb",
+      "kbBefore": 255,
+      "kbAfter": 165
+    },
+    {
+      "asset": "blocks/crate_wood_fragments.glb",
+      "kbBefore": 164,
+      "kbAfter": 133
+    },
+    {
+      "asset": "blocks/stone_block.glb",
+      "kbBefore": 147,
+      "kbAfter": 121
+    },
+    {
+      "asset": "blocks/stone_block_damaged.glb",
+      "kbBefore": 161,
+      "kbAfter": 127
+    },
+    {
+      "asset": "blocks/vol_solid_column.glb",
+      "kbBefore": 138,
+      "kbAfter": 124
+    },
+    {
+      "asset": "bombs/bomb_classic.glb",
+      "kbBefore": 131,
+      "kbAfter": 44
+    },
+    {
+      "asset": "characters/accessories/acc_scarf.glb",
+      "kbBefore": 90,
+      "kbAfter": 24
+    },
+    {
+      "asset": "characters/back/back_bombpack.glb",
+      "kbBefore": 169,
+      "kbAfter": 46
+    },
+    {
+      "asset": "characters/back/back_rocketpack.glb",
+      "kbBefore": 133,
+      "kbAfter": 37
+    },
+    {
+      "asset": "characters/base/adventurer_base.glb",
+      "kbBefore": 364,
+      "kbAfter": 147
+    },
+    {
+      "asset": "characters/clothing/outfit_armor.glb",
+      "kbBefore": 268,
+      "kbAfter": 60
+    },
+    {
+      "asset": "characters/clothing/outfit_hoodie.glb",
+      "kbBefore": 127,
+      "kbAfter": 35
+    },
+    {
+      "asset": "characters/clothing/outfit_jumpsuit.glb",
+      "kbBefore": 121,
+      "kbAfter": 35
+    },
+    {
+      "asset": "characters/faces/face_angry.glb",
+      "kbBefore": 119,
+      "kbAfter": 34
+    },
+    {
+      "asset": "characters/faces/face_happy.glb",
+      "kbBefore": 143,
+      "kbAfter": 42
+    },
+    {
+      "asset": "characters/faces/face_surprised.glb",
+      "kbBefore": 133,
+      "kbAfter": 41
+    },
+    {
+      "asset": "characters/headgear/helmet_classic.glb",
+      "kbBefore": 276,
+      "kbAfter": 65
+    },
+    {
+      "asset": "characters/headgear/helmet_pilot.glb",
+      "kbBefore": 361,
+      "kbAfter": 84
+    },
+    {
+      "asset": "characters/headgear/helmet_wizard.glb",
+      "kbBefore": 149,
+      "kbAfter": 35
+    },
+    {
+      "asset": "environments/gate_arch_vol_forest.glb",
+      "kbBefore": 353,
+      "kbAfter": 296
+    },
+    {
+      "asset": "ground/for_ground_grass.glb",
+      "kbBefore": 28,
+      "kbAfter": 10
+    },
+    {
+      "asset": "ground/trans_ground_mossy.glb",
+      "kbBefore": 168,
+      "kbAfter": 157
+    },
+    {
+      "asset": "ground/vol_ground_ash.glb",
+      "kbBefore": 103,
+      "kbAfter": 102
+    },
+    {
+      "asset": "ground/vol_ground_basalt_a.glb",
+      "kbBefore": 105,
+      "kbAfter": 104
+    },
+    {
+      "asset": "ground/vol_ground_basalt_b.glb",
+      "kbBefore": 131,
+      "kbAfter": 114
+    },
+    {
+      "asset": "ground/vol_ground_cracked.glb",
+      "kbBefore": 136,
+      "kbAfter": 135
+    },
+    {
+      "asset": "ground/vol_lava_tile.glb",
+      "kbBefore": 136,
+      "kbAfter": 137
+    },
+    {
+      "asset": "hazards/hz_fire_vent_active.glb",
+      "kbBefore": 204,
+      "kbAfter": 134
+    },
+    {
+      "asset": "hazards/hz_fire_vent_disabled.glb",
+      "kbBefore": 136,
+      "kbAfter": 114
+    },
+    {
+      "asset": "hazards/hz_fire_vent_idle.glb",
+      "kbBefore": 136,
+      "kbAfter": 114
+    },
+    {
+      "asset": "hazards/hz_fire_vent_warning.glb",
+      "kbBefore": 140,
+      "kbAfter": 116
+    },
+    {
+      "asset": "powerups/pu_bomb_up.glb",
+      "kbBefore": 97,
+      "kbAfter": 32
+    },
+    {
+      "asset": "powerups/pu_fire_up.glb",
+      "kbBefore": 54,
+      "kbAfter": 20
+    },
+    {
+      "asset": "powerups/pu_speed_up.glb",
+      "kbBefore": 67,
+      "kbAfter": 21
+    },
+    {
+      "asset": "props/for_bush.glb",
+      "kbBefore": 9,
+      "kbAfter": 6
+    },
+    {
+      "asset": "props/for_mushroom_giant.glb",
+      "kbBefore": 56,
+      "kbAfter": 20
+    },
+    {
+      "asset": "props/for_tree_round.glb",
+      "kbBefore": 14,
+      "kbAfter": 7
+    },
+    {
+      "asset": "props/sign_post_forest.glb",
+      "kbBefore": 132,
+      "kbAfter": 121
+    },
+    {
+      "asset": "props/trans_dead_tree.glb",
+      "kbBefore": 48,
+      "kbAfter": 15
+    },
+    {
+      "asset": "props/vol_obsidian_cluster.glb",
+      "kbBefore": 114,
+      "kbAfter": 108
+    },
+    {
+      "asset": "props/vol_rock_a.glb",
+      "kbBefore": 111,
+      "kbAfter": 108
+    },
+    {
+      "asset": "props/vol_rock_b.glb",
+      "kbBefore": 130,
+      "kbAfter": 122
+    },
+    {
+      "asset": "world-chunks/trans_vol_forest_01.glb",
+      "kbBefore": 968,
+      "kbAfter": 688
+    },
+    {
+      "asset": "world-chunks/vol_exploration_01.glb",
+      "kbBefore": 1481,
+      "kbAfter": 851
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "name": "@4walls/game-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json",
+    "start:prod": "tsx src/index.ts --prod"
+  },
+  "dependencies": {
+    "@4walls/core": "workspace:*",
+    "@4walls/protocol": "workspace:*",
+    "@4walls/shared": "workspace:*",
+    "@colyseus/ws-transport": "^0.18.5",
+    "colyseus": "^0.18.12",
+    "tsx": "^4.23.15"
+  },
+  "devDependencies": {
+    "@colyseus/sdk": "^0.18.10",
+    "@types/node": "^26.6.6",
+    "vitest": "^5.1.0"
+  }
+}

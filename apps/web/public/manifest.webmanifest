@@ -1,0 +1,10 @@
+{
+  "name": "4Walls",
+  "short_name": "4Walls",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#1a0d10",
+  "theme_color": "#1a0d10",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

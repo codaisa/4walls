@@ -1,0 +1,696 @@
+{
+  "kit": "volcanic_lands_phase1",
+  "unit": "1 grid tile = 1 unit",
+  "assets": [
+    {
+      "id": "vol_ground_basalt_a",
+      "category": "ground",
+      "biome": "volcanic_lands",
+      "kind": "tile",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/ground/vol_ground_basalt_a.glb",
+      "tris": 108,
+      "kb": 105,
+      "dimensions": [
+        0.98,
+        0.98,
+        0.3
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/vol_ground_basalt_a.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "vol_ground_basalt_b",
+      "category": "ground",
+      "biome": "volcanic_lands",
+      "kind": "tile",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/ground/vol_ground_basalt_b.glb",
+      "tris": 1068,
+      "kb": 131,
+      "dimensions": [
+        0.98,
+        0.98,
+        0.376
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/vol_ground_basalt_b.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "vol_ground_cracked",
+      "category": "ground",
+      "biome": "volcanic_lands",
+      "kind": "tile",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/ground/vol_ground_cracked.glb",
+      "tris": 108,
+      "kb": 136,
+      "dimensions": [
+        0.98,
+        0.98,
+        0.3
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/vol_ground_cracked.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "vol_ground_ash",
+      "category": "ground",
+      "biome": "volcanic_lands",
+      "kind": "tile",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/ground/vol_ground_ash.glb",
+      "tris": 108,
+      "kb": 102,
+      "dimensions": [
+        0.98,
+        0.98,
+        0.3
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/vol_ground_ash.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "vol_lava_tile",
+      "category": "ground",
+      "biome": "volcanic_lands",
+      "kind": "liquid",
+      "destructible": false,
+      "hazard": true,
+      "model": "/assets/ground/vol_lava_tile.glb",
+      "tris": 12,
+      "kb": 136,
+      "dimensions": [
+        1.0,
+        1.0,
+        0.12
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/vol_lava_tile.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "trans_ground_mossy",
+      "category": "ground",
+      "biome": "transition:volcanic_lands>enchanted_forest",
+      "kind": "tile",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/ground/trans_ground_mossy.glb",
+      "tris": 276,
+      "kb": 168,
+      "dimensions": [
+        0.98,
+        0.98,
+        0.47
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/trans_ground_mossy.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "for_ground_grass",
+      "category": "ground",
+      "biome": "enchanted_forest",
+      "kind": "tile",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/ground/for_ground_grass.glb",
+      "tris": 372,
+      "kb": 27,
+      "dimensions": [
+        0.98,
+        0.98,
+        0.47
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/for_ground_grass.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "vol_solid_column",
+      "category": "blocks",
+      "biome": "volcanic_lands",
+      "kind": "solid",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/blocks/vol_solid_column.glb",
+      "tris": 876,
+      "kb": 137,
+      "dimensions": [
+        0.864,
+        0.974,
+        1.079
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/vol_solid_column.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "crate_wood",
+      "category": "blocks",
+      "biome": "shared",
+      "kind": "destructible",
+      "destructible": true,
+      "hazard": false,
+      "model": "/assets/blocks/crate_wood.glb",
+      "tris": 5452,
+      "kb": 270,
+      "dimensions": [
+        0.905,
+        0.905,
+        0.87
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/crate_wood.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "crate_wood_damaged",
+      "category": "blocks",
+      "biome": "shared",
+      "kind": "destructible_state",
+      "destructible": true,
+      "hazard": false,
+      "model": "/assets/blocks/crate_wood_damaged.glb",
+      "tris": 4888,
+      "kb": 254,
+      "dimensions": [
+        0.905,
+        0.897,
+        0.97
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/crate_wood_damaged.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "crate_wood_fragments",
+      "category": "blocks",
+      "biome": "shared",
+      "kind": "fragments",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/blocks/crate_wood_fragments.glb",
+      "tris": 1692,
+      "kb": 164,
+      "dimensions": [
+        1,
+        1,
+        0.2
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/crate_wood_fragments.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "stone_block",
+      "category": "blocks",
+      "biome": "volcanic_lands",
+      "kind": "destructible",
+      "destructible": true,
+      "hazard": false,
+      "model": "/assets/blocks/stone_block.glb",
+      "tris": 1508,
+      "kb": 147,
+      "dimensions": [
+        0.863,
+        0.861,
+        0.85
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/stone_block.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "stone_block_damaged",
+      "category": "blocks",
+      "biome": "volcanic_lands",
+      "kind": "destructible_state",
+      "destructible": true,
+      "hazard": false,
+      "model": "/assets/blocks/stone_block_damaged.glb",
+      "tris": 2118,
+      "kb": 161,
+      "dimensions": [
+        0.886,
+        0.895,
+        0.85
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/stone_block_damaged.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "bomb_classic",
+      "category": "bombs",
+      "biome": "shared",
+      "kind": "bomb",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/bombs/bomb_classic.glb",
+      "tris": 4932,
+      "kb": 131,
+      "dimensions": [
+        0.818,
+        0.786,
+        0.975
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/bomb_classic.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "pu_bomb_up",
+      "category": "powerups",
+      "biome": "shared",
+      "kind": "powerup:common",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/powerups/pu_bomb_up.glb",
+      "tris": 3828,
+      "kb": 96,
+      "dimensions": [
+        0.709,
+        0.709,
+        0.74
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/pu_bomb_up.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "pu_fire_up",
+      "category": "powerups",
+      "biome": "shared",
+      "kind": "powerup:rare",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/powerups/pu_fire_up.glb",
+      "tris": 1680,
+      "kb": 53,
+      "dimensions": [
+        0.677,
+        0.741,
+        0.753
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/pu_fire_up.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "pu_speed_up",
+      "category": "powerups",
+      "biome": "shared",
+      "kind": "powerup:epic",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/powerups/pu_speed_up.glb",
+      "tris": 1532,
+      "kb": 67,
+      "dimensions": [
+        0.765,
+        0.744,
+        0.82
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/pu_speed_up.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "vol_rock_a",
+      "category": "props",
+      "biome": "volcanic_lands",
+      "kind": "decor",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/props/vol_rock_a.glb",
+      "tris": 320,
+      "kb": 111,
+      "dimensions": [
+        0.838,
+        0.916,
+        0.604
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/vol_rock_a.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "vol_rock_b",
+      "category": "props",
+      "biome": "volcanic_lands",
+      "kind": "decor",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/props/vol_rock_b.glb",
+      "tris": 640,
+      "kb": 130,
+      "dimensions": [
+        0.753,
+        0.672,
+        0.498
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/vol_rock_b.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "vol_obsidian_cluster",
+      "category": "props",
+      "biome": "volcanic_lands",
+      "kind": "decor",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/props/vol_obsidian_cluster.glb",
+      "tris": 360,
+      "kb": 114,
+      "dimensions": [
+        0.463,
+        0.447,
+        0.851
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/vol_obsidian_cluster.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "trans_dead_tree",
+      "category": "props",
+      "biome": "transition:volcanic_lands>enchanted_forest",
+      "kind": "decor",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/props/trans_dead_tree.glb",
+      "tris": 1780,
+      "kb": 48,
+      "dimensions": [
+        0.884,
+        0.182,
+        1.614
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/trans_dead_tree.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "for_mushroom_giant",
+      "category": "props",
+      "biome": "enchanted_forest",
+      "kind": "decor",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/props/for_mushroom_giant.glb",
+      "tris": 1820,
+      "kb": 56,
+      "dimensions": [
+        1.039,
+        1.039,
+        1.008
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/for_mushroom_giant.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "for_tree_round",
+      "category": "props",
+      "biome": "enchanted_forest",
+      "kind": "decor",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/props/for_tree_round.glb",
+      "tris": 356,
+      "kb": 13,
+      "dimensions": [
+        1.208,
+        1.0,
+        1.75
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/for_tree_round.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "for_bush",
+      "category": "props",
+      "biome": "enchanted_forest",
+      "kind": "decor",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/props/for_bush.glb",
+      "tris": 240,
+      "kb": 9,
+      "dimensions": [
+        0.819,
+        0.56,
+        0.56
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/for_bush.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "sign_post_forest",
+      "category": "props",
+      "biome": "shared",
+      "kind": "decor",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/props/sign_post_forest.glb",
+      "tris": 444,
+      "kb": 131,
+      "dimensions": [
+        0.636,
+        0.095,
+        1.0
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/sign_post_forest.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "gate_arch_vol_forest",
+      "category": "environments",
+      "biome": "transition:volcanic_lands>enchanted_forest",
+      "kind": "connector",
+      "destructible": false,
+      "hazard": false,
+      "model": "/assets/environments/gate_arch_vol_forest.glb",
+      "tris": 2876,
+      "kb": 353,
+      "dimensions": [
+        3.222,
+        0.715,
+        3.52
+      ],
+      "gridFootprint": [
+        2,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/gate_arch_vol_forest.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "hz_fire_vent_disabled",
+      "category": "hazards",
+      "biome": "volcanic_lands",
+      "kind": "hazard_state",
+      "destructible": false,
+      "hazard": true,
+      "model": "/assets/hazards/hz_fire_vent_disabled.glb",
+      "tris": 1220,
+      "kb": 136,
+      "dimensions": [
+        0.903,
+        0.903,
+        0.165
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/hz_fire_vent_disabled.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "hz_fire_vent_idle",
+      "category": "hazards",
+      "biome": "volcanic_lands",
+      "kind": "hazard_state",
+      "destructible": false,
+      "hazard": true,
+      "model": "/assets/hazards/hz_fire_vent_idle.glb",
+      "tris": 1220,
+      "kb": 136,
+      "dimensions": [
+        0.903,
+        0.903,
+        0.165
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/hz_fire_vent_idle.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "hz_fire_vent_warning",
+      "category": "hazards",
+      "biome": "volcanic_lands",
+      "kind": "hazard_state",
+      "destructible": false,
+      "hazard": true,
+      "model": "/assets/hazards/hz_fire_vent_warning.glb",
+      "tris": 1262,
+      "kb": 140,
+      "dimensions": [
+        0.903,
+        0.903,
+        0.37
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/hz_fire_vent_warning.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    },
+    {
+      "id": "hz_fire_vent_active",
+      "category": "hazards",
+      "biome": "volcanic_lands",
+      "kind": "hazard_state",
+      "destructible": false,
+      "hazard": true,
+      "model": "/assets/hazards/hz_fire_vent_active.glb",
+      "tris": 3940,
+      "kb": 203,
+      "dimensions": [
+        0.903,
+        0.903,
+        1.501
+      ],
+      "gridFootprint": [
+        1,
+        1
+      ],
+      "origin": "tile center, resting on Z=0",
+      "preview": "previews/assets/hz_fire_vent_active.png",
+      "license": "original geometry; textures CC0 (see docs/LICENSES.md)"
+    }
+  ]
+}

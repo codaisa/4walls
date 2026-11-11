@@ -1,0 +1,21 @@
+node_modules
+dist
+.turbo
+coverage
+*.log
+.vite
+playwright-report
+test-results
+tools/blender/previews
+apps/game-server/data
+# Blender backups and Python caches
+*.blend1
+__pycache__/
+*.pyc
+# Local secrets / machine config
+.env
+.env.*
+# Raw Mixamo downloads: Adobe's license forbids redistributing them (the game uses the baked .glb)
+game-assets/mixamo/*.fbx
+# Local Claude Code / editor config
+.claude/
