@@ -1,4 +1,4 @@
-import { BOSSES, BOSS_ARENA, Cell, DIRS, DIR_VEC, RULES, TICK_DT, secToTicks, type BossDef, type BossId, type Dir } from '@4walls/shared';
+import { BOSSES, BOSS_ARENA, Cell, DIRS, DIR_VEC, OPPOSITE, RULES, TICK_DT, secToTicks, type BossDef, type BossId, type Dir } from '@4walls/shared';
 import { destroyBlock } from './bombs';
 import { hitPlayer } from './combat';
 import { cellIndex, createGrid, getCell, inBounds, setCell } from './grid';
@@ -55,7 +55,14 @@ export interface BossSpawn {
   level: number;
   hp: number;
   speedMul: number;
+  /** The chamber's open floor (inclusive). */
+  arena?: { x0: number; y0: number; x1: number; y1: number };
 }
+
+/** All four plates. */
+export const ALL_PLATES = 15;
+/** The reworked Adventure Golem (armor, lava, leap); Boss Rush keeps the classic one. */
+export const reworkedGolem = (b: { kind: BossId; regionId?: number }) => b.kind === 'golem' && b.regionId !== undefined;
 
 export function spawnBoss(s: GameState, kind: BossId, at?: BossSpawn) {
   const def = BOSSES[kind];
@@ -85,6 +92,8 @@ export function spawnBoss(s: GameState, kind: BossId, at?: BossSpawn) {
     diedTick: -1,
     phase: 0,
     ...(at ? { regionId: at.regionId, level: at.level, speedMul: at.speedMul } : {}),
+    ...(at?.arena ? { arena: at.arena } : {}),
+    ...(at && kind === 'golem' ? { plates: ALL_PLATES, lava: [] } : {}),
   };
   const total = s.bossesDefeated + s.bossQueue.length + 1;
   s.events.push({ type: 'bossSpawned', boss: kind, index: s.bossesDefeated, total });
@@ -112,8 +121,9 @@ export function updateBoss(s: GameState) {
     return;
   }
   if (takeDamage(s, b, def)) return; // just died
+  updateLava(s, b);
   if (s.tick < b.frozenUntil) return; // frozen solid: harmless and still
-  if (b.action !== 'burrowed') touchPlayers(s, b);
+  if (b.action !== 'burrowed' && b.action !== 'leaping') touchPlayers(s, b);
 
   switch (b.action) {
     case 'walk':
@@ -132,6 +142,9 @@ export function updateBoss(s: GameState) {
       break;
     case 'burrowed':
       if (s.tick >= b.actionUntil) emerge(s, b, def);
+      break;
+    case 'leaping':
+      if (s.tick >= b.actionUntil) land(s, b, def);
       break;
   }
 }
@@ -224,10 +237,23 @@ function takeDamage(s: GameState, b: BossState, def: BossDef): boolean {
       s.events.push({ type: 'bossBlocked', x: b.x, y: b.y });
       return false;
     }
-    b.hp = Math.max(0, b.hp - 1);
+    // The Adventure Golem: stunned against a wall its core is open (double damage); otherwise a
+    // blast on an armored side only knocks that plate off.
+    const core = b.plates !== undefined && b.action === 'stunned';
+    if (b.plates !== undefined && !core) {
+      const dir = hitDir(b, f, cx, cy);
+      const side = bodySide(b.facing, dir);
+      if (b.plates & (1 << side)) {
+        b.plates &= ~(1 << side);
+        b.invulnUntil = s.tick + secToTicks(def.hitCooldownSec);
+        s.events.push({ type: 'bossPlate', side, dir, plates: b.plates, x: b.x, y: b.y });
+        return false;
+      }
+    }
+    b.hp = Math.max(0, b.hp - (core ? 2 : 1));
     b.invulnUntil = s.tick + secToTicks(def.hitCooldownSec);
     b.lastHitTick = s.tick;
-    s.events.push({ type: 'bossHit', hp: b.hp, maxHp: b.maxHp, byId: f.ownerId, x: b.x, y: b.y });
+    s.events.push({ type: 'bossHit', hp: b.hp, maxHp: b.maxHp, byId: f.ownerId, x: b.x, y: b.y, ...(core ? { core: true } : {}) });
     enterPhase(s, b, def);
     if (b.hp <= 0) {
       setAction(s, b, 'dead', 0);
@@ -246,6 +272,7 @@ function takeDamage(s: GameState, b: BossState, def: BossDef): boolean {
       const owner = s.players.find((p) => p.id === f.ownerId);
       if (owner) owner.kills++;
       s.events.push({ type: 'bossDefeated', boss: b.kind, x: b.x, y: b.y });
+      coolLava(s, b);
       // Adventure: the chamber's objective is this boss.
       const reg = b.regionId === undefined ? undefined : s.adventure?.regions.find((r) => r.id === b.regionId);
       if (reg && reg.objective.kind === 'boss') reg.objective.progress = reg.objective.goal;
@@ -257,7 +284,8 @@ function takeDamage(s: GameState, b: BossState, def: BossDef): boolean {
 }
 
 /** Thresholds of this encounter: deeper Adventure bosses get an extra, faster phase. */
-const phasesOf = (b: BossState, def: BossDef) => ((b.level ?? 0) > 0 && def.deepPhases ? def.deepPhases : def.phases);
+const phasesOf = (b: BossState, def: BossDef) =>
+  b.regionId !== undefined && def.adventurePhases ? def.adventurePhases : (b.level ?? 0) > 0 && def.deepPhases ? def.deepPhases : def.phases;
 
 /**
  * Crossing a health threshold starts the next phase. Phase 1 is the enraged one (faster, wider
@@ -278,6 +306,130 @@ function enterPhase(s: GameState, b: BossState, def: BossDef) {
   s.events.push({ type: 'bossPhase', phase: want });
   b.invulnUntil = Math.max(b.invulnUntil, s.tick + secToTicks(1));
   for (const p of s.adventure?.props ?? []) if (p.kind === 'totem' && p.region === b.regionId && p.state === 'used') p.state = 'idle';
+  if (reworkedGolem(b)) golemPhase(s, b, def, want);
+}
+
+// ───────────────────────────── the Adventure Golem ─────────────────────────────
+
+const CLOCKWISE: Dir[] = ['up', 'right', 'down', 'left'];
+
+/** Which world side of the body a flame hits: arms come from the bomb's side; centers by offset. */
+function hitDir(b: BossState, f: Flame, cx: number, cy: number): Dir {
+  if (f.dir) return OPPOSITE[f.dir];
+  const dx = f.x - cx;
+  const dy = f.y - cy;
+  if (dx === 0 && dy === 0) return b.facing;
+  return Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
+}
+
+/** World side → side of the body (0 front, 1 right, 2 back, 3 left). */
+export const bodySide = (facing: Dir, world: Dir) => (CLOCKWISE.indexOf(world) - CLOCKWISE.indexOf(facing) + 4) % 4;
+
+/** The outer ring of the chamber's floor that the lava claims. */
+export function lavaRing(s: GameState, b: BossState) {
+  const a = b.arena;
+  if (!a) return [];
+  const out: { x: number; y: number }[] = [];
+  for (let y = a.y0; y <= a.y1; y++)
+    for (let x = a.x0; x <= a.x1; x++) {
+      if (x !== a.x0 && x !== a.x1 && y !== a.y0 && y !== a.y1) continue;
+      const c = getCell(s.grid, x, y);
+      if ((c === Cell.Floor || c === Cell.Block) && inArena(s, b, x, y)) out.push({ x, y });
+    }
+  return out;
+}
+
+/**
+ * Each new phase re-forges the front and back plates and calls a lava rain. Phase 1 also makes
+ * the lava rise from the chamber's edges (with a warning first); phase 2 unlocks the leap.
+ */
+function golemPhase(s: GameState, b: BossState, def: BossDef, phase: number) {
+  b.plates = (b.plates ?? 0) | 1 | 4;
+  s.events.push({ type: 'bossArmor', plates: b.plates, x: b.x, y: b.y });
+  callMeteors(s, def.enragedMeteors);
+  if (phase === 1 && !b.lavaWarn?.length) {
+    const cells = lavaRing(s, b);
+    if (cells.length) {
+      b.lavaWarn = cells;
+      b.lavaAt = s.tick + secToTicks(2.5);
+      s.events.push({ type: 'lavaRising', cells });
+    }
+  }
+}
+
+/** The warned cells turn into lava (whatever stands there falls in). */
+function updateLava(s: GameState, b: BossState) {
+  if (!b.lavaWarn?.length || b.lavaAt === undefined || s.tick < b.lavaAt) return;
+  const cells = b.lavaWarn.filter((c) => {
+    const cell = getCell(s.grid, c.x, c.y);
+    return cell === Cell.Floor || cell === Cell.Block;
+  });
+  for (const c of cells) setCell(s.grid, c.x, c.y, Cell.Lava);
+  b.lava = [...(b.lava ?? []), ...cells];
+  b.lavaWarn = [];
+  b.lavaAt = undefined;
+  if (cells.length) s.events.push({ type: 'lavaRose', cells });
+}
+
+/** The boss falls and its lava cools into solid ground again. */
+function coolLava(s: GameState, b: BossState) {
+  b.lavaWarn = [];
+  b.lavaAt = undefined;
+  const cells = (b.lava ?? []).filter((c) => getCell(s.grid, c.x, c.y) === Cell.Lava);
+  for (const c of cells) setCell(s.grid, c.x, c.y, Cell.Floor);
+  b.lava = [];
+  if (cells.length) s.events.push({ type: 'lavaCooled', cells });
+}
+
+/** Where the leap lands: a free 3×3 spot centered on the target or right next to it. */
+function leapSpot(s: GameState, b: BossState, target: PlayerState) {
+  const tx = cellOf(target.x);
+  const ty = cellOf(target.y);
+  let best: { x: number; y: number }[] = [];
+  let bestD = Infinity;
+  for (let y = ty - 2; y <= ty + 2; y++)
+    for (let x = tx - 2; x <= tx + 2; x++) {
+      if (!footprintClear(s, b, x, y)) continue;
+      const d = Math.max(Math.abs(x - tx), Math.abs(y - ty));
+      if (d < bestD) {
+        bestD = d;
+        best = [];
+      }
+      if (d === bestD) best.push({ x, y });
+    }
+  return best.length ? best[randInt(s, best.length)] : null;
+}
+
+/** Cells the landing cracks: a ring around the body plus four fissures running out from it. */
+export function leapCells(s: GameState, b: { regionId?: number }, spot: { x: number; y: number }) {
+  const cells = slamCells(s, { x: spot.x, y: spot.y, enraged: false, regionId: b.regionId }, 2);
+  for (const d of DIRS) {
+    const v = DIR_VEC[d];
+    for (let i = 3; i <= 6; i++) {
+      const x = spot.x + v.x * i;
+      const y = spot.y + v.y * i;
+      if (getCell(s.grid, x, y) === Cell.Wall || !inArena(s, b, x, y)) break;
+      cells.push({ x, y });
+    }
+  }
+  return cells;
+}
+
+/** Coming down: crushes whatever is under it, cracks the floor and stands there, open to hits. */
+function land(s: GameState, b: BossState, def: BossDef) {
+  const [spot, ...cells] = b.targets;
+  if (spot) {
+    b.x = b.px = b.tx = spot.x;
+    b.y = b.py = b.ty = spot.y;
+    crushFootprint(s, spot.x, spot.y);
+  }
+  b.targets = [];
+  b.invulnUntil = s.tick;
+  fireCells(s, b, cells);
+  s.events.push({ type: 'bossLand', x: b.x, y: b.y });
+  s.events.push({ type: 'bossSlam', x: b.x, y: b.y });
+  touchPlayers(s, b);
+  setAction(s, b, 'recover', def.recoverSec);
 }
 
 function walk(s: GameState, b: BossState, def: BossDef) {
@@ -326,12 +478,23 @@ function chooseAttack(s: GameState, b: BossState, def: BossDef) {
   if (has('roots')) options.push({ a: 'roots', w: 3 });
   if (has('spores') && s.enemies.filter((e) => e.alive && e.kind === 'sprout').length < (def.maxSprouts ?? 6)) options.push({ a: 'spores', w: 2 });
   if (has('burrow')) options.push({ a: 'burrow', w: reach > 5 ? 4 : 2 });
+  if (reworkedGolem(b)) {
+    // It wants to ram walls (the charge leaves its core open) and, in its last phase, to leap.
+    const charge = options.find((o) => o.a === 'charge');
+    if (charge) charge.w = 5;
+    if ((b.phase ?? 0) >= 2) options.push({ a: 'leap', w: 4 });
+  }
   if (!options.length) return;
   let attack = pickWeighted(s, options, (o) => o.w).a;
   b.facing = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
   b.targets = [];
   if (attack === 'charge') b.chargeDir = b.facing;
   if (attack === 'roots') b.targets = rootTargets(s, b, target);
+  if (attack === 'leap') {
+    const spot = leapSpot(s, b, target);
+    if (spot) b.targets = [spot, ...leapCells(s, b, spot)];
+    else attack = 'meteors';
+  }
   if (attack === 'burrow') {
     const spot = emergeSpot(s, b, target);
     if (spot) b.targets = [spot];
@@ -346,6 +509,7 @@ function chooseAttack(s: GameState, b: BossState, def: BossDef) {
     : attack === 'charge' ? def.chargeWindupSec
     : attack === 'roots' ? (def.rootsWindupSec ?? 1)
     : attack === 'spores' ? (def.sporesWindupSec ?? 0.7)
+    : attack === 'leap' ? 0.85
     : (def.burrowWindupSec ?? 0.6);
   setAction(s, b, 'windup', windup * speedUp);
   s.events.push({ type: 'bossWindup', attack });
@@ -498,6 +662,11 @@ function performAttack(s: GameState, b: BossState, def: BossDef) {
     summonSprouts(s, b, (b.enraged ? def.enragedSprouts : def.sprouts) ?? 3, def.maxSprouts ?? 6);
     s.events.push({ type: 'bossSpores', x: b.x, y: b.y });
     setAction(s, b, 'recover', def.recoverSec * 0.5);
+  } else if (attack === 'leap' && b.targets.length) {
+    // In the air: untouchable until it lands on the marked spot.
+    setAction(s, b, 'leaping', 1.0);
+    b.invulnUntil = b.actionUntil;
+    s.events.push({ type: 'bossLeap', x: b.x, y: b.y, tx: b.targets[0].x, ty: b.targets[0].y });
   } else if (attack === 'burrow' && b.targets.length) {
     // Underground: untouchable and harmless until it bursts out at the marked spot.
     setAction(s, b, 'burrowed', def.burrowSec ?? 1.2);
@@ -540,7 +709,8 @@ function chargeStep(s: GameState, b: BossState, def: BossDef) {
         fireCells(s, b, slamCells(s, b, 2));
         s.events.push({ type: 'bossSlam', x: b.x, y: b.y });
         b.chargeDir = null;
-        setAction(s, b, 'stunned', def.recoverSec * 1.5);
+        setAction(s, b, 'stunned', def.recoverSec * (b.plates !== undefined ? 2.4 : 1.5));
+        if (b.plates !== undefined) s.events.push({ type: 'bossCore', x: b.x, y: b.y });
         return;
       }
       b.tx = nx;

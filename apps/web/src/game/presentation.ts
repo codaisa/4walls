@@ -236,6 +236,30 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
     case 'bossBlocked':
       sfx.kick();
       break;
+    case 'bossPlate':
+      sfx.crack();
+      sfx.kick();
+      break;
+    case 'bossArmor':
+      sfx.clink();
+      break;
+    case 'bossCore':
+      sfx.alarm(1);
+      hud.set({ banner: { text: 'NÚCLEO EXPOSTO! ATAQUE!', key: tick + 4 } });
+      break;
+    case 'bossLeap':
+      sfx.rumble();
+      break;
+    case 'lavaRising':
+      sfx.alarm(2);
+      hud.set({ banner: { text: 'A LAVA ESTÁ SUBINDO! SAIA DAS BORDAS!', key: tick + 5 } });
+      break;
+    case 'lavaRose':
+      sfx.lavaSplash();
+      break;
+    case 'lavaCooled':
+      sfx.hiss();
+      break;
     case 'totemRevive':
       sfx.pickup();
       hud.set({ banner: { text: 'O TOTEM TROUXE UM ALIADO DE VOLTA!', key: tick + 2 } });
@@ -364,5 +388,6 @@ function bossInfo(s: GameState): HudBoss | null {
     total: s.bossesDefeated + s.bossQueue.length + (dead ? 0 : 1),
     dead,
     ...(b.regionId !== undefined ? { arc: (s.adventure?.regions.find((r) => r.id === b.regionId)?.arc ?? 0) + 1, level: b.level ?? 0 } : {}),
+    ...(b.plates !== undefined ? { plates: [1, 2, 4, 8].filter((m) => b.plates! & m).length, core: b.action === 'stunned' } : {}),
   };
 }

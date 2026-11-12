@@ -196,6 +196,15 @@ function PowerBadges({ p }: { p: HudPlayer }) {
   );
 }
 
+/** The Golem's plates left (one shield each), or its open core. */
+function Armor({ b }: { b: { plates?: number; core?: boolean } }) {
+  return (
+    <span className="mr-1.5 tracking-tighter" data-testid="boss-armor" title="Placas de pedra">
+      {b.core ? '🔥' : '🛡️'.repeat(b.plates ?? 0) || '—'}
+    </span>
+  );
+}
+
 function BossBar() {
   const b = useHud((s) => s.boss);
   if (!b) return null;
@@ -210,7 +219,10 @@ function BossBar() {
             <span className="truncate font-display text-base leading-tight" style={{ color: b.enraged ? '#ff6a4a' : '#ffb347' }}>
               {b.name}
             </span>
-            <span className="shrink-0 text-[10px] font-bold opacity-75">{b.dead ? 'Derrotado!' : b.enraged ? 'ENFURECIDO' : `${b.hp}/${b.maxHp}`}</span>
+            <span className="shrink-0 text-[10px] font-bold opacity-75">
+              {b.plates !== undefined && !b.dead && <Armor b={b} />}
+              {b.dead ? 'Derrotado!' : b.core ? 'NÚCLEO!' : b.enraged ? 'ENFURECIDO' : `${b.hp}/${b.maxHp}`}
+            </span>
           </div>
           <div className="mt-0.5 h-2 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/15">
             <div className={`h-full rounded-full transition-[width] duration-200 ${fill}`} style={{ width: `${pct}%` }} />
@@ -227,7 +239,8 @@ function BossBar() {
             {b.name}
           </span>
           <span className="text-xs font-bold opacity-75">
-            {b.dead ? 'Derrotado!' : b.enraged ? 'ENFURECIDO' : b.title} ·{' '}
+            {b.plates !== undefined && !b.dead && <Armor b={b} />}
+            {b.dead ? 'Derrotado!' : b.core ? 'NÚCLEO EXPOSTO!' : b.enraged ? 'ENFURECIDO' : b.title} ·{' '}
             {b.arc ? `Guardião do Arco ${b.arc}${b.level ? ` · Nv. ${b.level + 1}` : ''}` : `Chefão ${Math.max(1, b.index)}/${b.total}`}
           </span>
         </div>

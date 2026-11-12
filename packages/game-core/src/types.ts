@@ -289,8 +289,8 @@ export interface CageState {
   state: 'locked' | 'free' | 'rescued';
 }
 
-export type BossAction = 'walk' | 'windup' | 'recover' | 'charge' | 'stunned' | 'burrowed' | 'dead';
-export type BossAttack = 'slam' | 'meteors' | 'charge' | 'roots' | 'spores' | 'burrow';
+export type BossAction = 'walk' | 'windup' | 'recover' | 'charge' | 'stunned' | 'burrowed' | 'leaping' | 'dead';
+export type BossAttack = 'slam' | 'meteors' | 'charge' | 'roots' | 'spores' | 'burrow' | 'leap';
 
 /**
  * A boss: one big body centered on a cell that covers the 3×3 cells around it.
@@ -332,6 +332,19 @@ export interface BossState {
   level?: number;
   /** Speed multiplier from the level. */
   speedMul?: number;
+  /**
+   * Adventure Golem: its stone armor plates, one bit per side of the body
+   * (1 front, 2 right, 4 back, 8 left, relative to where it faces). A blast on an armored side
+   * breaks that plate instead of hurting it.
+   */
+  plates?: number;
+  /** The chamber's open floor (inclusive), for the lava that rises from its edges. */
+  arena?: { x0: number; y0: number; x1: number; y1: number };
+  /** Cells about to turn into lava, and when. */
+  lavaWarn?: { x: number; y: number }[];
+  lavaAt?: number;
+  /** Floor it turned into lava (it cools back down when the boss falls). */
+  lava?: { x: number; y: number }[];
 }
 
 export type GameEvent =
@@ -400,10 +413,20 @@ export type GameEvent =
   | { type: 'bossSlam'; x: number; y: number }
   | { type: 'bossRoar'; x: number; y: number }
   | { type: 'bossCharge'; dir: Dir }
-  | { type: 'bossHit'; hp: number; maxHp: number; byId: string; x: number; y: number }
+  | { type: 'bossHit'; hp: number; maxHp: number; byId: string; x: number; y: number; core?: boolean }
   | { type: 'bossEnraged' }
   | { type: 'bossPhase'; phase: number }
   | { type: 'bossBlocked'; x: number; y: number }
+  /** A plate broke off; `side` is the body side (0 front, 1 right, 2 back, 3 left), `dir` the world side. */
+  | { type: 'bossPlate'; side: number; dir: Dir; plates: number; x: number; y: number }
+  | { type: 'bossArmor'; plates: number; x: number; y: number }
+  /** Stunned against a wall: its molten core is open (hits count double). */
+  | { type: 'bossCore'; x: number; y: number }
+  | { type: 'bossLeap'; x: number; y: number; tx: number; ty: number }
+  | { type: 'bossLand'; x: number; y: number }
+  | { type: 'lavaRising'; cells: { x: number; y: number }[] }
+  | { type: 'lavaRose'; cells: { x: number; y: number }[] }
+  | { type: 'lavaCooled'; cells: { x: number; y: number }[] }
   | { type: 'totemRevive'; propId: number; playerId: string; byId: string; x: number; y: number }
   | { type: 'bossRoots'; cells: { x: number; y: number }[] }
   | { type: 'bossSpores'; x: number; y: number }

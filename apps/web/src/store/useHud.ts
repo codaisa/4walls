@@ -68,6 +68,9 @@ export interface HudBoss {
   /** Adventure: the arc (1-based) whose chamber it guards, and how many times it came back. */
   arc?: number;
   level?: number;
+  /** Adventure Golem: stone plates left (0–4) and whether its core is open right now. */
+  plates?: number;
+  core?: boolean;
 }
 
 export interface HudState {

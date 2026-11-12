@@ -166,11 +166,13 @@ export interface BossDef {
   enragedMeteors: number;
   freezeSec: number;
   /** Which attacks this boss uses. */
-  attacks: ('slam' | 'meteors' | 'charge' | 'roots' | 'spores' | 'burrow')[];
+  attacks: ('slam' | 'meteors' | 'charge' | 'roots' | 'spores' | 'burrow' | 'leap')[];
   /** Health fractions where a new phase starts (phase 1 is the enraged one). */
   phases: number[];
   /** Extra phases for stronger (deeper) encounters in the Adventure. */
   deepPhases?: number[];
+  /** Phases of the reworked Adventure version (every encounter, from the first). */
+  adventurePhases?: number[];
   /** Armored boss: blasts only hurt it during these actions (otherwise they clank off). */
   exposedDuring?: ('walk' | 'windup' | 'recover' | 'charge' | 'stunned')[];
   /** Guardião: root lines, sprout summons and the underground dive. */
@@ -205,6 +207,8 @@ export const BOSSES: Record<BossId, BossDef> = {
     attacks: ['slam', 'meteors', 'charge'],
     phases: [0.5],
     deepPhases: [0.5, 0.25],
+    // Adventure Golem: armor → lava rising from the edges → the floor-cracking leap.
+    adventurePhases: [0.66, 0.33],
   },
   guardian: {
     id: 'guardian',

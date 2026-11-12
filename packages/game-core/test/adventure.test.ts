@@ -1,6 +1,6 @@
 import { ADVENTURE, BOSSES, Cell, DIR_VEC, DIRS } from '@4walls/shared';
 import { describe, expect, it } from 'vitest';
-import { arcBoss, arcInfo, arcOfRegion, chamberCenter, isPit, cellIndex, createGame, difficulty, geyserPhase, regionDifficulty, spawnBomb, getCell, inBounds, platformPos, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
+import { ALL_PLATES, arcBoss, bodySide, lavaRing, leapCells, spawnBoss, arcInfo, arcOfRegion, chamberCenter, isPit, cellIndex, createGame, difficulty, geyserPhase, regionDifficulty, spawnBomb, getCell, inBounds, platformPos, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
 
 const make = (seed = 11, players = 1) => {
   const s = createGame({
@@ -753,6 +753,7 @@ describe('endless adventure: B1 Guardian Chambers', () => {
     // The killing blow.
     const boss = s.boss!;
     boss.hp = 1;
+    boss.plates = 0;
     boss.invulnUntil = 0;
     boss.frozenUntil = 0;
     flameOn(s, Math.round(boss.x), Math.round(boss.y));
@@ -789,6 +790,7 @@ describe('endless adventure: B1 Guardian Chambers', () => {
     b.frozenUntil = 0;
     b.invulnUntil = 0;
     b.hp = Math.floor(b.maxHp / 2) + 1;
+    b.plates = 0;
     flameOn(s, Math.round(b.x), Math.round(b.y));
     step(s, {});
     expect(b.phase).toBe(1);
@@ -803,5 +805,147 @@ describe('endless adventure: B1 Guardian Chambers', () => {
     const solo = into(4, 3, 1).boss!;
     const four = into(4, 3, 4).boss!;
     expect(four.maxHp).toBeGreaterThan(solo.maxHp * 2);
+  });
+});
+
+describe('endless adventure: B2 the reworked Golem', () => {
+  const into = (target: number, seed = 3, players = 2) => {
+    const s = make(seed, players);
+    for (let id = 0; id < target; id++) {
+      complete(s, id);
+      walkThrough(s, id);
+    }
+    return s;
+  };
+  /** A golem chamber with the boss frozen in place and the players safe. */
+  const chamber = () => {
+    const s = into(4);
+    const b = s.boss!;
+    expect(b.kind).toBe('golem');
+    b.frozenUntil = 1e9;
+    for (const p of s.players) p.invulnUntil = 1e9;
+    return { s, b };
+  };
+  const blast = (s: GameState, x: number, y: number, dir: 'up' | 'down' | 'left' | 'right' | null = null) =>
+    s.flames.push({ x, y, part: dir ? 'arm' : 'center', dir, bombId: 999, ownerId: 'p1', bornTick: s.tick, untilTick: s.tick + 30, kind: 'normal' });
+  const events = (s: GameState, n: number) => {
+    const out: GameState['events'] = [];
+    for (let i = 0; i < n; i++) {
+      step(s, {});
+      out.push(...s.events);
+    }
+    return out;
+  };
+
+  it('wears four plates: a blast on an armored side breaks that plate, a bare side takes the hit', () => {
+    const { s, b } = chamber();
+    expect(b.plates).toBe(ALL_PLATES);
+    b.facing = 'down';
+    const hp = b.hp;
+    // A blast coming in from the west hits its right side (it faces south).
+    blast(s, b.x - 1, b.y, 'right');
+    const ev = events(s, 1);
+    expect(ev.find((e) => e.type === 'bossPlate')).toMatchObject({ side: 1, dir: 'left' });
+    expect(b.plates).toBe(ALL_PLATES & ~2);
+    expect(b.hp).toBe(hp);
+    expect(bodySide('down', 'left')).toBe(1);
+    expect(bodySide('up', 'up')).toBe(0);
+    // Same side once the hit cooldown is over: now it hurts.
+    events(s, 60);
+    blast(s, b.x - 1, b.y, 'right');
+    events(s, 1);
+    expect(b.hp).toBe(hp - 1);
+    expect(b.plates).toBe(ALL_PLATES & ~2);
+  });
+
+  it('ramming a wall leaves it stunned with the core open: hits count double through the armor', () => {
+    const { s, b } = chamber();
+    b.frozenUntil = 0;
+    for (const p of s.players) {
+      p.x = p.px = b.arena!.x1 - 1;
+      p.y = p.py = b.arena!.y1 - 1;
+    }
+    // Right against the west rim, charging into it.
+    b.x = b.px = b.tx = b.arena!.x0 + 1;
+    b.y = b.py = b.ty = b.arena!.y0 + 5;
+    b.action = 'charge';
+    b.chargeDir = 'left';
+    const ev = events(s, 2);
+    expect(b.action).toBe('stunned');
+    expect(ev.some((e) => e.type === 'bossCore')).toBe(true);
+    const hp = b.hp;
+    b.invulnUntil = 0;
+    blast(s, b.x, b.y + 1, 'up');
+    const hit = events(s, 1).find((e) => e.type === 'bossHit');
+    expect(hit).toMatchObject({ core: true });
+    expect(b.hp).toBe(hp - 2);
+    expect(b.plates).toBe(ALL_PLATES);
+  });
+
+  it('three phases; at the second the lava rises from the edges (warned first) and cools when it falls', () => {
+    const { s, b } = chamber();
+    const [p1, p2] = s.players;
+    const ring = lavaRing(s, b);
+    expect(ring.length).toBeGreaterThan(20);
+    for (const c of ring) expect(regionAt(s, c.x, c.y)).toBe(4);
+    // P2 stands on the edge, P1 well inside.
+    p2.x = p2.px = ring[0].x;
+    p2.y = p2.py = ring[0].y;
+    p1.x = p1.px = b.arena!.x0 + 3;
+    p1.y = p1.py = b.arena!.y0 + 2;
+    b.plates = 0;
+    b.invulnUntil = 0;
+    b.hp = Math.floor(b.maxHp * 0.66);
+    blast(s, b.x, b.y, null);
+    const ev = events(s, 1);
+    expect(b.phase).toBe(1);
+    expect(ev.some((e) => e.type === 'lavaRising')).toBe(true);
+    // The front and back plates come back with the new phase.
+    expect(b.plates).toBe(1 | 4);
+    expect(getCell(s.grid, ring[0].x, ring[0].y)).not.toBe(Cell.Lava);
+    const later = events(s, 60 * 3);
+    expect(later.some((e) => e.type === 'lavaRose')).toBe(true);
+    for (const c of ring) expect(isPit(getCell(s.grid, c.x, c.y))).toBe(true);
+    expect(p2.alive).toBe(false);
+    expect(p1.alive).toBe(true);
+    // The boss falls: its lava cools into floor again.
+    b.hp = 1;
+    b.plates = 0;
+    b.invulnUntil = 0;
+    blast(s, b.x, b.y, null);
+    const end = events(s, 2);
+    expect(b.action).toBe('dead');
+    expect(end.some((e) => e.type === 'lavaCooled')).toBe(true);
+    for (const c of ring) expect(getCell(s.grid, c.x, c.y)).toBe(Cell.Floor);
+  });
+
+  it('in its last phase it leaps onto the players (untouchable in the air) and cracks the floor', () => {
+    const { s, b } = chamber();
+    b.frozenUntil = 0;
+    b.phase = 2;
+    b.enraged = true;
+    const p1 = s.players[0];
+    p1.x = p1.px = b.arena!.x0 + 3;
+    p1.y = p1.py = b.arena!.y0 + 3;
+    let leapt = false;
+    for (let i = 0; i < 60 * 40 && !leapt; i++) {
+      step(s, {});
+      if (b.action === 'leaping') leapt = true;
+    }
+    expect(leapt).toBe(true);
+    const [spot, ...cells] = b.targets;
+    expect(cells).toEqual(leapCells(s, b, spot));
+    expect(b.invulnUntil).toBeGreaterThanOrEqual(b.actionUntil);
+    while (b.action === 'leaping') step(s, {});
+    expect({ x: b.x, y: b.y }).toEqual(spot);
+    expect(s.flames.some((f) => f.ownerId === 'boss' && cells.some((c) => c.x === f.x && c.y === f.y))).toBe(true);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) expect(regionAt(s, spot.x + dx, spot.y + dy)).toBe(4);
+  });
+
+  it('the Boss Rush golem keeps its classic rules (no plates, no lava)', () => {
+    const s = make(3, 1);
+    spawnBoss(s, 'golem');
+    expect(s.boss!.plates).toBeUndefined();
+    expect(lavaRing(s, s.boss!)).toEqual([]);
   });
 });

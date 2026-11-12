@@ -6,7 +6,7 @@ antes da próxima:
 | # | Tarefa | Depende de | Status |
 |---|---|---|---|
 | 1 | **Mapa**: regiões viram fases, objetivos, mecânicas de ambiente, segredos, navegação, arcos | — | **Concluída** (M1–M5) |
-| 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | Em andamento: B1 concluído (seção 5) |
+| 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | Em andamento: B1 e B2 concluídos (seção 5) |
 | 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Esboço (seção 6) |
 
 Ponto de partida (como está hoje):
@@ -358,6 +358,16 @@ O `boss.ts` de hoje é uma máquina de estados (andar → preparar → atacar �
 - **Totem do Retorno:** com um aliado caído, explodir ao lado do totem o traz de volta (com proteção). 1 uso por fase.
 - **Apresentação:** barra do chefe na Aventura ("Guardião do Arco N · Nv."), a câmera abre para mostrar o chefe e aproxima no golpe final, cartão com a etiqueta "CHEFE", ☠️ no mapa, dicas novas (chefe e totem) e, no celular, o painel de objetivo some durante a luta para não cobrir a arena.
 - **Fica para depois:** o congelamento de imagem no golpe final (hoje é só o zoom), a recompensa em 3 níveis e a mudança no mundo (B5), os "pilares que caem" da Ponte de Obsidiana.
+
+**Como ficou o B2 (o Golem da Aventura):**
+- **Placas de armadura:** 4 placas de pedra, uma por lado do corpo (peito, costas e as duas ombreiras), em relação a para onde ele olha. Uma explosão num lado com placa só arranca a placa (ela voa com lascas); num lado sem placa, ele perde vida. O HUD mostra os 🛡️ que restam.
+- **Núcleo exposto:** quando a investida bate na parede, ele fica atordoado por mais tempo (≈2,6 s) com o núcleo inchado e brilhando. Nessa janela cada acerto vale **2** e ignora as placas ("NÚCLEO EXPOSTO! ATAQUE!"). Na Aventura ele prefere investir.
+- **3 fases (66% e 33%), desde o 1º encontro:** cada troca de fase refaz as placas do peito e das costas e chama uma chuva de meteoros.
+  - **Fase 2:** a lava sobe pelas bordas. O anel de fora do salão pisca em vermelho por 2,5 s ("A LAVA ESTÁ SUBINDO!") e vira lava; quem estiver nele cai.
+  - **Fase 3:** o **pulo**. Ele se agacha, salta (intocável no ar) e cai num 3×3 em cima ou ao lado do jogador. O pouso racha o chão num anel e em quatro fendas. Tudo é marcado no chão antes.
+- **A lava esfria no fim:** quando ele cai, a lava das bordas vira chão de novo, com vapor (é a "mudança no mundo" do Golem).
+- **Boss Rush:** continua com o Golem clássico, sem placas nem lava. O novo entra lá no B5.
+
 
 Pontos de atenção:
 - **B1 é o maior marco:** mexe no `boss.ts`, no formato de região e no fluxo de portões ao mesmo tempo.

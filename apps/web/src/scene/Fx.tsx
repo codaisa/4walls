@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { SLOT_COLORS } from '@4walls/shared';
+import { DIR_VEC, SLOT_COLORS } from '@4walls/shared';
 import { useGame } from './context';
 import { SoftPool } from './SoftParticles';
 import { meteorRockPos } from './Hazards';
@@ -626,6 +626,52 @@ export function Fx() {
                 x: e.x + ox + rnd(-0.7, 0.7), y: rnd(0.8, 1.8), z: e.y + oz + rnd(-0.7, 0.7),
                 vx: rnd(-3, 3), vy: rnd(1, 4), vz: rnd(-3, 3),
                 life: rnd(0.2, 0.4), size: rnd(0.04, 0.07), color: '#dfe6ff', intensity: 3, gravity: 9, drag: 1,
+              });
+            break;
+          case 'bossPlate': {
+            // The plate shatters off that side of the body.
+            const v = DIR_VEC[e.dir];
+            const px = e.x + ox + v.x * 1.2;
+            const pz = e.y + oz + v.y * 1.2;
+            for (let i = 0; i < 12; i++)
+              solids.spawn({
+                x: px + rnd(-0.4, 0.4), y: rnd(1, 2), z: pz + rnd(-0.4, 0.4),
+                vx: v.x * rnd(2, 4) + rnd(-1.5, 1.5), vy: rnd(2, 5), vz: v.y * rnd(2, 4) + rnd(-1.5, 1.5),
+                life: rnd(0.8, 1.3), size: rnd(0.12, 0.22), color: '#5b5049', gravity: 16, drag: 0.3, bounce: true,
+              });
+            for (let i = 0; i < 10; i++)
+              sparks.spawn({
+                x: px, y: 1.5, z: pz, vx: v.x * rnd(1, 3) + rnd(-2, 2), vy: rnd(1, 4), vz: v.y * rnd(1, 3) + rnd(-2, 2),
+                life: rnd(0.3, 0.6), size: rnd(0.04, 0.08), color: '#ffb347', intensity: 3, gravity: 9, drag: 1,
+              });
+            smoke.spawn({ x: px, y: 1.2, z: pz, vy: 0.5, life: 0.9, size: 0.9, grow: 2, color: '#6b5a52', alpha: 0.5, drag: 2 });
+            fx.shake = Math.min(1, fx.shake + 0.25);
+            break;
+          }
+          case 'bossCore':
+            for (let i = 0; i < 24; i++)
+              sparks.spawn({
+                x: e.x + ox + rnd(-0.5, 0.5), y: rnd(1.2, 2), z: e.y + oz + rnd(-0.5, 0.5),
+                vx: rnd(-3, 3), vy: rnd(2, 5), vz: rnd(-3, 3),
+                life: rnd(0.5, 0.9), size: rnd(0.05, 0.1), color: '#ff9a2a', intensity: 4, gravity: 8, drag: 1,
+              });
+            break;
+          case 'lavaRose':
+            for (const c of e.cells) {
+              if (Math.random() < 0.5)
+                sparks.spawn({
+                  x: c.x + ox + rnd(-0.3, 0.3), y: 0.1, z: c.y + oz + rnd(-0.3, 0.3), vx: rnd(-0.6, 0.6), vy: rnd(2, 4), vz: rnd(-0.6, 0.6),
+                  life: rnd(0.5, 0.9), size: rnd(0.05, 0.09), color: '#ff8a2a', intensity: 3.5, gravity: 8, drag: 0.8,
+                });
+            }
+            fx.shake = Math.min(1, fx.shake + 0.3);
+            break;
+          case 'lavaCooled':
+            // Steam rises as the lava turns back into rock.
+            for (const c of e.cells)
+              smoke.spawn({
+                x: c.x + ox + rnd(-0.2, 0.2), y: 0.15, z: c.y + oz + rnd(-0.2, 0.2), vy: rnd(0.8, 1.6),
+                life: rnd(1.4, 2.4), size: rnd(0.5, 0.8), grow: 2.4, color: '#d9d4cf', alpha: 0.45, drag: 1.2, delay: rnd(0, 0.8),
               });
             break;
           case 'totemRevive':
