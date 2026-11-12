@@ -7,7 +7,7 @@ antes da próxima:
 |---|---|---|---|
 | 1 | **Mapa**: regiões viram fases, objetivos, mecânicas de ambiente, segredos, navegação, arcos | — | **Concluída** (M1–M5) |
 | 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | **Concluída** (B1–B5, seção 5) |
-| 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Esboço (seção 6) |
+| 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Plano pronto, aguardando aprovação (seção 6) |
 
 Ponto de partida (como está hoje):
 - 5 regiões-ilha num reticulado de blocos de 16×14 casas, ligadas por corredores e geradas por seed.
@@ -412,17 +412,168 @@ Pontos de atenção:
 - **A câmara precisa caber na janela de 3 regiões ao vivo.** O chefe tem que ficar estável quando a região anterior é descartada.
 - **Mini-chefes a cada 2–3 regiões** ficam de fora deste pacote: as elites (B4) cumprem esse papel. Volto nisso se os testes pedirem.
 
-## 6. Tarefa 3 — Acampamentos e progressão (esboço)
+## 6. Tarefa 3 — Acampamentos e progressão (plano detalhado)
 
-- **Progresso da expedição:** região alcançada, power-ups, heróis resgatados nesta expedição, missões, chefes e relíquias. Fica salvo no servidor por grupo e sala.
-- **Progresso permanente da conta:** já existe em parte (personagens, cosméticos, conquistas, moedas). Entram as relíquias registradas, os biomas descobertos e o histórico de chefes.
-- **Acampamento (checkpoint e hub)** entre marcos:
-  - fogueira para salvar;
-  - lojinha com as moedas da expedição;
-  - troca de personagem entre os já desbloqueados;
-  - customização;
-  - NPCs, que são os **heróis resgatados morando no acampamento**: ferreiro, comerciante, explorador e cozinheiro, cada um abrindo um serviço;
-  - registro da jornada;
-  - escolha entre continuar ou encerrar.
-- **Derrota:** o grupo volta ao último acampamento e perde parte das moedas da expedição. É a decisão "arriscar ou garantir".
-- **Decisão pendente para essa fase:** hoje qualquer golpe mata (sem vida). "Recuperar vida" no acampamento exige criar um sistema de corações; isso será decidido no plano detalhado da Tarefa 3.
+> Status: **plano para aprovação**. Nada desta seção está implementado ainda.
+
+### 6.1 A ideia em uma frase
+
+A Aventura vira uma **expedição**: você atravessa arcos, para num **acampamento** depois de cada chefe,
+gasta e guarda o que juntou, troca de herói, e decide se **arrisca o próximo arco ou encerra**
+garantindo o que ganhou. Se o grupo cair, volta ao último acampamento e perde parte do que carregava.
+
+### 6.2 Onde o acampamento fica no mundo infinito
+
+- **Um acampamento por arco:** a região logo depois de cada Câmara do Guardião vira o acampamento
+  (região segura, sem inimigos). O primeiro aparece depois do Golem do Arco 1 (região 6), depois a
+  cada 5–7 regiões, sempre depois de um chefe.
+- **Começo da expedição:** a região 0 ganha uma fogueira simples (o "acampamento zero"), para a
+  regra de voltar ao último acampamento valer desde o início.
+- **Formato `camp`:** uma clareira pequena, gerada pela seed como as outras regiões. Tem:
+  - a fogueira no meio (salvar);
+  - as tendas dos moradores em volta (serviços, ver 6.5);
+  - o mural da jornada;
+  - o portão de saída ("Continuar a expedição").
+- **Sem pressa no acampamento:** o portão de trás fecha como sempre, mas lá não nasce nada. No
+  online, ninguém fica preso esperando: o portão de saída abre quando todos marcam "pronto" ou
+  depois de 60 s com a maioria pronta.
+
+### 6.3 O que é salvo e quando
+
+**Progresso da expedição** (vale só para esta jornada):
+- seed, último acampamento alcançado e profundidade;
+- moedas da expedição (as que você carrega);
+- por jogador: herói, power-ups e habilidades (uma "foto" tirada na fogueira);
+- heróis resgatados nesta expedição;
+- chefes vencidos e medalhas;
+- relíquias encontradas (6.6).
+
+**Quando salva:** ao acender a fogueira de um acampamento, o que é automático assim que o grupo
+inteiro chega a ela.
+
+**Onde fica:**
+- **Online:** no servidor, na conta do **anfitrião da sala**. No lobby, o anfitrião vê
+  "Continuar expedição · Acampamento 3 · Região 18". Os outros entram como convidados, com o
+  progresso de expedição do anfitrião e a própria conta para XP e moedas.
+- **Local (solo ou sofá):** no aparelho (localStorage), um espaço para cada modo.
+- **Uma expedição salva por conta.** Começar outra pergunta se pode apagar a atual.
+
+### 6.4 Moedas da expedição, derrota e "arriscar ou garantir"
+
+- **Moedas da expedição (🪙):** caem de baús, elites, Mímicos, medalhas de chefe e regiões
+  atravessadas, cada vez mais quanto mais fundo. Aparecem no HUD ao lado do objetivo.
+- **Gastar:** na loja e nos serviços do acampamento.
+- **Guardar:** no cofre da fogueira. O que vai para o cofre vira moeda da conta na hora e não se
+  perde mais.
+- **Derrota (todos caíram):**
+  - o grupo volta ao último acampamento;
+  - perde **50% das moedas que carregava** (o cofre não é tocado);
+  - os power-ups voltam à "foto" da fogueira;
+  - a seed é a mesma, então o arco que derrotou o grupo é **o mesmo mapa**: dá para aprender e tentar de novo.
+- **Encerrar a expedição** (na fogueira): tudo o que carrega vai para o cofre e o jogo termina com o
+  resumo (XP, moedas, profundidade, chefes, medalhas). É a escolha de garantir.
+- **Sem acampamento ainda** (caiu antes do primeiro): volta à fogueira da região 0, como hoje.
+
+### 6.5 Os moradores (heróis resgatados) e os serviços
+
+Os heróis desbloqueados na conta passam a **morar no acampamento**: aparecem andando entre as tendas
+e cada um abre um serviço. No online, vale se **qualquer pessoa do grupo** já tiver aquele herói. Até
+lá, a tenda fica fechada, com uma silhueta e a dica "resgate alguém para abrir".
+
+| Morador | Serviço | O que faz |
+|---|---|---|
+| (sempre) | **Fogueira** | Salva, cofre de moedas, encerrar ou continuar |
+| (sempre) | **Mural da jornada** | Mapa da jornada, chefes, medalhas, relíquias desta expedição |
+| (sempre) | **Barraca de troca** | Troca de herói entre os desbloqueados, e cosméticos (abre o Ateliê) |
+| Silvio Bombos | **Lojinha** | Power-ups com moedas da expedição: bomba+, fogo+, velocidade, escudo, "Pena do Retorno" (reviver na hora, 1 uso). Preço sobe com a profundidade |
+| Bombião | **Ferreiro** | Melhorias para a expedição inteira: +1 no limite de bombas ou de alcance, pavio um pouco mais curto. Caro, 1 de cada por acampamento |
+| Luiz Bombzaga | **Cozinha** | Uma refeição por acampamento, que vale para o próximo arco: começar com escudo, +velocidade ou uma vida extra (ver 6.7) |
+| Ayrton Senha | **Batedor** | Revela no mapa o próximo arco: baús, segredos e se há Mímico |
+| Rei Pelota | **Contratos** | 1 desafio opcional para o próximo arco (ex.: "vença o chefe com ouro", "abra 3 baús", "nenhuma queda"), com prêmio em moedas |
+| Tiringão | **Animador** | Uma vez por acampamento, a "Roleta do Tiringão": aposta moedas por uma relíquia ou um power-up raro |
+
+### 6.6 Relíquias
+
+- Achados raros que mudam a expedição até o fim. Vêm de:
+  - baús raros e secretos (chance pequena);
+  - medalha de ouro no chefe (garantida na 1ª vez de cada chefe);
+  - a roleta do Tiringão.
+- **Exemplos (8 na primeira leva):**
+  - Coração de Magma: a 1ª queda na lava de cada arco não mata.
+  - Pavio Duplo: a cada 5 bombas, uma sai com +1 de alcance.
+  - Bota de Obsidiana: imune ao chão rachando por 1 s a mais.
+  - Semente do Guardião: totens recarregam mais rápido.
+  - Ímã de Moedas: +25% moedas da expedição.
+  - Olho do Mímico: Mímicos piscam antes de você chegar perto.
+  - Coroa Partida: elites dão o dobro de moedas.
+  - Lanterna: na noite, o chefe fica um pouco mais visível.
+- **Conta:** cada relíquia achada fica registrada para sempre num **códice** no Perfil, ao lado do
+  bestiário. O códice tem conquistas próprias.
+
+### 6.7 Decisão pendente: vida (corações) ou golpe único
+
+Hoje qualquer golpe mata, e só o escudo e os totens salvam. Com acampamentos, há duas opções:
+
+- **A) Manter o golpe único.** O acampamento "cura" dando escudo e a cozinha dá uma vida extra para
+  o próximo arco.
+  - A favor: muda menos o equilíbrio e mantém a tensão do jogo.
+  - Contra: no celular, e jogando sozinho, um erro custa o arco inteiro.
+- **B) Corações só na Aventura** (3 por jogador). Um golpe tira 1 coração e dá 2 s de proteção.
+  O acampamento enche os corações e a cozinha dá um coração extra.
+  - A favor: mais acessível, combina com expedição longa e com voltar ao acampamento.
+  - Contra: os chefes e as medalhas precisam de uma nova passada de equilíbrio. "Ninguém cair"
+    passa a ser "ninguém perder todos os corações".
+- **Recomendação:** **B**. A Aventura é longa e infinita, e o acampamento ganha sentido como lugar
+  de recuperar.
+  - Versus e Boss Rush continuam com o golpe único.
+  - O escudo vira "coração azul": absorve 1 golpe e não volta no acampamento.
+
+### 6.8 Progresso permanente da conta
+
+Já existe: personagens, cosméticos, conquistas, moedas, atlas e bestiário.
+
+Entram:
+- o códice de relíquias;
+- o recorde de acampamentos alcançados;
+- o histórico de expedições (profundidade, chefes, medalhas e motivo do fim);
+- conquistas novas (exemplos):
+  - "Primeiro acampamento";
+  - "5 acampamentos numa expedição";
+  - "Encerrar com 1.000 moedas guardadas";
+  - "Contrato cumprido ×10";
+  - "Códice com 8 relíquias".
+
+### 6.9 Parte técnica (como encaixa no que já existe)
+
+- **Começar de um acampamento:** `createAdventure(seed, fromRegion)` cria a janela ao vivo a partir
+  do acampamento. A geração já é determinística por região (`seed + id`), então o mapa é o mesmo,
+  não precisa salvar geometria. A cadeia de direções (`dirs`) é refeita até a região pedida.
+- **Novo objetivo `camp`** e formato de região `camp` no gerador. Os props novos (fogueira, tendas,
+  mural, NPCs) entram no `PropState`, como os do M2–M4.
+- **Derrota vira "voltar ao acampamento"** em vez de fim de jogo (`modes.ts`): no local, a partida
+  reinicia do save; no online, o servidor recria o jogo a partir do save da sala, sem derrubar ninguém.
+- **Menus do acampamento:** painéis de tela no modo paisagem, um por serviço, com toque e controle.
+  Abrem ao encostar na tenda. No online, a compra é um comando para o servidor; o jogo não pausa no
+  online, mas o acampamento é seguro.
+- **Servidor:** `AccountStore` ganha `expedition` (o save) e `codex`. O protocolo ganha os comandos
+  `campBuy`, `campBank`, `campEnd`, `campReady` e `heroSwap`. Tudo é validado no servidor (preço,
+  saldo, 1 por acampamento).
+- **Arte:** fogueira, tendas, mural e o cofre num `tools/blender/camp_props.py` (GLB, como os outros
+  props). Os moradores usam os modelos de herói que já existem, com animação de "idle". Música própria
+  do acampamento (mais calma).
+
+### 6.10 Marcos
+
+| Marco | Conteúdo | Observação |
+|---|---|---|
+| **A1 — Acampamento e checkpoint** | Região `camp` depois de cada chefe e a fogueira da região 0. Fogueira salva a "foto". Derrota volta ao último acampamento (mesma seed, power-ups da foto). Moedas da expedição (queda, HUD, perda de 50%). Encerrar na fogueira com o resumo. Save local | Testes de determinismo: recomeçar do acampamento gera o mesmo mundo |
+| **A2 — Online e conta** | Save no servidor (conta do anfitrião), "Continuar expedição" no lobby, cofre que vira moeda da conta, voltar ao acampamento sem derrubar a sala, histórico de expedições | Migração das contas existentes |
+| **A3 — Serviços e moradores** | Lojinha, Barraca de troca (herói e Ateliê), Mural, e os 6 moradores com seus serviços (ferreiro, cozinha, batedor, contratos, roleta). NPCs andando no acampamento | Menus em paisagem com toque e controle |
+| **A4 — Relíquias e corações** | 8 relíquias, códice no Perfil, conquistas novas e, se aprovado, os corações da Aventura (6.7), com uma passada de equilíbrio nos chefes e medalhas | Depende da decisão 6.7 |
+| **A5 — Arte e acabamento** | GLBs do acampamento, música, dicas de tutorial, cartão "ACAMPAMENTO", ajustes de celular | Fecha a Tarefa 3 |
+
+**Perguntas para aprovar antes do A1:**
+1. Corações (B, recomendado) ou golpe único (A)?
+2. Perder **50%** das moedas carregadas na derrota está bom?
+3. Um acampamento **por arco** (depois de cada chefe) está bom, ou quer mais perto (a cada 3 regiões)?
+4. O save online na conta do **anfitrião** (recomendado) ou cada jogador com o seu?
