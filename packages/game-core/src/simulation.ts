@@ -1,6 +1,6 @@
 import { ARENAS, BOSS_ARENA, BOSS_RUSH, CHARACTERS, RULES, secToTicks, type CharacterId, type GameConfig } from '@4walls/shared';
 import { updateMines, useAbility } from './abilities';
-import { buildAdventure, revealAround, spawnAdventureEnemies, updateAdventure } from './adventure';
+import { createAdventure, revealAround, spawnAdventureEnemies, updateAdventure } from './adventure';
 import { scheduleFirstEvent, updateArenaEvents } from './arenaEvents';
 import { buildBossArena, spawnBoss, updateBoss } from './boss';
 import { tryPlaceBomb, updateBombs } from './bombs';
@@ -15,7 +15,7 @@ export function createGame(config: GameConfig): GameState {
   const arena = config.arenaId ? ARENAS[config.arenaId] : undefined;
   // Adventure builds its own (non-rectangular) world; arenas come from the arena definition.
   const rngHolder = { rng: config.seed | 0 };
-  const adv = config.mode === 'adventure' ? buildAdventure(rngHolder, config.regions) : null;
+  const adv = config.mode === 'adventure' ? createAdventure(config.seed | 0) : null;
   const bossArena = config.mode === 'bossrush' ? buildBossArena(rngHolder) : null;
   const custom = adv ?? bossArena;
   const width = custom ? custom.grid.w : (arena?.width ?? config.width);

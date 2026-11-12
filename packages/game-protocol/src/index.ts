@@ -3,6 +3,7 @@
 // Key rule: a connection is NOT a player. One connection may own several player slots
 // (couch co-op online); every input names the slot it drives and the server checks ownership.
 import { ARENA_IDS, CHARACTER_IDS, DIRS, type ArenaId, type BossId, type CharacterId, type Dir, type GameConfig, type Loadout, type ModeId, type PlayerInput } from '@4walls/shared';
+import { regionInfo, syncAdventureWindow } from '@4walls/core';
 import type {
   ArenaEventState,
   BombState,
@@ -161,6 +162,27 @@ export interface StartInfo {
 type SnapPlayer = Omit<PlayerState, 'px' | 'py' | 'name' | 'slot' | 'colorIndex'>;
 type SnapEnemy = Omit<EnemyState, 'px' | 'py'>;
 
+/**
+ * Endless Adventure. The geometry is rebuilt by each client from the seed and the list of live
+ * region ids; only what changes travels:
+ * - w: live region ids (the window), d: depth reached;
+ * - r: per live region [id, flags (1 unlocked, 2 cleared), progress, goal];
+ * - g: exit gates [regionId, openedTick or -1];
+ * - c: cages [id, 0 locked | 1 free | 2 rescued];
+ * - p: props [id, state code, x, y, carrierId or ''];
+ * - cl: the gate behind the group closes at [region, tick].
+ */
+export interface AdvSnap {
+  w: number[];
+  d: number;
+  r: [number, number, number, number][];
+  g: [number, number][];
+  c: [number, number][];
+  p: [number, number, number, number, string][];
+  cl: [number, number] | null;
+}
+const PROP_STATES = ['closed', 'open', 'idle', 'carried', 'used'] as const;
+
 /** Authoritative snapshot (~30×/s, msgpack-encoded by Colyseus). Floats rounded to 3 decimals. */
 export interface Snapshot {
   t: number;
@@ -178,8 +200,8 @@ export interface Snapshot {
   ev0: ArenaEventState | null;
   ne: number;
   r: GameResult | null;
-  /** Adventure: region flags (bit 0 unlocked, bit 1 cleared), gate open ticks (-1 = sealed), cage states (0 locked, 1 free, 2 rescued). */
-  adv?: { r: number[]; g: number[]; c?: number[] };
+  /** Endless Adventure (see AdvSnap). */
+  adv?: AdvSnap;
   /** Boss Rush: the boss in the arena, the queue, how many fell, when the next one enters. */
   bs?: Omit<BossState, 'px' | 'py'> | null;
   bq?: BossId[];
@@ -220,9 +242,13 @@ export function encodeSnapshot(s: GameState, ack: Record<number, number>, ev: Ga
     ...(s.adventure
       ? {
           adv: {
-            r: s.adventure.regions.map((r) => (r.unlocked ? 1 : 0) | (r.cleared ? 2 : 0)),
-            g: s.adventure.gates.map((g) => (g.open ? g.openedTick : -1)),
-            c: s.adventure.cages.map((c) => (c.state === 'locked' ? 0 : c.state === 'free' ? 1 : 2)),
+            w: s.adventure.regions.map((r) => r.id),
+            d: s.adventure.depth,
+            r: s.adventure.regions.map((r) => [r.id, (r.unlocked ? 1 : 0) | (r.cleared ? 2 : 0), r.objective.progress, r.objective.goal]),
+            g: s.adventure.gates.filter((g) => g.kind !== 'back').map((g) => [g.from, g.open ? g.openedTick : -1]),
+            c: s.adventure.cages.map((c) => [c.id, c.state === 'locked' ? 0 : c.state === 'free' ? 1 : 2]),
+            p: s.adventure.props.map((p) => [p.id, PROP_STATES.indexOf(p.state), p.x, p.y, p.carrierId ?? '']),
+            cl: s.adventure.closing ? [s.adventure.closing.region, s.adventure.closing.atTick] : null,
           },
         }
       : {}),
@@ -245,7 +271,9 @@ export function applySnapshot(s: GameState, snap: Snapshot) {
   s.phase = snap.ph;
   s.phaseStartTick = snap.pst;
   s.timeLeftTicks = snap.tl;
-  for (let i = 0; i < snap.g.length && i < s.grid.cells.length; i++) s.grid.cells[i] = snap.g.charCodeAt(i) - 48;
+  // Endless Adventure: rebuild the same live regions as the server before copying the cells.
+  if (snap.adv && s.adventure && snap.adv.w.join(',') !== s.adventure.windowKey) syncAdventureWindow(s, snap.adv.w);
+  if (snap.g.length === s.grid.cells.length) for (let i = 0; i < snap.g.length; i++) s.grid.cells[i] = snap.g.charCodeAt(i) - 48;
   for (const sp of snap.p) {
     const p = s.players.find((pp) => pp.id === sp.id);
     if (!p) continue;
@@ -268,24 +296,45 @@ export function applySnapshot(s: GameState, snap: Snapshot) {
   s.nextEventTick = snap.ne;
   s.result = snap.r;
   if (snap.adv && s.adventure) {
-    snap.adv.r.forEach((f, i) => {
-      const r = s.adventure!.regions[i];
-      if (r) {
-        r.unlocked = (f & 1) !== 0;
-        r.cleared = (f & 2) !== 0;
-      }
-    });
-    snap.adv.c?.forEach((st, i) => {
-      const c = s.adventure!.cages[i];
+    const a = snap.adv;
+    const adv = s.adventure;
+    for (const [id, flags, progress, goal] of a.r) {
+      const r = adv.regions.find((x) => x.id === id);
+      if (!r) continue;
+      r.unlocked = (flags & 1) !== 0;
+      r.cleared = (flags & 2) !== 0;
+      r.objective.progress = progress;
+      r.objective.goal = goal;
+      r.objective.done = r.cleared;
+    }
+    for (const [id, st] of a.c) {
+      const c = adv.cages.find((x) => x.id === id);
       if (c) c.state = st === 0 ? 'locked' : st === 1 ? 'free' : 'rescued';
-    });
-    snap.adv.g.forEach((t, i) => {
-      const g = s.adventure!.gates[i];
+    }
+    for (const [from, t] of a.g) {
+      const g = adv.gates.find((x) => x.kind !== 'back' && x.from === from);
       if (g) {
         g.open = t >= 0;
         g.openedTick = Math.max(0, t);
       }
-    });
+    }
+    for (const [id, st, x, y, carrier] of a.p) {
+      const p = adv.props.find((q) => q.id === id);
+      if (!p) continue;
+      p.state = PROP_STATES[st] ?? p.state;
+      p.x = x;
+      p.y = y;
+      p.carrierId = carrier || null;
+    }
+    adv.closing = a.cl ? { region: a.cl[0], atTick: a.cl[1] } : null;
+    if (a.d !== adv.depth) {
+      adv.depth = a.d;
+      // Journey names come from the seed: no need to send them.
+      adv.journey = Array.from({ length: a.d + 1 }, (_, i) => {
+        const info = regionInfo(s.config.seed, i);
+        return { id: i, name: info.name, biome: info.biome };
+      });
+    }
   }
   if (snap.bs !== undefined) {
     const prev = s.boss;

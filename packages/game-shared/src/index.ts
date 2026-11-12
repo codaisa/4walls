@@ -10,6 +10,8 @@ export enum Cell {
   Floor = 0,
   Wall = 1,
   Block = 2,
+  /** Cracked wall (Adventure secrets): solid like a wall, a blast turns it into floor. */
+  Cracked = 3,
 }
 
 export type Dir = 'up' | 'down' | 'left' | 'right';
@@ -228,6 +230,8 @@ export const ADVENTURE = {
   blockFill: 0.42,
   enemiesBase: 2,
   enemiesMax: 5,
+  /** Deep regions never have more Magmitos than this (difficulty then comes from speed/density). */
+  enemiesCap: 12,
 } as const;
 
 export type BiomeId = 'volcanic' | 'transition' | 'forest';

@@ -1,231 +1,618 @@
-import { ADVENTURE, Cell, CHARACTER_IDS, CHARACTERS, DIR_VEC, DIRS, RULES, secToTicks, type BiomeId, type CharacterId } from '@4walls/shared';
-import { cellIndex, createGrid, getCell, setCell } from './grid';
-import { nextRandom, randInt } from './rng';
-import type { AdventureState, CageState, EnemyState, GameState, GateState, Grid, PlayerState, RegionState } from './types';
-import { bombAt, flamesAt, mineAt, newId } from './world';
+import { ADVENTURE, Cell, CHARACTER_IDS, CHARACTERS, DIR_VEC, DIRS, POWERUPS, RULES, secToTicks, type BiomeId, type CharacterId, type PowerupType } from '@4walls/shared';
+import { cellIndex, createGrid, getCell, inBounds, setCell } from './grid';
+import { nextRandom, pickWeighted, randInt } from './rng';
+import type { AdventureState, CageState, EnemyState, GameState, GateState, Grid, PlayerState, PropState, RegionDir, RegionObjectiveKind, RegionState } from './types';
+import { bombAt, flamesAt, mineAt, newId, powerupAt } from './world';
 
 /**
- * Adventure mode world: regions laid out along a random walk on a chunk lattice (so the world is
- * never a plain rectangle), each region an organic island with a pillar grid and crates, joined by
- * sealed gates. Clearing a region's Magmitos opens the gate to the next one; fog of war covers
- * what is still locked or unexplored.
+ * Endless Adventure.
+ *
+ * The world is an infinite lattice of chunks (ADVENTURE.chunkW × chunkH). Region N sits next to
+ * region N − 1 (east, north or south — never back west), its layout comes only from (seed, N),
+ * and it is generated when the group reaches region N − 1. Only a window of 1–3 regions is alive:
+ * once everybody walks into a new region, the gate behind them seals and the old region is dropped.
+ * The grid is a window in world coordinates (grid.x0 / y0), so nothing alive ever moves when the
+ * window slides — memory, physics and rendering cost the same at region 3 or region 300.
+ *
+ * Servers and clients build identical regions from the seed; only the dynamic state (destroyed
+ * blocks, props, gates, objectives) travels in snapshots.
  */
 
-const REGION_NAMES = ['Caldeira Rasa', 'Campos de Cinza', 'Rio de Magma', 'Ponte de Obsidiana', 'Bosque Chamuscado', 'Clareira Encantada', 'Ruínas Musgosas'];
+const CW = ADVENTURE.chunkW;
+const CH = ADVENTURE.chunkH;
+/** Seconds the gate behind the group stays open once the first player went through. */
+export const GATE_CLOSE_SEC = 15;
+/** Seconds of spawn protection after coming back. */
+const REVIVE_INVULN_SEC = 2.5;
 
-export interface AdventureBuild {
-  grid: Grid;
-  adventure: AdventureState;
-  spawns: { x: number; y: number }[];
+type Pt = { x: number; y: number };
+const STEP: Record<RegionDir, [number, number]> = { E: [1, 0], N: [0, -1], S: [0, 1] };
+
+// ───────────────────────────── seeds, names, difficulty ─────────────────────────────
+
+/** Independent, well-mixed random stream per (seed, region, purpose). */
+function subRng(seed: number, id: number, salt: number) {
+  let h = (seed ^ Math.imul(id + 1, 0x9e3779b1) ^ Math.imul(salt + 7, 0x85ebca6b)) | 0;
+  h = Math.imul(h ^ (h >>> 16), 0x7feb352d);
+  h = Math.imul(h ^ (h >>> 15), 0x846ca68b);
+  h ^= h >>> 16;
+  return { rng: h | 0 };
 }
 
-type Dir4 = 'E' | 'N' | 'S';
-const STEP: Record<Dir4, [number, number]> = { E: [1, 0], N: [0, -1], S: [0, 1] };
+/** The first regions are a scripted introduction; after them everything is drawn from the seed. */
+const SCRIPTED: { name: string; chapter: string; biome: BiomeId; objective: RegionObjectiveKind }[] = [
+  { name: 'Caldeira Rasa', chapter: 'O despertar', biome: 'volcanic', objective: 'clear' },
+  { name: 'Campos de Cinza', chapter: 'A infestação', biome: 'volcanic', objective: 'key' },
+  { name: 'Rio de Magma', chapter: 'A travessia', biome: 'volcanic', objective: 'clear' },
+  { name: 'Ponte de Obsidiana', chapter: 'O guardião', biome: 'transition', objective: 'key' },
+  { name: 'Bosque Chamuscado', chapter: 'A corrupção', biome: 'forest', objective: 'clear' },
+];
 
-function biomeFor(i: number, n: number): BiomeId {
-  if (n >= 3 && i === n - 1) return 'forest';
-  if (n >= 3 && i === n - 2) return 'transition';
-  return 'volcanic';
+const NAME_PARTS: Record<BiomeId, { head: string[]; tail: string[] }> = {
+  volcanic: {
+    head: ['Vale', 'Cratera', 'Encosta', 'Planície', 'Fornalha', 'Garganta', 'Campos', 'Caldeirão', 'Escarpa', 'Bacia'],
+    tail: ['das Brasas', 'de Cinza', 'do Enxofre', 'das Faíscas', 'de Basalto', 'da Lava Fria', 'do Fole', 'Rubra', 'Fumegante', 'do Carvão'],
+  },
+  transition: {
+    head: ['Ponte', 'Passagem', 'Fenda', 'Limiar', 'Desfiladeiro', 'Travessia', 'Garganta'],
+    tail: ['de Obsidiana', 'do Vapor', 'das Raízes', 'Partida', 'Cinzenta', 'dos Ecos', 'Velada'],
+  },
+  forest: {
+    head: ['Bosque', 'Clareira', 'Mata', 'Trilha', 'Vereda', 'Grota', 'Brenha', 'Capoeira'],
+    tail: ['Sussurrante', 'dos Ipês', 'das Sombras', 'Chamuscada', 'do Cipó', 'das Corujas', 'Encantada', 'dos Vagalumes'],
+  },
+};
+const CHAPTERS: Record<RegionObjectiveKind, string[]> = {
+  clear: ['A limpeza', 'O cerco', 'A emboscada', 'A infestação', 'O enxame'],
+  key: ['A chave perdida', 'O cadeado', 'A busca', 'O segredo do portão', 'A relíquia'],
+};
+/** Biome rhythm of every arc (5 regions for now; varied arcs come with the next milestones). */
+const ARC_BIOMES: BiomeId[] = ['volcanic', 'volcanic', 'volcanic', 'transition', 'forest'];
+
+/** Name, chapter, biome and objective of region `id`: cheap, needs no world generation. */
+export function regionInfo(seed: number, id: number) {
+  if (id < SCRIPTED.length) return SCRIPTED[id];
+  const r = subRng(seed, id, 3);
+  const biome = ARC_BIOMES[id % ARC_BIOMES.length];
+  const objective: RegionObjectiveKind = nextRandom(r) < 0.45 ? 'key' : 'clear';
+  const parts = NAME_PARTS[biome];
+  const name = `${parts.head[randInt(r, parts.head.length)]} ${parts.tail[randInt(r, parts.tail.length)]}`;
+  const chapter = CHAPTERS[objective][randInt(r, CHAPTERS[objective].length)];
+  return { name, chapter, biome, objective };
 }
 
-export function buildAdventure(rngHolder: { rng: number }, regionCount: number = ADVENTURE.regions): AdventureBuild {
-  const CW = ADVENTURE.chunkW;
-  const CH = ADVENTURE.chunkH;
-  const n = Math.max(2, Math.min(regionCount, REGION_NAMES.length));
-
-  // 1. Region path: east-leaning random walk, never revisiting a chunk.
-  const path: { cx: number; cy: number; dirToNext: Dir4 | null }[] = [{ cx: 0, cy: 0, dirToNext: null }];
-  const seen = new Set(['0,0']);
-  for (let i = 1; i < n; i++) {
-    const prev = path[i - 1];
-    const options = (['E', 'E', 'E', 'N', 'S'] as Dir4[]).filter((d) => !seen.has(`${prev.cx + STEP[d][0]},${prev.cy + STEP[d][1]}`));
-    // Avoid two vertical steps in a row so the world keeps moving forward.
-    const lastVertical = i > 1 && path[i - 2].dirToNext !== 'E';
-    const pool = lastVertical ? options.filter((d) => d === 'E') : options;
-    const d = (pool.length ? pool : (['E'] as Dir4[]))[randInt(rngHolder, pool.length || 1)];
-    prev.dirToNext = d;
-    const next = { cx: prev.cx + STEP[d][0], cy: prev.cy + STEP[d][1], dirToNext: null };
-    seen.add(`${next.cx},${next.cy}`);
-    path.push(next);
-  }
-  const minCy = Math.min(...path.map((p) => p.cy));
-  for (const p of path) p.cy -= minCy;
-  const maxCx = Math.max(...path.map((p) => p.cx));
-  const maxCy = Math.max(...path.map((p) => p.cy));
-
-  // 2. Grid: everything starts as void (wall); islands are carved into it.
-  const W = (maxCx + 1) * CW;
-  const H = (maxCy + 1) * CH;
-  const grid = createGrid(W, H);
-  grid.cells.fill(Cell.Wall);
-  const regionOf = new Int16Array(W * H).fill(-1);
-  const corridor = new Set<number>();
-  const regions: RegionState[] = [];
-  const gates: GateState[] = [];
-
-  const center = (i: number) => ({ x: path[i].cx * CW + 7, y: path[i].cy * CH + 7 });
-  const edgeCell = (i: number, d: Dir4 | 'W'): { x: number; y: number } => {
-    const ox = path[i].cx * CW;
-    const oy = path[i].cy * CH;
-    if (d === 'E') return { x: ox + CW - 1, y: oy + 7 };
-    if (d === 'W') return { x: ox, y: oy + 7 };
-    if (d === 'N') return { x: ox + 7, y: oy };
-    return { x: ox + 7, y: oy + CH - 1 };
+/**
+ * The endless difficulty curve: fast early growth, then slow, with hard caps so deep regions get
+ * harder through speed and density rather than by filling the screen.
+ */
+export function difficulty(depth: number) {
+  const d = Math.max(0, depth);
+  const enemies = d < 5 ? [2, 3, 4, 5, 5][d] : Math.min(ADVENTURE.enemiesCap, 5 + Math.floor((d - 4) / 2));
+  return {
+    enemies,
+    enemySpeed: Math.min(1.6, 1 + 0.035 * Math.max(0, d - 4)),
+    blockFill: d === 0 ? 0.36 : Math.min(0.56, ADVENTURE.blockFill + 0.012 * d),
+    chestChance: Math.max(0.25, 0.6 - 0.03 * d),
+    secretChance: d === 0 ? 1 : Math.max(0.35, 0.7 - 0.02 * d),
   };
-  const opposite = (d: Dir4): Dir4 | 'W' => (d === 'E' ? 'W' : d === 'N' ? 'S' : 'N');
+}
 
-  for (let i = 0; i < n; i++) {
-    const { cx, cy } = path[i];
-    const ox = cx * CW;
-    const oy = cy * CH;
-    regions.push({ id: i, name: REGION_NAMES[i], biome: biomeFor(i, n), cx, cy, unlocked: i === 0, cleared: false });
-    // Organic island: a noisy ellipse inside the chunk (1-cell margin).
-    const p1 = nextRandom(rngHolder) * Math.PI * 2;
-    const p2 = nextRandom(rngHolder) * Math.PI * 2;
-    const rx = 6.5;
-    const ry = 5.5;
+// ───────────────────────────── lattice ─────────────────────────────
+
+/** Grows the direction chain so that dirs[upTo] exists. Never two vertical steps in a row. */
+function ensureChain(adv: AdventureState, seed: number, upTo: number) {
+  while (adv.dirs.length <= upTo) {
+    const i = adv.dirs.length;
+    const prev = adv.dirs[i - 1];
+    const pool: RegionDir[] = prev && prev !== 'E' ? ['E'] : ['E', 'E', 'E', 'N', 'S'];
+    adv.dirs.push(pool[randInt(subRng(seed, i, 1), pool.length)]);
+  }
+}
+
+function chunkOf(adv: AdventureState, id: number) {
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < id; i++) {
+    cx += STEP[adv.dirs[i]][0];
+    cy += STEP[adv.dirs[i]][1];
+  }
+  return { cx, cy };
+}
+
+const mod2 = (v: number) => ((v % 2) + 2) % 2;
+
+function edgeCell(ox: number, oy: number, d: RegionDir | 'W'): Pt {
+  if (d === 'E') return { x: ox + CW - 1, y: oy + 7 };
+  if (d === 'W') return { x: ox, y: oy + 7 };
+  if (d === 'N') return { x: ox + 7, y: oy };
+  return { x: ox + 7, y: oy + CH - 1 };
+}
+const opposite = (d: RegionDir): RegionDir | 'W' => (d === 'E' ? 'W' : d === 'N' ? 'S' : 'N');
+
+// ───────────────────────────── region generation ─────────────────────────────
+
+interface Blueprint {
+  state: RegionState;
+  /** Chunk cells, row-major (CW × CH), in world space starting at (ox, oy). */
+  cells: Uint8Array;
+  ox: number;
+  oy: number;
+  exitGate: GateState;
+  spawns: Pt[];
+  cage: Pt | null;
+  props: Omit<PropState, 'tick'>[];
+  enemySpots: Pt[];
+  enemyCount: number;
+  enemySpeed: number;
+}
+
+/** Builds region `id` deterministically from the seed (chain must reach id + 1). */
+function regionBlueprint(seed: number, adv: AdventureState, id: number): Blueprint {
+  const info = regionInfo(seed, id);
+  const diff = difficulty(id);
+  const r = subRng(seed, id, 2);
+  const { cx, cy } = chunkOf(adv, id);
+  const ox = cx * CW;
+  const oy = cy * CH;
+  const cells = new Uint8Array(CW * CH).fill(Cell.Wall);
+  const at = (x: number, y: number) => (y - oy) * CW + (x - ox);
+  const inChunk = (x: number, y: number) => x >= ox && y >= oy && x < ox + CW && y < oy + CH;
+  const get = (x: number, y: number) => (inChunk(x, y) ? cells[at(x, y)] : Cell.Wall);
+  const set = (x: number, y: number, c: Cell) => {
+    if (inChunk(x, y)) cells[at(x, y)] = c;
+  };
+
+  // 1. Organic island: a noisy ellipse inside the chunk (1-cell margin), pillars on even/even.
+  const p1 = nextRandom(r) * Math.PI * 2;
+  const p2 = nextRandom(r) * Math.PI * 2;
+  for (let y = oy + 1; y < oy + CH - 1; y++)
+    for (let x = ox + 1; x < ox + CW - 1; x++) {
+      const dx = (x + 0.5 - (ox + 8)) / 6.5;
+      const dy = (y + 0.5 - (oy + 7)) / 5.5;
+      const t = Math.atan2(dy, dx);
+      const rr = 1 + 0.17 * Math.sin(3 * t + p1) + 0.1 * Math.sin(5 * t + p2);
+      if (dx * dx + dy * dy <= rr * rr) set(x, y, mod2(x) === 0 && mod2(y) === 0 ? Cell.Wall : Cell.Floor);
+    }
+
+  // 2. Corridors from the center to the entry edge and to the exit edge (odd row/column).
+  const center = { x: ox + 7, y: oy + 7 };
+  const corridor = new Set<number>();
+  const carve = (to: Pt) => {
+    const sx = Math.sign(to.x - center.x);
+    const sy = Math.sign(to.y - center.y);
+    for (let x = center.x, y = center.y; ; x += sx, y += sy) {
+      set(x, y, Cell.Floor);
+      corridor.add(at(x, y));
+      if (x === to.x && y === to.y) break;
+    }
+  };
+  const exitDir = adv.dirs[id];
+  const exit = edgeCell(ox, oy, exitDir);
+  carve(exit);
+  const entry = id > 0 ? edgeCell(ox, oy, opposite(adv.dirs[id - 1])) : null;
+  if (entry) carve(entry);
+  set(exit.x, exit.y, Cell.Wall); // sealed until the objective is done
+
+  // 3. The first region has a safe spawn pocket in the middle.
+  const spawns: Pt[] = id === 0 ? [center, { x: center.x + 2, y: center.y }, { x: center.x - 2, y: center.y }, { x: center.x, y: center.y + 2 }] : [];
+  for (const sp of spawns) {
+    set(sp.x, sp.y, Cell.Floor);
+    corridor.add(at(sp.x, sp.y));
+  }
+
+  const near = (a: Pt | null, x: number, y: number, d: number) => !!a && Math.abs(a.x - x) + Math.abs(a.y - y) <= d;
+  const reserved = (x: number, y: number) => corridor.has(at(x, y)) || near(exit, x, y, 2) || near(entry, x, y, 2) || (id === 0 && near(center, x, y, 3));
+
+  // 4. Destructible blocks (denser the deeper you go).
+  for (let y = oy; y < oy + CH; y++)
+    for (let x = ox; x < ox + CW; x++) {
+      if (get(x, y) !== Cell.Floor || reserved(x, y)) continue;
+      if (nextRandom(r) < diff.blockFill) set(x, y, Cell.Block);
+    }
+
+  // Walking distance from where the group arrives (blocks count as passable: they can be blown up).
+  const start = entry ?? center;
+  const dist = new Map<number, number>([[at(start.x, start.y), 0]]);
+  const queue: Pt[] = [start];
+  while (queue.length) {
+    const c = queue.shift()!;
+    for (const d of DIRS) {
+      const nx = c.x + DIR_VEC[d].x;
+      const ny = c.y + DIR_VEC[d].y;
+      if (!inChunk(nx, ny) || get(nx, ny) === Cell.Wall || dist.has(at(nx, ny))) continue;
+      dist.set(at(nx, ny), dist.get(at(c.x, c.y))! + 1);
+      queue.push({ x: nx, y: ny });
+    }
+  }
+  const reachable = (x: number, y: number) => dist.has(at(x, y));
+  const candidates = (pred: (x: number, y: number) => boolean) => {
+    const out: Pt[] = [];
+    for (let y = oy; y < oy + CH; y++) for (let x = ox; x < ox + CW; x++) if (reachable(x, y) && !reserved(x, y) && pred(x, y)) out.push({ x, y });
+    return out;
+  };
+  const taken: Pt[] = [];
+  const free = (x: number, y: number) => taken.every((t) => Math.abs(t.x - x) + Math.abs(t.y - y) > 1);
+
+  const props: Omit<PropState, 'tick'>[] = [];
+  let propSeq = 0;
+  const propId = () => id * 16 + propSeq++;
+
+  // 5. Objective: a key on a pedestal far from the exit gate.
+  if (info.objective === 'key') {
+    const far = candidates((x, y) => get(x, y) !== Cell.Wall).sort((a, b) => Math.abs(b.x - exit.x) + Math.abs(b.y - exit.y) - (Math.abs(a.x - exit.x) + Math.abs(a.y - exit.y)));
+    const pool = far.slice(0, Math.max(1, Math.floor(far.length / 4)));
+    const k = pool[randInt(r, pool.length)] ?? center;
+    set(k.x, k.y, Cell.Floor);
+    taken.push(k);
+    props.push({ id: propId(), kind: 'key', region: id, x: k.x, y: k.y, state: 'idle', carrierId: null, homeX: k.x, homeY: k.y });
+  }
+
+  // 6. One caged hero per region (it blocks like a crate until blown open).
+  const cageSpots = candidates((x, y) => get(x, y) !== Cell.Wall && free(x, y) && !(id === 0 && near(center, x, y, 5)));
+  const cage = cageSpots.length ? cageSpots[randInt(r, cageSpots.length)] : null;
+  if (cage) {
+    set(cage.x, cage.y, Cell.Block);
+    taken.push(cage);
+  }
+
+  // 7. Secret: a cracked wall at the island's rim hiding a pocket with a rare chest.
+  if (nextRandom(r) < diff.secretChance) {
+    const options: { wall: Pt; pocket: Pt }[] = [];
+    for (const c of candidates((x, y) => get(x, y) !== Cell.Wall))
+      for (const d of DIRS) {
+        const wall = { x: c.x + DIR_VEC[d].x, y: c.y + DIR_VEC[d].y };
+        const pocket = { x: wall.x + DIR_VEC[d].x, y: wall.y + DIR_VEC[d].y };
+        if (get(wall.x, wall.y) !== Cell.Wall || get(pocket.x, pocket.y) !== Cell.Wall) continue;
+        if (pocket.x <= ox || pocket.y <= oy || pocket.x >= ox + CW - 1 || pocket.y >= oy + CH - 1) continue;
+        // The pocket must only touch the cracked wall (no other way in).
+        const sealed = DIRS.every((dd) => {
+          const nx = pocket.x + DIR_VEC[dd].x;
+          const ny = pocket.y + DIR_VEC[dd].y;
+          return (nx === wall.x && ny === wall.y) || get(nx, ny) === Cell.Wall;
+        });
+        if (sealed && !near(exit, wall.x, wall.y, 2) && !near(entry, wall.x, wall.y, 2)) options.push({ wall, pocket });
+      }
+    if (options.length) {
+      const o = options[randInt(r, options.length)];
+      set(o.wall.x, o.wall.y, Cell.Cracked);
+      set(o.pocket.x, o.pocket.y, Cell.Floor);
+      taken.push(o.pocket);
+      props.push({ id: propId(), kind: 'chest', region: id, x: o.pocket.x, y: o.pocket.y, state: 'closed', rare: true });
+    }
+  }
+
+  // 8. A common chest out in the open, sometimes.
+  if (nextRandom(r) < diff.chestChance) {
+    const spots = candidates((x, y) => get(x, y) === Cell.Floor && free(x, y));
+    if (spots.length) {
+      const c = spots[randInt(r, spots.length)];
+      taken.push(c);
+      props.push({ id: propId(), kind: 'chest', region: id, x: c.x, y: c.y, state: 'closed', rare: false });
+    }
+  }
+
+  // 9. Where Magmitos may start: open floor, away from the arrival point, gates, cage and props.
+  const enemySpots = candidates((x, y) => get(x, y) === Cell.Floor && !near(start, x, y, 5) && free(x, y));
+  for (let i = enemySpots.length - 1; i > 0; i--) {
+    const j = randInt(r, i + 1);
+    [enemySpots[i], enemySpots[j]] = [enemySpots[j], enemySpots[i]];
+  }
+
+  const state: RegionState = {
+    id,
+    name: info.name,
+    chapter: info.chapter,
+    biome: info.biome,
+    cx,
+    cy,
+    objective: { kind: info.objective, progress: 0, goal: info.objective === 'key' ? 1 : diff.enemies, done: false },
+    unlocked: id === 0,
+    cleared: false,
+    entry,
+  };
+  const exitGate: GateState = { id, x: exit.x, y: exit.y, axis: exitDir === 'E' ? 'h' : 'v', from: id, to: id + 1, open: false, openedTick: -1, kind: 'exit' };
+  return { state, cells, ox, oy, exitGate, spawns, cage, props, enemySpots, enemyCount: diff.enemies, enemySpeed: diff.enemySpeed };
+}
+
+// ───────────────────────────── the live window ─────────────────────────────
+
+/** Re-allocates the grid around the given regions, keeping the live cells of the ones already there. */
+function rebuildWindow(s: GameState, regions: RegionState[], fresh: Map<number, Blueprint>) {
+  const adv = s.adventure!;
+  const minCx = Math.min(...regions.map((r) => r.cx));
+  const maxCx = Math.max(...regions.map((r) => r.cx));
+  const minCy = Math.min(...regions.map((r) => r.cy));
+  const maxCy = Math.max(...regions.map((r) => r.cy));
+  const old = s.grid;
+  const oldRegionOf = adv.regionOf;
+  const oldExplored = adv.explored;
+  const grid = createGrid((maxCx - minCx + 1) * CW, (maxCy - minCy + 1) * CH, minCx * CW, minCy * CH);
+  grid.cells.fill(Cell.Wall);
+  const regionOf = new Int16Array(grid.w * grid.h).fill(-1);
+  const explored = new Uint8Array(grid.w * grid.h);
+  for (const reg of regions) {
+    const ox = reg.cx * CW;
+    const oy = reg.cy * CH;
+    const bp = fresh.get(reg.id);
     for (let y = oy; y < oy + CH; y++)
       for (let x = ox; x < ox + CW; x++) {
-        regionOf[cellIndex(grid, x, y)] = i;
-        if (x === ox || y === oy || x === ox + CW - 1 || y === oy + CH - 1) continue;
-        const dx = (x + 0.5 - (ox + 8)) / rx;
-        const dy = (y + 0.5 - (oy + 7)) / ry;
-        const t = Math.atan2(dy, dx);
-        const r = 1 + 0.17 * Math.sin(3 * t + p1) + 0.1 * Math.sin(5 * t + p2);
-        if (dx * dx + dy * dy <= r * r) setCell(grid, x, y, x % 2 === 0 && y % 2 === 0 ? Cell.Wall : Cell.Floor);
-      }
-    // Corridors from the island center to the gates (odd row/column: never a pillar).
-    const c = center(i);
-    const links: (Dir4 | 'W')[] = [];
-    if (path[i].dirToNext) links.push(path[i].dirToNext!);
-    if (i > 0) links.push(opposite(path[i - 1].dirToNext!));
-    for (const d of links) {
-      const e = edgeCell(i, d);
-      const sx = Math.sign(e.x - c.x);
-      const sy = Math.sign(e.y - c.y);
-      for (let x = c.x, y = c.y; ; x += sx, y += sy) {
-        setCell(grid, x, y, Cell.Floor);
-        corridor.add(cellIndex(grid, x, y));
-        if (x === e.x && y === e.y) break;
-      }
-    }
-    if (path[i].dirToNext) {
-      const e = edgeCell(i, path[i].dirToNext!);
-      setCell(grid, e.x, e.y, Cell.Wall); // sealed until the region is cleared
-      gates.push({ id: gates.length, x: e.x, y: e.y, axis: path[i].dirToNext === 'E' ? 'h' : 'v', from: i, to: i + 1, open: false, openedTick: -1 });
-    }
-  }
-
-  // 3. Player spawn pocket in region 0.
-  const c0 = center(0);
-  const spawns = [
-    { x: c0.x, y: c0.y },
-    { x: c0.x + 2, y: c0.y },
-    { x: c0.x - 2, y: c0.y },
-    { x: c0.x, y: c0.y + 2 },
-  ];
-  for (const sp of spawns) {
-    setCell(grid, sp.x, sp.y, Cell.Floor);
-    corridor.add(cellIndex(grid, sp.x, sp.y));
-  }
-
-  // 4. Destructible blocks: never on corridors, never next to gates, never in the spawn pocket.
-  const nearGate = (x: number, y: number) => gates.some((g) => Math.abs(g.x - x) + Math.abs(g.y - y) <= 2);
-  for (let y = 0; y < H; y++)
-    for (let x = 0; x < W; x++) {
-      const i = cellIndex(grid, x, y);
-      if (grid.cells[i] !== Cell.Floor || corridor.has(i) || nearGate(x, y)) continue;
-      if (Math.abs(x - c0.x) + Math.abs(y - c0.y) <= 3) continue;
-      if (nextRandom(rngHolder) < ADVENTURE.blockFill) grid.cells[i] = Cell.Block;
-    }
-
-  // 5. One caged hero per region, off the corridors, away from gates and the spawn pocket.
-  const cages: CageState[] = [];
-  for (const r of regions) {
-    const options: { x: number; y: number }[] = [];
-    for (let y = 0; y < H; y++)
-      for (let x = 0; x < W; x++) {
         const i = cellIndex(grid, x, y);
-        if (regionOf[i] !== r.id || corridor.has(i) || nearGate(x, y)) continue;
-        if (grid.cells[i] !== Cell.Floor && grid.cells[i] !== Cell.Block) continue;
-        if (Math.abs(x - c0.x) + Math.abs(y - c0.y) <= 5) continue;
-        options.push({ x, y });
+        regionOf[i] = reg.id;
+        if (bp) grid.cells[i] = bp.cells[(y - oy) * CW + (x - ox)];
+        else if (old && inBounds(old, x, y)) {
+          const j = cellIndex(old, x, y);
+          grid.cells[i] = old.cells[j];
+          explored[i] = oldExplored[j];
+          if (oldRegionOf[j] !== reg.id) regionOf[i] = reg.id;
+        }
       }
-    if (!options.length) continue;
-    const c = options[randInt(rngHolder, options.length)];
-    grid.cells[cellIndex(grid, c.x, c.y)] = Cell.Block; // the cage blocks like a crate until blown open
-    cages.push({ id: cages.length, x: c.x, y: c.y, region: r.id, state: 'locked' });
   }
-
-  const adventure: AdventureState = { chunkW: CW, chunkH: CH, regions, gates, regionOf, explored: new Uint8Array(W * H), cages };
-  return { grid, adventure, spawns };
+  s.grid = grid;
+  adv.regionOf = regionOf;
+  adv.explored = explored;
+  adv.regions = [...regions].sort((a, b) => a.id - b.id);
+  adv.windowKey = adv.regions.map((r) => r.id).join(',');
 }
 
-/** Each region gets its own Magmitos, away from the spawn and the gates. */
-export function spawnAdventureEnemies(s: GameState) {
+/**
+ * Adds region `id` to the live window. `authority` (server or local game) also populates it with
+ * Magmitos and reports the event; mirrors (online clients) only rebuild the geometry.
+ */
+export function attachRegion(s: GameState, id: number, authority = true) {
   const adv = s.adventure!;
-  const spawn = s.players[0] ?? { x: 0, y: 0 };
-  for (const r of adv.regions) {
-    const count = Math.min(ADVENTURE.enemiesMax, ADVENTURE.enemiesBase + r.id);
-    const free: { x: number; y: number }[] = [];
-    for (let y = 0; y < s.grid.h; y++)
-      for (let x = 0; x < s.grid.w; x++) {
-        if (adv.regionOf[cellIndex(s.grid, x, y)] !== r.id || getCell(s.grid, x, y) !== Cell.Floor) continue;
-        if (r.id === 0 && Math.abs(spawn.x - x) + Math.abs(spawn.y - y) < 6) continue;
-        if (adv.gates.some((g) => Math.abs(g.x - x) + Math.abs(g.y - y) <= 1)) continue;
-        if (adv.cages.some((c) => Math.abs(c.x - x) + Math.abs(c.y - y) <= 1)) continue;
-        free.push({ x, y });
-      }
-    for (let k = 0; k < count && free.length; k++) {
-      const [c] = free.splice(randInt(s, free.length), 1);
-      const e: EnemyState = { id: newId(s), kind: 'magmite', x: c.x, y: c.y, px: c.x, py: c.y, dir: null, tx: c.x, ty: c.y, alive: true, diedTick: -1, frozenUntil: 0, regionId: r.id };
+  if (adv.regions.some((r) => r.id === id)) return null;
+  ensureChain(adv, s.config.seed, id + 1);
+  const bp = regionBlueprint(s.config.seed, adv, id);
+  rebuildWindow(s, [...adv.regions, bp.state], new Map([[id, bp]]));
+  adv.gates.push(bp.exitGate);
+  if (bp.cage) adv.cages.push({ id, x: bp.cage.x, y: bp.cage.y, region: id, state: 'locked' });
+  for (const p of bp.props) adv.props.push({ ...p, tick: s.tick });
+  if (authority) {
+    for (let k = 0; k < bp.enemyCount && k < bp.enemySpots.length; k++) {
+      const c = bp.enemySpots[k];
+      const e: EnemyState = { id: newId(s), kind: 'magmite', x: c.x, y: c.y, px: c.x, py: c.y, dir: null, tx: c.x, ty: c.y, alive: true, diedTick: -1, frozenUntil: 0, regionId: id, speedMul: bp.enemySpeed };
       s.enemies.push(e);
     }
+    // A clear objective counts the Magmitos actually placed.
+    if (bp.state.objective.kind === 'clear') adv.regions.find((x) => x.id === id)!.objective.goal = Math.min(bp.enemyCount, bp.enemySpots.length);
+    s.events.push({ type: 'regionAttached', region: id });
   }
+  return bp;
 }
 
-/** Marks cells within the reveal radius of every living player as explored (unlocked regions only). */
-export function revealAround(s: GameState) {
+/** Drops region `id` and everything in it; the next region's entry seals for good. */
+export function detachRegion(s: GameState, id: number, authority = true) {
+  const adv = s.adventure!;
+  const reg = adv.regions.find((r) => r.id === id);
+  if (!reg) return;
+  const ox = reg.cx * CW;
+  const oy = reg.cy * CH;
+  const inside = (x: number, y: number) => Math.round(x) >= ox && Math.round(y) >= oy && Math.round(x) < ox + CW && Math.round(y) < oy + CH;
+  adv.gates = adv.gates.filter((g) => g.from !== id && !(g.kind === 'back' && g.to === id));
+  adv.cages = adv.cages.filter((c) => c.region !== id);
+  adv.props = adv.props.filter((p) => p.region !== id);
+  s.enemies = s.enemies.filter((e) => e.regionId !== id && !inside(e.x, e.y));
+  s.bombs = s.bombs.filter((b) => !inside(b.x, b.y));
+  s.flames = s.flames.filter((f) => !inside(f.x, f.y));
+  s.powerups = s.powerups.filter((p) => !inside(p.x, p.y));
+  s.mines = s.mines.filter((m) => !inside(m.x, m.y));
+  rebuildWindow(s, adv.regions.filter((r) => r.id !== id), new Map());
+  // Seal the way back.
+  const next = adv.regions.find((r) => r.id === id + 1);
+  if (next?.entry) {
+    setCell(s.grid, next.entry.x, next.entry.y, Cell.Wall);
+    const prevDir = adv.dirs[id];
+    adv.gates.push({ id: 1_000_000 + next.id, x: next.entry.x, y: next.entry.y, axis: prevDir === 'E' ? 'h' : 'v', from: id, to: next.id, open: false, openedTick: -1, kind: 'back' });
+  }
+  if (authority) s.events.push({ type: 'regionDetached', region: id });
+}
+
+/** Mirrors (online clients): make the live window match the server's list of region ids. */
+export function syncAdventureWindow(s: GameState, ids: number[]) {
   const adv = s.adventure;
   if (!adv) return;
-  const R = ADVENTURE.revealRadius;
-  const r = Math.ceil(R);
-  for (const p of s.players) {
-    if (!p.alive) continue;
-    const px = Math.round(p.x);
-    const py = Math.round(p.y);
-    for (let y = py - r; y <= py + r; y++)
-      for (let x = px - r; x <= px + r; x++) {
-        if (x < 0 || y < 0 || x >= s.grid.w || y >= s.grid.h) continue;
-        if ((x - px) ** 2 + (y - py) ** 2 > R * R) continue;
-        const i = cellIndex(s.grid, x, y);
-        const reg = adv.regionOf[i];
-        if (reg >= 0 && adv.regions[reg].unlocked) adv.explored[i] = 1;
-      }
+  const want = new Set(ids);
+  for (const id of [...ids].sort((a, b) => a - b)) if (!adv.regions.some((r) => r.id === id)) attachRegion(s, id, false);
+  for (const r of [...adv.regions]) if (!want.has(r.id)) detachRegion(s, r.id, false);
+}
+
+/** Initial state: regions 0 and 1 (the second one visible behind the first gate). */
+export function createAdventure(seed: number): { grid: Grid; adventure: AdventureState; spawns: Pt[] } {
+  const adventure: AdventureState = {
+    chunkW: CW,
+    chunkH: CH,
+    depth: 0,
+    regions: [],
+    gates: [],
+    regionOf: new Int16Array(0),
+    explored: new Uint8Array(0),
+    cages: [],
+    props: [],
+    closing: null,
+    journey: [],
+    dirs: [],
+    windowKey: '',
+  };
+  const s = { config: { seed }, adventure, grid: null as unknown as Grid, tick: 0, events: [], enemies: [], bombs: [], flames: [], powerups: [], mines: [] } as unknown as GameState;
+  const bp = attachRegion(s, 0, false)!;
+  attachRegion(s, 1, false);
+  const first = regionInfo(seed, 0);
+  adventure.journey.push({ id: 0, name: first.name, biome: first.biome });
+  return { grid: s.grid, adventure, spawns: bp.spawns };
+}
+
+/** The real game state's regions get their Magmitos once the players exist. */
+export function spawnAdventureEnemies(s: GameState) {
+  const adv = s.adventure!;
+  const ids = adv.regions.map((r) => r.id);
+  // Re-attach with authority: same geometry (deterministic), plus enemies.
+  for (const id of ids) {
+    const reg = adv.regions.find((r) => r.id === id)!;
+    const bp = regionBlueprint(s.config.seed, adv, id);
+    for (let k = 0; k < bp.enemyCount && k < bp.enemySpots.length; k++) {
+      const c = bp.enemySpots[k];
+      s.enemies.push({ id: newId(s), kind: 'magmite', x: c.x, y: c.y, px: c.x, py: c.y, dir: null, tx: c.x, ty: c.y, alive: true, diedTick: -1, frozenUntil: 0, regionId: id, speedMul: bp.enemySpeed });
+    }
+    if (reg.objective.kind === 'clear') reg.objective.goal = Math.min(bp.enemyCount, bp.enemySpots.length);
   }
 }
 
-/** Region objectives: when a region's Magmitos are all gone its gate opens and the next region unlocks. */
+// ───────────────────────────── per-tick rules ─────────────────────────────
+
+/** Region objectives, props, the window sliding along with the group. */
 export function updateAdventure(s: GameState) {
   const adv = s.adventure;
   if (!adv) return;
   if (s.tick % 3 === 0) revealAround(s);
   updateCages(s);
+  updateProps(s);
+  updateObjectives(s);
+  updateProgress(s);
+}
+
+function updateObjectives(s: GameState) {
+  const adv = s.adventure!;
   for (const r of adv.regions) {
     if (r.cleared || !r.unlocked) continue;
-    if (s.enemies.some((e) => e.alive && e.regionId === r.id)) continue;
+    const o = r.objective;
+    let progress = o.progress;
+    if (o.kind === 'clear') progress = Math.max(0, o.goal - s.enemies.filter((e) => e.alive && e.regionId === r.id).length);
+    else if (o.kind === 'key') progress = adv.props.some((p) => p.kind === 'key' && p.region === r.id && p.state === 'used') ? 1 : 0;
+    if (progress !== o.progress) {
+      o.progress = progress;
+      s.events.push({ type: 'objectiveProgress', region: r.id, progress, goal: o.goal });
+    }
+    if (progress < o.goal) continue;
+    o.done = true;
     r.cleared = true;
     s.events.push({ type: 'regionCleared', region: r.id });
-    for (const g of adv.gates) {
-      if (g.from !== r.id || g.open) continue;
+    if (!adv.regions.some((x) => x.id === r.id + 1)) attachRegion(s, r.id + 1);
+    const g = adv.gates.find((x) => x.kind !== 'back' && x.from === r.id);
+    if (g && !g.open) {
       g.open = true;
       g.openedTick = s.tick;
       setCell(s.grid, g.x, g.y, Cell.Floor);
-      adv.regions[g.to].unlocked = true;
-      s.events.push({ type: 'gateOpened', gateId: g.id, x: g.x, y: g.y, region: g.to });
+      const next = adv.regions.find((x) => x.id === r.id + 1);
+      if (next) next.unlocked = true;
+      s.events.push({ type: 'gateOpened', gateId: g.id, x: g.x, y: g.y, region: r.id + 1 });
       reviveAllies(s, g);
     }
   }
+}
+
+/** Entering deeper regions, attaching the one after, and sealing the way back. */
+function updateProgress(s: GameState) {
+  const adv = s.adventure!;
+  const living = s.players.filter((p) => p.alive);
+  for (const p of living) {
+    const rid = regionAt(s, p.x, p.y);
+    if (rid <= adv.depth) continue;
+    adv.depth = rid;
+    const info = regionInfo(s.config.seed, rid);
+    adv.journey.push({ id: rid, name: info.name, biome: info.biome });
+    s.events.push({ type: 'regionEntered', region: rid });
+    attachRegion(s, rid + 1); // the next island shows up behind the new (closed) gate
+    adv.closing = { region: rid, atTick: s.tick + secToTicks(GATE_CLOSE_SEC) };
+    s.events.push({ type: 'gateClosing', region: rid, atTick: adv.closing.atTick });
+  }
+  const c = adv.closing;
+  if (!c) return;
+  const behind = adv.regions.filter((r) => r.id < c.region);
+  if (!behind.length) {
+    adv.closing = null;
+    return;
+  }
+  const allIn = living.every((p) => regionAt(s, p.x, p.y) >= c.region);
+  if (!allIn && s.tick < c.atTick) return;
+  // Time's up: stragglers are pulled through so nobody is left in a region about to vanish.
+  const reg = adv.regions.find((r) => r.id === c.region)!;
+  const stragglers = living.filter((p) => regionAt(s, p.x, p.y) < c.region);
+  if (stragglers.length && reg.entry) {
+    // Never the entry cell itself: it becomes the sealed back gate.
+    const e = reg.entry;
+    const spots = safeCellsNear(s, e.x, e.y, stragglers.length + 6).filter((q) => regionAt(s, q.x, q.y) === c.region && (q.x !== e.x || q.y !== e.y));
+    stragglers.forEach((p, i) => {
+      const q = spots[i] ?? spots[0] ?? { x: reg.cx * CW + 7, y: reg.cy * CH + 7 };
+      Object.assign(p, { x: q.x, y: q.y, px: q.x, py: q.y, maneuver: null, slideDir: null, moving: false, passBombs: [] });
+    });
+  }
+  for (const r of behind) detachRegion(s, r.id);
+  adv.closing = null;
+  s.events.push({ type: 'gateClosed', region: c.region });
+}
+
+// ───────────────────────────── props: chests and keys ─────────────────────────────
+
+const RARE_LOOT: PowerupType[] = ['shield', 'kick', 'remote', 'glove', 'ghost', 'boots', 'infernal', 'ice'];
+
+function updateProps(s: GameState) {
+  const adv = s.adventure!;
+  for (const pr of adv.props) {
+    if (pr.kind === 'chest' && pr.state === 'closed') {
+      const opener = s.players.find((p) => p.alive && Math.round(p.x) === pr.x && Math.round(p.y) === pr.y);
+      const burned = flamesAt(s, pr.x, pr.y).length > 0;
+      if (opener || burned) openChest(s, pr, opener?.id ?? null);
+    } else if (pr.kind === 'key') updateKey(s, pr);
+  }
+}
+
+function openChest(s: GameState, pr: PropState, byId: string | null) {
+  pr.state = 'open';
+  pr.tick = s.tick;
+  s.events.push({ type: 'chestOpened', propId: pr.id, x: pr.x, y: pr.y, rare: !!pr.rare, byId });
+  const loot: PowerupType[] = [pickWeighted(s, Object.values(POWERUPS), (d) => d.weight).type];
+  if (pr.rare) loot.push(RARE_LOOT[randInt(s, RARE_LOOT.length)]);
+  const spots = [{ x: pr.x, y: pr.y }, ...DIRS.map((d) => ({ x: pr.x + DIR_VEC[d].x, y: pr.y + DIR_VEC[d].y }))].filter(
+    (c) => getCell(s.grid, c.x, c.y) === Cell.Floor && !bombAt(s, c.x, c.y) && !powerupAt(s, c.x, c.y),
+  );
+  loot.forEach((type, i) => {
+    // A secret pocket has no room around it: extra loot stacks on the chest (picked up one by one).
+    const c = spots[i] ?? { x: pr.x, y: pr.y };
+    const id = newId(s);
+    s.powerups.push({ id, type, x: c.x, y: c.y, bornTick: s.tick });
+    s.events.push({ type: 'powerupSpawned', id, x: c.x, y: c.y, powerup: type });
+  });
+}
+
+function updateKey(s: GameState, k: PropState) {
+  const adv = s.adventure!;
+  if (k.state === 'used') return;
+  if (k.state === 'idle') {
+    const p = s.players.find((pp) => pp.alive && Math.round(pp.x) === k.x && Math.round(pp.y) === k.y);
+    if (!p) return;
+    k.state = 'carried';
+    k.carrierId = p.id;
+    s.events.push({ type: 'keyPicked', propId: k.id, playerId: p.id });
+    return;
+  }
+  const carrier = s.players.find((p) => p.id === k.carrierId);
+  if (!carrier || !carrier.alive) {
+    // Dropped where the carrier fell (back to the pedestal if that spot isn't floor).
+    const x = carrier ? Math.round(carrier.x) : k.homeX!;
+    const y = carrier ? Math.round(carrier.y) : k.homeY!;
+    const ok = getCell(s.grid, x, y) === Cell.Floor && regionAt(s, x, y) === k.region;
+    k.x = ok ? x : k.homeX!;
+    k.y = ok ? y : k.homeY!;
+    k.state = 'idle';
+    k.carrierId = null;
+    s.events.push({ type: 'keyDropped', propId: k.id, x: k.x, y: k.y });
+    return;
+  }
+  k.x = Math.round(carrier.x);
+  k.y = Math.round(carrier.y);
+  const gate = adv.gates.find((g) => g.kind !== 'back' && g.from === k.region);
+  if (gate && !gate.open && Math.abs(gate.x - carrier.x) + Math.abs(gate.y - carrier.y) <= 1.15) {
+    k.state = 'used';
+    k.carrierId = null;
+    k.x = gate.x;
+    k.y = gate.y;
+    s.events.push({ type: 'keyDelivered', propId: k.id, playerId: carrier.id, region: k.region });
+  }
+}
+
+/** Carrying the gate key slows you down a little: the group is invited to escort the carrier. */
+export function carriesKey(s: GameState, playerId: string) {
+  return !!s.adventure?.props.some((k) => k.kind === 'key' && k.carrierId === playerId);
 }
 
 // ───────────────────────────── caged heroes ─────────────────────────────
@@ -262,19 +649,7 @@ export function rescueHero(s: GameState, c: CageState, rescuer: PlayerState) {
   const previousId = target.characterId;
   if (fallen) {
     const spot = safeCellsNear(s, c.x, c.y, 1)[0] ?? { x: c.x, y: c.y };
-    Object.assign(fallen, {
-      alive: true,
-      x: spot.x,
-      y: spot.y,
-      px: spot.x,
-      py: spot.y,
-      moving: false,
-      slideDir: null,
-      maneuver: null,
-      frozenUntil: 0,
-      passBombs: [],
-      diedTick: -1,
-    });
+    Object.assign(fallen, { alive: true, x: spot.x, y: spot.y, px: spot.x, py: spot.y, moving: false, slideDir: null, maneuver: null, frozenUntil: 0, passBombs: [], diedTick: -1 });
   }
   becomeHero(s, target, hero);
   target.invulnUntil = s.tick + secToTicks(Math.max(REVIVE_INVULN_SEC, RULES.invulnSec));
@@ -293,9 +668,6 @@ export function becomeHero(s: GameState, p: PlayerState, id: CharacterId) {
   p.abilityReadyTick = s.tick; // the new ability is ready right away
   p.turboUntil = 0;
 }
-
-/** Seconds of spawn protection after coming back. */
-const REVIVE_INVULN_SEC = 2.5;
 
 /**
  * Co-op rule: every opened gate brings fallen allies back, standing at the gate on safe floor
@@ -327,33 +699,61 @@ function reviveAllies(s: GameState, g: GateState) {
 
 /** Breadth-first search over walkable floor from (x, y): the closest `n` safe cells. */
 function safeCellsNear(s: GameState, x: number, y: number, n: number) {
-  const out: { x: number; y: number }[] = [];
-  const seen = new Set<number>([cellIndex(s.grid, x, y)]);
-  const queue = [{ x, y }];
+  const out: Pt[] = [];
+  const key = (cx: number, cy: number) => `${cx},${cy}`;
+  const seen = new Set<string>([key(x, y)]);
+  const queue: Pt[] = [{ x, y }];
   const safe = (cx: number, cy: number) =>
-    !bombAt(s, cx, cy) && !mineAt(s, cx, cy) && flamesAt(s, cx, cy).length === 0 && !s.enemies.some((e) => e.alive && Math.round(e.x) === cx && Math.round(e.y) === cy);
+    getCell(s.grid, cx, cy) === Cell.Floor &&
+    !bombAt(s, cx, cy) &&
+    !mineAt(s, cx, cy) &&
+    flamesAt(s, cx, cy).length === 0 &&
+    !s.enemies.some((e) => e.alive && Math.round(e.x) === cx && Math.round(e.y) === cy);
   while (queue.length && out.length < n) {
     const c = queue.shift()!;
     if (safe(c.x, c.y)) out.push(c);
     for (const d of DIRS) {
       const nx = c.x + DIR_VEC[d].x;
       const ny = c.y + DIR_VEC[d].y;
-      if (nx < 0 || ny < 0 || nx >= s.grid.w || ny >= s.grid.h) continue;
-      const k = cellIndex(s.grid, nx, ny);
-      if (seen.has(k) || getCell(s.grid, nx, ny) !== Cell.Floor) continue;
-      seen.add(k);
+      if (!inBounds(s.grid, nx, ny) || seen.has(key(nx, ny)) || getCell(s.grid, nx, ny) !== Cell.Floor) continue;
+      seen.add(key(nx, ny));
       queue.push({ x: nx, y: ny });
     }
   }
   return out;
 }
 
-/** Region the player stands in (for the HUD). */
+// ───────────────────────────── queries ─────────────────────────────
+
+/** Marks cells within the reveal radius of every living player as explored (unlocked regions only). */
+export function revealAround(s: GameState) {
+  const adv = s.adventure;
+  if (!adv) return;
+  const R = ADVENTURE.revealRadius;
+  const r = Math.ceil(R);
+  for (const p of s.players) {
+    if (!p.alive) continue;
+    const px = Math.round(p.x);
+    const py = Math.round(p.y);
+    for (let y = py - r; y <= py + r; y++)
+      for (let x = px - r; x <= px + r; x++) {
+        if (!inBounds(s.grid, x, y) || (x - px) ** 2 + (y - py) ** 2 > R * R) continue;
+        const i = cellIndex(s.grid, x, y);
+        const reg = adv.regionOf[i];
+        if (reg >= 0 && adv.regions.find((q) => q.id === reg)?.unlocked) adv.explored[i] = 1;
+      }
+  }
+}
+
+/** Region id at a world position (-1 outside the live window). */
 export function regionAt(s: GameState, x: number, y: number) {
   const adv = s.adventure;
   if (!adv) return -1;
   const cx = Math.round(x);
   const cy = Math.round(y);
-  if (cx < 0 || cy < 0 || cx >= s.grid.w || cy >= s.grid.h) return -1;
+  if (!inBounds(s.grid, cx, cy)) return -1;
   return adv.regionOf[cellIndex(s.grid, cx, cy)];
 }
+
+/** Live region by id. */
+export const regionById = (s: GameState, id: number) => s.adventure?.regions.find((r) => r.id === id);

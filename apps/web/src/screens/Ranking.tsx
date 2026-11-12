@@ -10,6 +10,7 @@ const BOARDS: { id: RankingBoard; label: string; unit: string }[] = [
   { id: 'xp', label: 'Nível', unit: 'XP' },
   { id: 'wins', label: 'Vitórias', unit: 'vitórias' },
   { id: 'season', label: 'Temporada', unit: 'XP da temporada' },
+  { id: 'depth', label: 'Aventura', unit: 'regiões' },
 ];
 
 /** Global ranking (every account on this server that played at least once). */

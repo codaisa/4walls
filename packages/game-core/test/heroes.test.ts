@@ -1,6 +1,6 @@
 import { Cell, CHARACTER_IDS, CHARACTERS, RULES, STARTER_CHARACTERS, secToTicks } from '@4walls/shared';
 import { describe, expect, it } from 'vitest';
-import { becomeHero, createGame, getCell, setCell, spawnBomb, step, useAbility, type GameState } from '../src';
+import { becomeHero, cellIndex, createGame, getCell, setCell, spawnBomb, step, useAbility, type GameState } from '../src';
 import { makeGame, placeAt, run } from './helpers';
 
 const adventure = (players = 1, seed = 11) => {
@@ -42,7 +42,7 @@ describe('caged heroes in Adventure', () => {
     expect(adv.cages).toHaveLength(adv.regions.length);
     for (const c of adv.cages) {
       expect(getCell(s.grid, c.x, c.y)).toBe(Cell.Block);
-      expect(adv.regionOf[c.y * s.grid.w + c.x]).toBe(c.region);
+      expect(adv.regionOf[cellIndex(s.grid, c.x, c.y)]).toBe(c.region);
       expect(s.enemies.some((e) => Math.abs(e.x - c.x) + Math.abs(e.y - c.y) <= 1)).toBe(false);
     }
   });

@@ -1,4 +1,4 @@
-import { activeBombCount, bombAt, cellOf, createGame, getCell, mineAt, stepPlayerMovement, type BombState, type GameEvent, type GameState } from '@4walls/core';
+import { activeBombCount, bombAt, cellOf, createGame, getCell, mineAt, revealAround, stepPlayerMovement, type BombState, type GameEvent, type GameState } from '@4walls/core';
 import { applySnapshot, encodeInput, SNAPSHOT_EVERY_TICKS, type InputTuple, type Snapshot, type StartInfo } from '@4walls/protocol';
 import { Cell, RULES, secToTicks, TICK_DT, TICK_RATE, type Dir } from '@4walls/shared';
 import { sfx } from '../audio/Sfx';
@@ -67,7 +67,8 @@ export class OnlineController implements MatchView {
     private locals: LocalSlot[],
   ) {
     this.state = createGame(start.config);
-    for (let i = 0; i < start.grid.length; i++) this.state.grid.cells[i] = start.grid.charCodeAt(i) - 48;
+    // (A mid-journey Adventure join gets its live regions from the first snapshot.)
+    if (start.grid.length === this.state.grid.cells.length) for (let i = 0; i < start.grid.length; i++) this.state.grid.cells[i] = start.grid.charCodeAt(i) - 48;
     this.localIds = new Set(this.state.players.filter((p) => locals.some((l) => l.slot === p.slot)).map((p) => p.id));
     this.hud = new HudSync((slot) => {
       const l = locals.find((x) => x.slot === slot);
@@ -236,6 +237,8 @@ export class OnlineController implements MatchView {
   private onSnapshot(snap: Snapshot) {
     applySnapshot(this.state, snap);
     this.keepPredictedBombs(snap);
+    // The journey map: what the players have seen is computed locally (it never travels).
+    if (this.state.adventure) revealAround(this.state);
 
     // Reconciliation: start from the server's position and replay inputs it hasn't processed yet.
     for (const l of this.locals) {

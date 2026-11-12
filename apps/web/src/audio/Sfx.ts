@@ -169,6 +169,27 @@ class SfxEngine {
     this.tone(700, 0.06, { type: 'triangle', gain: 0.1, bus: 'ui' });
   }
 
+  // ── Endless Adventure ──
+  chest(rare: boolean) {
+    this.tone(180, 0.18, { to: 120, type: 'square', gain: 0.12 });
+    (rare ? [784, 988, 1175, 1568, 1976] : [660, 880, 1046]).forEach((f, i) => this.tone(f, 0.22, { type: 'triangle', gain: 0.14, delay: 0.12 + i * 0.07, bus: 'ui' }));
+  }
+  secret() {
+    // The classic "you found it" rising arpeggio.
+    [392, 494, 587, 784, 988, 1175].forEach((f, i) => this.tone(f, 0.16, { type: 'square', gain: 0.07, delay: i * 0.09, bus: 'ui' }));
+  }
+  keyPick() {
+    [1046, 1318, 1568].forEach((f, i) => this.tone(f, 0.12, { type: 'sine', gain: 0.14, delay: i * 0.05 }));
+  }
+  keyDrop() {
+    this.tone(900, 0.18, { to: 500, type: 'triangle', gain: 0.12 });
+  }
+  unlockGate() {
+    this.tone(220, 0.1, { type: 'square', gain: 0.14 });
+    this.tone(330, 0.1, { type: 'square', gain: 0.14, delay: 0.1 });
+    this.burst(0.3, 3000, 600, 0.3, 2);
+  }
+
   // ── Rescued heroes ──
   /** "Joins the fight!": a whoosh, a brass stab and (new hero) a fanfare. */
   heroReveal(isNew: boolean) {

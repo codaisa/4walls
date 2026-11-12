@@ -1,5 +1,5 @@
 import { Cell, DIRS, DIR_VEC, POWERUPS, RULES, secToTicks, type BombKind, type Dir, type PowerupType } from '@4walls/shared';
-import { cellIndex, getCell, setCell } from './grid';
+import { cellIndex, getCell, inBounds, setCell } from './grid';
 import { kickIntervalTicks } from './movement';
 import { nextRandom, pickWeighted } from './rng';
 import type { BombState, Flame, GameState, PlayerState } from './types';
@@ -38,6 +38,14 @@ function propagate(s: GameState, bomb: BombState, ctx: BlastContext): Flame[] {
       const y = bomb.y + v.y * i;
       const cell = getCell(s.grid, x, y);
       if (cell === Cell.Wall) break;
+      if (cell === Cell.Cracked) {
+        // Adventure secret: the cracked wall gives way.
+        flames.push(mk(x, y, 'end', d));
+        setCell(s.grid, x, y, Cell.Floor);
+        ctx.destroyedThisTick.add(cellIndex(s.grid, x, y));
+        s.events.push({ type: 'secretFound', x, y, byId: bomb.ownerId });
+        break;
+      }
       const idx = cellIndex(s.grid, x, y);
       if (cell === Cell.Block || ctx.destroyedThisTick.has(idx)) {
         flames.push(mk(x, y, 'end', d));
@@ -134,7 +142,7 @@ export function throwBomb(s: GameState, p: PlayerState, b: BombState): boolean {
   for (let d = RULES.throwCells; d <= RULES.throwMaxCells; d++) {
     const tx = b.x + v.x * d;
     const ty = b.y + v.y * d;
-    if (tx < 0 || ty < 0 || tx >= s.grid.w || ty >= s.grid.h) break;
+    if (!inBounds(s.grid, tx, ty)) break;
     if (getCell(s.grid, tx, ty) !== Cell.Floor || bombAt(s, tx, ty) || mineAt(s, tx, ty)) continue;
     const flight = secToTicks(RULES.throwFlightSec);
     s.events.push({ type: 'bombThrown', bombId: b.id, playerId: p.id, fromX: b.x, fromY: b.y, x: tx, y: ty });

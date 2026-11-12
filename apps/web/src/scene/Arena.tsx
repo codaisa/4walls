@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Cell, type BiomeId } from '@4walls/shared';
-import { getCell } from '@4walls/core';
+import { cellIndex, getCell, inBounds } from '@4walls/core';
 import { useGame } from './context';
 import type { ArenaTheme } from './themes';
 
@@ -38,10 +38,12 @@ export function Arena({ theme }: { theme: ArenaTheme }) {
    *    coast (tall columns), the rest are pillars; walls with nothing walkable around are void.
    */
   const layout = useMemo(() => {
-    const gateSet = new Set(adventure?.gates.map((g) => g.y * w + g.x) ?? []);
+    const k = (x: number, y: number) => `${x},${y}`;
+    const gateSet = new Set(adventure?.gates.map((g) => k(g.x, g.y)) ?? []);
     // Cage cells are crates in the rules but drawn by <Cages />.
-    const cageSet = new Set(adventure?.cages.map((c) => c.y * w + c.x) ?? []);
-    const solid = (x: number, y: number) => x < 0 || y < 0 || x >= w || y >= h || (getCell(grid, x, y) === Cell.Wall && !gateSet.has(y * w + x));
+    const cageSet = new Set(adventure?.cages.map((c) => k(c.x, c.y)) ?? []);
+    // getCell is Wall outside the grid window; cracked walls get a floor tile (they can be blown open).
+    const solid = (x: number, y: number) => getCell(grid, x, y) === Cell.Wall && !gateSet.has(k(x, y));
     const walkable = (x: number, y: number) => !solid(x, y);
     const near8 = (x: number, y: number, pred: (x: number, y: number) => boolean) => {
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && pred(x + dx, y + dy)) return true;
@@ -52,20 +54,23 @@ export function Arena({ theme }: { theme: ArenaTheme }) {
     const border: { x: number; y: number }[] = [];
     const pillars: { x: number; y: number }[] = [];
     const blocks: { x: number; y: number }[] = [];
+    const cracked: { x: number; y: number }[] = [];
     const base: { x: number; y: number }[] = [];
-    for (let y = 0; y < h; y++)
-      for (let x = 0; x < w; x++) {
+    for (let y = grid.y0; y < grid.y0 + h; y++)
+      for (let x = grid.x0; x < grid.x0 + w; x++) {
         if (walkable(x, y)) {
           floor.push({ x, y });
           base.push({ x, y });
-          if (getCell(grid, x, y) === Cell.Block && !cageSet.has(y * w + x)) blocks.push({ x, y });
+          const cell = getCell(grid, x, y);
+          if (cell === Cell.Block && !cageSet.has(k(x, y))) blocks.push({ x, y });
+          if (cell === Cell.Cracked) cracked.push({ x, y });
           continue;
         }
         if (isVoid(x, y)) continue;
         base.push({ x, y });
         (near8(x, y, isVoid) ? border : pillars).push({ x, y });
       }
-    return { floor, border, pillars, blocks, base };
+    return { floor, border, pillars, blocks, cracked, base };
     // The layout only changes when a new match (new grid) starts.
   }, [grid, w, h, adventure]);
 
@@ -78,10 +83,10 @@ export function Arena({ theme }: { theme: ArenaTheme }) {
     };
     return (x: number, y: number) => {
       if (!adventure) return { ...byBiome.volcanic, floor: theme.floor, wall: theme.border, pillar: theme.pillarColor, base: tree ? '#3a2d22' : '#1d171f' };
-      const r = adventure.regionOf[y * w + x];
-      return byBiome[r >= 0 ? adventure.regions[r].biome : 'volcanic'];
+      const r = inBounds(grid, x, y) ? adventure.regionOf[cellIndex(grid, x, y)] : -1;
+      return byBiome[adventure.regions.find((q) => q.id === r)?.biome ?? 'volcanic'];
     };
-  }, [adventure, theme, tree, w]);
+  }, [adventure, theme, tree, grid]);
 
   const geo = useMemo(
     () => ({
@@ -264,6 +269,7 @@ export function Arena({ theme }: { theme: ArenaTheme }) {
       <instancedMesh ref={capRef} args={[tree ? geo.canopy : geo.cap, tree ? mat.canopy : mat.cap, layout.pillars.length]} castShadow />
       <instancedMesh ref={blockRef} args={[geo.block, mat.block, blockCount]} castShadow receiveShadow />
       <instancedMesh ref={markRef} args={[geo.mark, mat.mark, blockCount]} />
+      {layout.cracked.length > 0 && <CrackedWalls cells={layout.cracked} color={look(layout.cracked[0].x, layout.cracked[0].y).pillar} />}
       {/* Arena dressing; the adventure world is too large for fixed corner props and backdrops. */}
       {!adventure && <Corners w={w} h={h} theme={theme} />}
       {!adventure && (theme.liquid === 'lava' ? <VolcanoSurroundings w={w} h={h} /> : <ForestSurroundings w={w} h={h} />)}
@@ -495,7 +501,10 @@ function FloatingParticles({ count, color, size, rise, wander, blink = false }: 
     }
     return { positions, speeds };
   }, [count, rise, blink]);
-  useFrame(({ clock }, dt) => {
+  useFrame(({ clock, camera }, dt) => {
+    // Embers / fireflies hover around wherever the camera is looking (the Adventure travels far).
+    ref.current.position.x = camera.position.x;
+    ref.current.position.z = camera.position.z - 8;
     const p = ref.current.geometry.attributes.position as THREE.BufferAttribute;
     const a = p.array as Float32Array;
     const t = clock.elapsedTime;
@@ -516,5 +525,64 @@ function FloatingParticles({ count, color, size, rise, wander, blink = false }: 
       </bufferGeometry>
       <pointsMaterial ref={matRef} size={size} color={new THREE.Color(...color)} toneMapped={false} transparent opacity={0.85} depthWrite={false} blending={THREE.AdditiveBlending} />
     </points>
+  );
+}
+
+/**
+ * Adventure secrets: a rock wall veined with glowing cracks. It looks almost like the coast but
+ * breathes light — a blast turns it to rubble and opens the hidden pocket behind it.
+ */
+function CrackedWalls({ cells, color }: { cells: { x: number; y: number }[]; color: string }) {
+  const { controller, ox, oz } = useGame();
+  const rock = useRef<THREE.InstancedMesh>(null!);
+  const glow = useRef<THREE.InstancedMesh>(null!);
+  const geo = useMemo(() => ({ rock: new RoundedBoxGeometry(0.92, 1.0, 0.92, 2, 0.08), vein: new THREE.BoxGeometry(0.08, 0.8, 0.05) }), []);
+  const mat = useMemo(
+    () => ({
+      rock: new THREE.MeshStandardMaterial({ color: new THREE.Color(color).offsetHSL(0, -0.05, -0.02), roughness: 0.95, flatShading: true }),
+      vein: new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.1, 0.35), toneMapped: false }),
+    }),
+    [color],
+  );
+  const crumbled = useRef(new Map<string, number>());
+  useEffect(
+    () =>
+      controller.on((e) => {
+        if (e.type === 'secretFound') crumbled.current.set(`${e.x},${e.y}`, performance.now());
+      }),
+    [controller],
+  );
+  useFrame(({ clock }) => {
+    const now = performance.now();
+    const pulse = 0.7 + 0.3 * Math.sin(clock.elapsedTime * 2.4);
+    mat.vein.color.setRGB(2.4 * pulse, 1.1 * pulse, 0.35 * pulse);
+    const grid = controller.state.grid;
+    cells.forEach((c, i) => {
+      const gone = crumbled.current.get(`${c.x},${c.y}`);
+      let s = getCell(grid, c.x, c.y) === Cell.Cracked ? 1 : 0;
+      if (gone !== undefined) s = Math.max(0, 1 - (now - gone) / 320);
+      dummy.position.set(c.x + ox, 0.5 * s, c.y + oz);
+      dummy.rotation.set(0, h01(c.x, c.y, 3) * 0.3, 0);
+      dummy.scale.setScalar(Math.max(0.0001, s));
+      dummy.updateMatrix();
+      rock.current.setMatrixAt(i, dummy.matrix);
+      // Two crossing veins on each visible side.
+      for (let k = 0; k < 4; k++) {
+        const side = k < 2 ? 1 : -1;
+        dummy.position.set(c.x + ox + (k < 2 ? 0 : 0.47 * side * s), 0.5 * s, c.y + oz + (k < 2 ? 0.47 * s : 0));
+        dummy.rotation.set(0, k < 2 ? 0 : Math.PI / 2, (k % 2 ? 0.6 : -0.5));
+        dummy.scale.setScalar(Math.max(0.0001, s));
+        dummy.updateMatrix();
+        glow.current.setMatrixAt(i * 4 + k, dummy.matrix);
+      }
+    });
+    rock.current.instanceMatrix.needsUpdate = true;
+    glow.current.instanceMatrix.needsUpdate = true;
+  });
+  return (
+    <>
+      <instancedMesh ref={rock} args={[geo.rock, mat.rock, cells.length]} castShadow receiveShadow />
+      <instancedMesh ref={glow} args={[geo.vein, mat.vein, cells.length * 4]} />
+    </>
   );
 }

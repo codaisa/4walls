@@ -7,8 +7,8 @@ const passable = (s: GameState, x: number, y: number) => isOpenFloor(s, x, y) &&
 
 export function spawnEnemies(s: GameState, count: number) {
   const free: { x: number; y: number }[] = [];
-  for (let y = 1; y < s.grid.h - 1; y++)
-    for (let x = 1; x < s.grid.w - 1; x++) {
+  for (let y = s.grid.y0 + 1; y < s.grid.y0 + s.grid.h - 1; y++)
+    for (let x = s.grid.x0 + 1; x < s.grid.x0 + s.grid.w - 1; x++) {
       if (!isOpenFloor(s, x, y)) continue;
       const farFromPlayers = s.players.every((p) => Math.abs(p.x - x) + Math.abs(p.y - y) >= 7);
       if (farFromPlayers) free.push({ x, y });
@@ -38,7 +38,7 @@ export function updateEnemies(s: GameState) {
     e.px = e.x;
     e.py = e.y;
     if (!e.alive || s.tick < e.frozenUntil) continue;
-    let budget = step;
+    let budget = step * (e.speedMul ?? 1);
     while (budget > 1e-6) {
       if (e.x === e.tx && e.y === e.ty) {
         e.dir = chooseDir(s, e);

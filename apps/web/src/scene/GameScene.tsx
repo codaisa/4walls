@@ -11,14 +11,14 @@ import { Arena } from './Arena';
 import { Bombs } from './Bombs';
 import { CameraRig } from './CameraRig';
 import { PlayerAvatar, preloadHeroes } from './CharacterGLB';
-import { Cages } from './Cages';
+import { AdventureWorld } from './AdventureWorld';
+import { EdgeProbe } from '../ui/EdgeArrows';
 import { Enemies } from './Enemies';
 import { Flames } from './Flames';
 import { Fx } from './Fx';
 import { GameContext, useGame, type SceneCtx } from './context';
 import { Lava } from './Lava';
 import { Hazards } from './Hazards';
-import { Gates } from './Gates';
 import { Boss } from './Boss';
 import { Powerups } from './Powerups';
 import { THEMES } from './themes';
@@ -58,6 +58,8 @@ export function GameScene({ controller }: { controller: MatchView }) {
   }, [controller]);
   const ctx = useMemo<SceneCtx>(() => {
     const { w, h } = controller.state.grid;
+    // Arenas are centered on the origin; the endless Adventure is drawn in world coordinates.
+    if (controller.state.adventure) return { controller, fx: { shake: 0 }, ox: 0, oz: 0 };
     return { controller, fx: { shake: 0 }, ox: -(w - 1) / 2, oz: -(h - 1) / 2 };
   }, [controller]);
   // Boss Rush: the arena dresses for whoever is fighting (the Guardião brings the forest).
@@ -120,10 +122,8 @@ export function GameScene({ controller }: { controller: MatchView }) {
           fog={theme.fog}
           half={controller.state.adventure ? undefined : [controller.state.grid.w / 2 + 0.35, controller.state.grid.h / 2 + 0.35]}
         />
-        <Arena key={`arena-${arenaTheme}`} theme={theme} />
+        {controller.state.adventure ? <AdventureWorld theme={theme} /> : <Arena key={`arena-${arenaTheme}`} theme={theme} />}
         <Hazards />
-        {controller.state.adventure && <Gates />}
-        {controller.state.adventure && <Cages />}
         {controller.state.mode === 'bossrush' && <Boss />}
         {controller.state.mode === 'bossrush' && <RootSpikes />}
         {controller.state.players.map((p) => (
@@ -135,6 +135,7 @@ export function GameScene({ controller }: { controller: MatchView }) {
         <Flames />
         <Fx />
         <CameraRig />
+        {controller.state.adventure && <EdgeProbe />}
         {gfx.post && (
           <EffectComposer multisampling={gfx.msaa}>
             <Bloom mipmapBlur intensity={0.9} luminanceThreshold={1} luminanceSmoothing={0.2} radius={0.7} />

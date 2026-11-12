@@ -33,7 +33,8 @@ export function Cages() {
 
 function Cage({ id }: { id: number }) {
   const { controller, ox, oz } = useGame();
-  const cage = controller.state.adventure!.cages[id];
+  // Cage ids are region ids (the endless world drops old cages): look them up by id.
+  const cage = controller.state.adventure!.cages.find((c) => c.id === id)!;
   const cageRef = useRef<THREE.Group>(null!);
   const prisoner = useRef<THREE.Group>(null!);
   const question = useRef<THREE.Group>(null!);

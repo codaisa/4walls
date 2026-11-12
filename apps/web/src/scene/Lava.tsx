@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 const vertex = /* glsl */ `
@@ -132,11 +132,16 @@ export function Lava({ fogColor, variant = 'lava', fog = [26, 70], half }: { fog
       }),
     [fogColor, variant, fog, half?.[0], half?.[1]],
   );
-  useFrame((_, dt) => {
+  const mesh = useRef<THREE.Mesh>(null!);
+  useFrame(({ camera }, dt) => {
     mat.uniforms.uTime.value += dt;
+    // The endless Adventure travels far from the origin: the sea follows the camera (its pattern is
+    // computed in world space, so it doesn't slide).
+    mesh.current.position.x = Math.round(camera.position.x);
+    mesh.current.position.z = Math.round(camera.position.z - 10);
   });
   return (
-    <mesh rotation-x={-Math.PI / 2} position={[0, -0.55, 0]} material={mat}>
+    <mesh ref={mesh} rotation-x={-Math.PI / 2} position={[0, -0.55, 0]} material={mat}>
       <planeGeometry args={[160, 160, 1, 1]} />
     </mesh>
   );

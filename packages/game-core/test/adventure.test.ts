@@ -1,138 +1,242 @@
-import { ADVENTURE, Cell } from '@4walls/shared';
+import { ADVENTURE, Cell, DIR_VEC, DIRS } from '@4walls/shared';
 import { describe, expect, it } from 'vitest';
-import { cellIndex, createGame, getCell, step, type GameState } from '../src';
+import { cellIndex, createGame, difficulty, getCell, inBounds, regionAt, regionInfo, setCell, step, syncAdventureWindow, type GameState } from '../src';
 
-const make = (seed = 11, players = 1) =>
-  createGame({
+const make = (seed = 11, players = 1) => {
+  const s = createGame({
     mode: 'adventure',
     seed,
     width: 0,
     height: 0,
     players: Array.from({ length: players }, (_, i) => ({ id: `p${i + 1}`, slot: i, characterId: 'bombito', name: `P${i + 1}` })),
   });
+  s.phase = 'playing';
+  return s;
+};
+const region = (s: GameState, id: number) => s.adventure!.regions.find((r) => r.id === id)!;
+const exitGate = (s: GameState, id: number) => s.adventure!.gates.find((g) => g.kind !== 'back' && g.from === id)!;
 
-/** Flood fill over cells a player can eventually reach (blocks are destructible, gates open). */
-function reachable(s: GameState, from: { x: number; y: number }) {
-  const seen = new Set<number>();
+/** Clears region `id` (kills its Magmitos or delivers its key) and steps once. */
+function complete(s: GameState, id: number) {
+  const r = region(s, id);
+  if (r.objective.kind === 'clear') {
+    for (const e of s.enemies) if (e.regionId === id) e.alive = false;
+  } else {
+    const key = s.adventure!.props.find((p) => p.kind === 'key' && p.region === id)!;
+    key.state = 'used';
+  }
+  step(s, {});
+}
+
+/** Moves every living player through the open exit gate of region `id` into region id + 1. */
+function walkThrough(s: GameState, id: number) {
+  const next = region(s, id + 1);
+  for (const p of s.players.filter((pp) => pp.alive)) {
+    p.x = p.px = next.entry!.x;
+    p.y = p.py = next.entry!.y;
+  }
+  step(s, {});
+}
+
+/** Cells reachable from a point, treating crates (and cages) as passable and walls as not. */
+function reach(s: GameState, from: { x: number; y: number }) {
+  const seen = new Set<number>([cellIndex(s.grid, from.x, from.y)]);
   const q = [from];
-  const passable = (x: number, y: number) => {
-    const c = getCell(s.grid, x, y);
-    return c !== Cell.Wall || s.adventure!.gates.some((g) => g.x === x && g.y === y);
-  };
   while (q.length) {
-    const { x, y } = q.pop()!;
-    const i = cellIndex(s.grid, x, y);
-    if (seen.has(i) || !passable(x, y)) continue;
-    seen.add(i);
-    q.push({ x: x + 1, y }, { x: x - 1, y }, { x, y: y + 1 }, { x, y: y - 1 });
+    const c = q.shift()!;
+    for (const d of DIRS) {
+      const x = c.x + DIR_VEC[d].x;
+      const y = c.y + DIR_VEC[d].y;
+      if (!inBounds(s.grid, x, y)) continue;
+      const i = cellIndex(s.grid, x, y);
+      const cell = getCell(s.grid, x, y);
+      if (seen.has(i) || cell === Cell.Wall) continue;
+      seen.add(i);
+      q.push({ x, y });
+    }
   }
   return seen;
 }
 
-describe('adventure world', () => {
-  it('builds several regions on a non-rectangular footprint with void around the islands', () => {
-    for (let seed = 1; seed < 20; seed++) {
-      const s = make(seed);
-      const adv = s.adventure!;
-      expect(adv.regions).toHaveLength(ADVENTURE.regions);
-      // Void = walls that are neither pillars (even/even) nor gates: the sea around organic islands.
-      let voidCells = 0;
-      for (let y = 0; y < s.grid.h; y++)
-        for (let x = 0; x < s.grid.w; x++) {
-          if (getCell(s.grid, x, y) !== Cell.Wall || (x % 2 === 0 && y % 2 === 0)) continue;
-          if (!adv.gates.some((g) => g.x === x && g.y === y)) voidCells++;
-        }
-      expect(voidCells).toBeGreaterThan(s.grid.w * s.grid.h * 0.2);
-      const floor = Array.from(s.grid.cells).filter((c) => c !== Cell.Wall).length;
-      expect(floor).toBeLessThan(s.grid.w * s.grid.h * 0.75); // organic islands, not a filled rectangle
-    }
-  });
-
-  it('every region is reachable from the spawn once its gates are open', () => {
-    for (let seed = 1; seed < 20; seed++) {
-      const s = make(seed);
-      const seen = reachable(s, { x: Math.round(s.players[0].x), y: Math.round(s.players[0].y) });
-      const reached = new Set([...seen].map((i) => s.adventure!.regionOf[i]));
-      for (const r of s.adventure!.regions) expect(reached.has(r.id), `seed ${seed} region ${r.id}`).toBe(true);
-    }
-  });
-
-  it('gates start sealed; only region 0 is unlocked', () => {
+describe('endless adventure: world', () => {
+  it('starts with the first region live and the second one waiting behind a sealed gate', () => {
     const s = make();
     const adv = s.adventure!;
-    expect(adv.gates).toHaveLength(adv.regions.length - 1);
-    for (const g of adv.gates) expect(getCell(s.grid, g.x, g.y)).toBe(Cell.Wall);
-    expect(adv.regions.map((r) => r.unlocked)).toEqual([true, ...adv.regions.slice(1).map(() => false)]);
+    expect(adv.regions.map((r) => r.id)).toEqual([0, 1]);
+    expect(region(s, 0).unlocked).toBe(true);
+    expect(region(s, 1).unlocked).toBe(false);
+    const g = exitGate(s, 0);
+    expect(getCell(s.grid, g.x, g.y)).toBe(Cell.Wall);
+    for (const p of s.players) expect(regionAt(s, p.x, p.y)).toBe(0);
   });
 
-  it('players reveal the fog around them, but never inside locked regions', () => {
-    const s = make();
-    const adv = s.adventure!;
-    const p = s.players[0];
-    expect(adv.explored[cellIndex(s.grid, Math.round(p.x), Math.round(p.y))]).toBe(1);
-    // Teleport next to the sealed gate: cells beyond it stay hidden.
-    const g = adv.gates[0];
-    p.x = p.px = g.axis === 'h' ? g.x - 1 : g.x;
-    p.y = p.py = g.axis === 'h' ? g.y : g.y + (adv.regions[1].cy > adv.regions[0].cy ? -1 : 1);
-    s.phase = 'playing';
-    for (let i = 0; i < 6; i++) step(s, {});
-    const lockedSeen = Array.from(adv.explored).some((v, i) => v === 1 && adv.regionOf[i] === 1);
-    expect(lockedSeen).toBe(false);
-  });
-
-  it('clearing a region opens its gate and unlocks the next one; clearing all wins', () => {
-    const s = make();
-    const adv = s.adventure!;
-    s.phase = 'playing';
-    for (const r of adv.regions) {
-      for (const e of s.enemies) if (e.regionId === r.id) e.alive = false;
-      step(s, {});
-      expect(r.cleared).toBe(true);
-      const g = adv.gates.find((gg) => gg.from === r.id);
-      if (g) {
-        expect(g.open).toBe(true);
-        expect(getCell(s.grid, g.x, g.y)).toBe(Cell.Floor);
-        expect(adv.regions[g.to].unlocked).toBe(true);
-        expect(s.events.some((e) => e.type === 'gateOpened' && e.gateId === g.id)).toBe(true);
-      }
-    }
-    expect(s.result).toMatchObject({ outcome: 'victory', reason: 'allRegionsCleared' });
-  });
-
-  it('opening a gate revives fallen allies at the gate, protected; departed players stay out', () => {
-    const s = make(11, 3);
-    const adv = s.adventure!;
-    s.phase = 'playing';
-    const [, p2, p3] = s.players;
-    for (const p of [p2, p3]) {
-      p.alive = false;
-      p.diedTick = s.tick;
-    }
-    p3.left = true; // quit the online match
-    for (const e of s.enemies) if (e.regionId === 0) e.alive = false;
-    step(s, {});
-    const g = adv.gates.find((gg) => gg.from === 0)!;
-    expect(g.open).toBe(true);
-    expect(p2.alive).toBe(true);
-    expect(Math.abs(p2.x - g.x) + Math.abs(p2.y - g.y)).toBeLessThanOrEqual(2);
-    expect(getCell(s.grid, p2.x, p2.y)).toBe(Cell.Floor);
-    expect(p2.invulnUntil).toBeGreaterThan(s.tick + 60);
-    expect(p3.alive).toBe(false);
-    expect(s.events).toContainEqual({ type: 'playerRevived', playerId: p2.id, x: p2.x, y: p2.y });
-  });
-
-  it('each region has its own enemies, more in later regions', () => {
-    const s = make();
-    const counts = s.adventure!.regions.map((r) => s.enemies.filter((e) => e.regionId === r.id).length);
-    expect(counts[0]).toBe(ADVENTURE.enemiesBase);
-    expect(counts[counts.length - 1]).toBeGreaterThan(counts[0]);
-  });
-
-  it('is deterministic per seed and supports local co-op spawns', () => {
+  it('is deterministic: same seed, same regions, wherever and whenever they are generated', () => {
     const a = make(42, 4);
     const b = make(42, 4);
     expect(Array.from(a.grid.cells)).toEqual(Array.from(b.grid.cells));
+    expect(a.adventure!.props).toEqual(b.adventure!.props);
     expect(new Set(a.players.map((p) => `${p.x},${p.y}`)).size).toBe(4);
-    for (const p of a.players) expect(getCell(a.grid, p.x, p.y)).toBe(Cell.Floor);
+    // A mirror that only knows the window ids rebuilds exactly the same geometry.
+    const mirror = make(42, 4);
+    syncAdventureWindow(mirror, [0, 1]);
+    expect(Array.from(mirror.grid.cells)).toEqual(Array.from(a.grid.cells));
+  });
+
+  it('scripted introduction, then seeded names and objectives', () => {
+    expect([0, 1, 2, 3, 4].map((i) => regionInfo(7, i).name)).toEqual(['Caldeira Rasa', 'Campos de Cinza', 'Rio de Magma', 'Ponte de Obsidiana', 'Bosque Chamuscado']);
+    expect(regionInfo(7, 1).objective).toBe('key');
+    const later = Array.from({ length: 40 }, (_, i) => regionInfo(7, 5 + i));
+    expect(new Set(later.map((r) => r.name)).size).toBeGreaterThan(15);
+    expect(new Set(later.map((r) => r.objective))).toEqual(new Set(['clear', 'key']));
+    expect(regionInfo(7, 12)).toEqual(regionInfo(7, 12));
+  });
+
+  it('difficulty keeps growing but is capped', () => {
+    expect(difficulty(0).enemies).toBe(2);
+    for (let d = 1; d < 200; d++) {
+      expect(difficulty(d).enemies).toBeGreaterThanOrEqual(difficulty(d - 1).enemies);
+      expect(difficulty(d).enemySpeed).toBeGreaterThanOrEqual(difficulty(d - 1).enemySpeed);
+    }
+    expect(difficulty(500).enemies).toBe(ADVENTURE.enemiesCap);
+    expect(difficulty(500).enemySpeed).toBeLessThanOrEqual(1.6);
+  });
+});
+
+describe('endless adventure: the journey', () => {
+  it('a done objective opens the gate; entering a region attaches the next; the way back seals', () => {
+    const s = make(5, 2);
+    complete(s, 0);
+    const g0 = exitGate(s, 0);
+    expect(g0.open).toBe(true);
+    expect(getCell(s.grid, g0.x, g0.y)).toBe(Cell.Floor);
+    expect(region(s, 1).unlocked).toBe(true);
+
+    walkThrough(s, 0);
+    const adv = s.adventure!;
+    expect(adv.depth).toBe(1);
+    expect(adv.regions.map((r) => r.id)).toEqual([1, 2]); // everyone in: region 0 dropped at once
+    expect(adv.gates.some((g) => g.kind === 'back')).toBe(true);
+    expect(getCell(s.grid, region(s, 1).entry!.x, region(s, 1).entry!.y)).toBe(Cell.Wall);
+    expect(s.enemies.every((e) => e.regionId >= 1)).toBe(true);
+    expect(adv.journey.map((j) => j.id)).toEqual([0, 1]);
+  });
+
+  it('stragglers are pulled through when the gate behind closes', () => {
+    const s = make(5, 2);
+    complete(s, 0);
+    const [p1, p2] = s.players;
+    p1.x = p1.px = region(s, 1).entry!.x;
+    p1.y = p1.py = region(s, 1).entry!.y;
+    step(s, {});
+    expect(s.adventure!.closing).not.toBeNull();
+    expect(regionAt(s, p2.x, p2.y)).toBe(0);
+    for (let i = 0; i < 16 * 60; i++) step(s, {});
+    expect(s.adventure!.regions.some((r) => r.id === 0)).toBe(false);
+    expect(regionAt(s, p2.x, p2.y)).toBe(1);
+    expect(getCell(s.grid, Math.round(p2.x), Math.round(p2.y))).toBe(Cell.Floor);
+  });
+
+  it('never ends while someone is alive: 30 regions deep, the window stays small and coordinates keep growing', () => {
+    const s = make(9, 1);
+    for (let id = 0; id < 30; id++) {
+      complete(s, id);
+      walkThrough(s, id);
+      expect(s.result).toBeNull();
+      expect(s.adventure!.regions.length).toBeLessThanOrEqual(3);
+      expect(s.grid.w * s.grid.h).toBeLessThanOrEqual(3 * ADVENTURE.chunkW * ADVENTURE.chunkH * 3);
+    }
+    expect(s.adventure!.depth).toBe(30);
+    expect(s.grid.x0).toBeGreaterThan(0);
+    // Only a full wipe ends it.
+    s.players[0].alive = false;
+    step(s, {});
+    expect(s.result).toMatchObject({ outcome: 'defeat', reason: 'allPlayersDown' });
+  });
+
+  it('every generated region is solvable: exit, key, cage and chests are reachable from the arrival point', () => {
+    for (let seed = 1; seed <= 60; seed++) {
+      const s = make(seed, 1);
+      for (let id = 0; id < 8; id++) {
+        const r = region(s, id);
+        const start = r.entry ?? { x: Math.round(s.players[0].x), y: Math.round(s.players[0].y) };
+        const seen = reach(s, start);
+        const g = exitGate(s, id);
+        const gateNeighbor = DIRS.map((d) => ({ x: g.x + DIR_VEC[d].x, y: g.y + DIR_VEC[d].y })).some((c) => inBounds(s.grid, c.x, c.y) && seen.has(cellIndex(s.grid, c.x, c.y)) && regionAt(s, c.x, c.y) === id);
+        expect(gateNeighbor, `seed ${seed} region ${id}: exit`).toBe(true);
+        for (const p of s.adventure!.props.filter((pp) => pp.region === id)) {
+          // Secret chests sit behind a cracked wall: open it for the check.
+          for (const d of DIRS) {
+            const x = p.x + DIR_VEC[d].x;
+            const y = p.y + DIR_VEC[d].y;
+            if (getCell(s.grid, x, y) === Cell.Cracked) setCell(s.grid, x, y, Cell.Floor);
+          }
+          expect(reach(s, start).has(cellIndex(s.grid, p.x, p.y)), `seed ${seed} region ${id}: ${p.kind}`).toBe(true);
+        }
+        const cage = s.adventure!.cages.find((c) => c.region === id);
+        if (cage) expect(seen.has(cellIndex(s.grid, cage.x, cage.y)), `seed ${seed} region ${id}: cage`).toBe(true);
+        complete(s, id);
+        walkThrough(s, id);
+      }
+    }
+  });
+});
+
+describe('endless adventure: props', () => {
+  /** Region 1 of seed 3 has a key objective (scripted). */
+  const atKeyRegion = () => {
+    const s = make(3, 2);
+    complete(s, 0);
+    walkThrough(s, 0);
+    return s;
+  };
+
+  it('the key: pick it up, it slows the carrier, drop it on death, deliver it at the gate', () => {
+    const s = atKeyRegion();
+    const key = s.adventure!.props.find((p) => p.kind === 'key' && p.region === 1)!;
+    const [p1] = s.players;
+    p1.x = p1.px = key.x;
+    p1.y = p1.py = key.y;
+    step(s, {});
+    expect(key.state).toBe('carried');
+    expect(key.carrierId).toBe('p1');
+    // Dies → the key stays where they fell.
+    p1.alive = false;
+    step(s, {});
+    expect(key.state).toBe('idle');
+    // A friend carries it to the gate.
+    const p2 = s.players[1];
+    p2.x = p2.px = key.x;
+    p2.y = p2.py = key.y;
+    step(s, {});
+    expect(key.carrierId).toBe('p2');
+    const g = exitGate(s, 1);
+    const inside = DIRS.map((d) => ({ x: g.x + DIR_VEC[d].x, y: g.y + DIR_VEC[d].y })).find((c) => regionAt(s, c.x, c.y) === 1 && getCell(s.grid, c.x, c.y) === Cell.Floor)!;
+    p2.x = p2.px = inside.x;
+    p2.y = p2.py = inside.y;
+    step(s, {});
+    step(s, {});
+    expect(key.state).toBe('used');
+    expect(g.open).toBe(true);
+    expect(p1.alive).toBe(true); // the gate brings the fallen back
+  });
+
+  it('chests open when touched or blasted and drop loot; secret chests hide behind cracked walls', () => {
+    let found = false;
+    for (let seed = 1; seed < 40 && !found; seed++) {
+      const s = make(seed, 1);
+      const chest = s.adventure!.props.find((p) => p.kind === 'chest' && p.rare && p.region === 0);
+      if (!chest) continue;
+      found = true;
+      const cracked = DIRS.map((d) => ({ x: chest.x + DIR_VEC[d].x, y: chest.y + DIR_VEC[d].y })).find((c) => getCell(s.grid, c.x, c.y) === Cell.Cracked)!;
+      expect(cracked).toBeTruthy();
+      const p = s.players[0];
+      p.x = p.px = chest.x;
+      p.y = p.py = chest.y;
+      step(s, {});
+      expect(chest.state).toBe('open');
+      expect(s.events.some((e) => e.type === 'chestOpened' && e.rare)).toBe(true);
+      expect(s.powerups.length + s.events.filter((e) => e.type === 'powerupCollected').length).toBeGreaterThanOrEqual(2);
+    }
+    expect(found).toBe(true);
   });
 });

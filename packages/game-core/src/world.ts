@@ -36,7 +36,7 @@ export function isOpenFloor(s: GameState, x: number, y: number) {
  */
 export function isSolidForPlayer(s: GameState, p: PlayerState, x: number, y: number) {
   const c = getCell(s.grid, x, y);
-  if (c === Cell.Wall) return true;
+  if (c === Cell.Wall || c === Cell.Cracked) return true;
   if (c === Cell.Block && s.tick >= p.ghostUntil) return true;
   if (p.hasBoots) return false;
   const b = bombAt(s, x, y);

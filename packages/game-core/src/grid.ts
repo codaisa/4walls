@@ -2,12 +2,17 @@ import { Cell, RULES } from '@4walls/shared';
 import { nextRandom } from './rng';
 import type { Grid } from './types';
 
-export function createGrid(w: number, h: number): Grid {
-  return { w, h, cells: new Uint8Array(w * h) };
+/**
+ * A grid is a window onto world coordinates: cell (x, y) lives at index (y - y0) * w + (x - x0).
+ * Arenas use x0 = y0 = 0; the endless Adventure slides the window along as regions come and go,
+ * so players, bombs and enemies never change coordinates.
+ */
+export function createGrid(w: number, h: number, x0 = 0, y0 = 0): Grid {
+  return { w, h, x0, y0, cells: new Uint8Array(w * h) };
 }
 
-export const inBounds = (g: Grid, x: number, y: number) => x >= 0 && y >= 0 && x < g.w && y < g.h;
-export const cellIndex = (g: Grid, x: number, y: number) => y * g.w + x;
+export const inBounds = (g: Grid, x: number, y: number) => x >= g.x0 && y >= g.y0 && x < g.x0 + g.w && y < g.y0 + g.h;
+export const cellIndex = (g: Grid, x: number, y: number) => (y - g.y0) * g.w + (x - g.x0);
 
 export function getCell(g: Grid, x: number, y: number): Cell {
   if (!inBounds(g, x, y)) return Cell.Wall;

@@ -241,27 +241,30 @@ function BossBar() {
 function AdventurePanel() {
   const a = useHud((s) => s.adventure);
   if (!a) return null;
+  const objective = a.gateOpen ? (
+    <span className="text-violet-200">✦ Portão aberto: siga em frente</span>
+  ) : a.objective === 'key' ? (
+    <span className="text-amber-200">🔑 {a.keyCarried ? 'Leve a chave ao portão' : 'Ache a chave do portão'}</span>
+  ) : (
+    <>
+      <span className="inline-block h-3 w-3 rounded-full bg-[#ff5a1f] shadow-[0_0_10px_#ff5a1f]" />
+      Magmitos: {a.progress}
+    </>
+  );
   return (
     <div className="hud-panel min-w-56 px-4 py-1.5 text-center [@media(max-height:500px)]:min-w-40 [@media(max-height:500px)]:px-3 [@media(max-height:500px)]:py-0.5" data-testid="adventure-panel">
       <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">
-        Região {a.index}/{a.total}
+        Região {a.index} · {a.chapter}
       </div>
       <div className="font-display text-2xl leading-tight [@media(max-height:500px)]:text-base">{a.regionName}</div>
-      <div className="flex items-center justify-center gap-2 text-sm font-bold [@media(max-height:500px)]:text-xs">
-        {a.gateOpen ? (
-          <span className="text-violet-200">✦ Portão aberto</span>
-        ) : (
-          <>
-            <span className="inline-block h-3 w-3 rounded-full bg-[#ff5a1f] shadow-[0_0_10px_#ff5a1f]" />
-            Magmitos: {a.enemiesLeft}
-          </>
-        )}
+      <div className="flex items-center justify-center gap-2 text-sm font-bold [@media(max-height:500px)]:text-xs" data-testid="adventure-objective">
+        {objective}
       </div>
-      <div className="mt-1 flex justify-center gap-1 [@media(max-height:500px)]:mt-0.5">
-        {Array.from({ length: a.total }, (_, i) => (
-          <span key={i} className={`h-1.5 w-5 rounded-full ${i < a.cleared ? 'bg-violet-300 shadow-[0_0_6px_#c4a5ff]' : i === a.index - 1 ? 'bg-white/70' : 'bg-white/20'}`} />
-        ))}
-      </div>
+      {a.closingIn !== null && (
+        <div className="mt-0.5 animate-pulse text-[11px] font-black uppercase tracking-wider text-red-300" data-testid="gate-closing">
+          ⛓ O portão de trás fecha em {a.closingIn}s
+        </div>
+      )}
     </div>
   );
 }
@@ -365,6 +368,7 @@ function ControlsHint({ players }: { mode: ModeId; players: HudPlayer[] }) {
 }
 
 function ResultTitle({ outcome, winner, reason, team }: { outcome: string; winner?: HudPlayer; reason: string; team: boolean }) {
+  const adventure = useHud((s) => s.adventure);
   let title = 'EMPATE!';
   let sub = reason === 'timeUp' ? 'O tempo acabou.' : 'Ninguém sobreviveu.';
   let color = '#ffd23f';
@@ -377,6 +381,11 @@ function ResultTitle({ outcome, winner, reason, team }: { outcome: string; winne
   } else if (outcome === 'victory') {
     title = 'VITÓRIA!';
     sub = 'Todos os Magmitos foram explodidos.';
+  } else if (outcome === 'defeat' && adventure) {
+    // The endless journey has no "lose": it ends, and the score is how far it got.
+    title = 'FIM DA JORNADA';
+    sub = `Vocês chegaram à região ${adventure.depth}: ${adventure.regionName}.`;
+    color = '#ffcf6a';
   } else if (outcome === 'defeat') {
     title = 'DERROTA';
     sub = reason === 'timeUp' ? 'O tempo acabou.' : team ? 'A equipe inteira foi pelos ares.' : 'Você foi pelos ares.';

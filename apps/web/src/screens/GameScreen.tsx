@@ -5,6 +5,9 @@ import { sfx } from '../audio/Sfx';
 import { GameController, type LocalPlayerBinding } from '../game/GameController';
 import { Hud } from '../hud/Hud';
 import { HeroReveal } from '../ui/HeroReveal';
+import { AdventureMap } from '../ui/AdventureMap';
+import { ChapterCard } from '../ui/ChapterCard';
+import { EdgeArrows } from '../ui/EdgeArrows';
 import { inputManager } from '../input/instance';
 import { GameScene } from '../scene/GameScene';
 import { useMatchSetup, type LocalMode } from '../store/useMatchSetup';
@@ -122,6 +125,15 @@ export function GameScreen() {
       <GameScene key={controller.state.config.seed} controller={controller} />
       <Hud mode={plan.mode} onResume={() => controller.setPaused(false)} onRestart={restart} onExit={exit} exitLabel={fromLobbyFlow ? 'Voltar ao lobby' : 'Menu principal'} />
       <HeroReveal key={`reveal-${controller.state.config.seed}`} controller={controller} />
+      {controller.state.adventure && (
+        <>
+          <ChapterCard key={`chapter-${controller.state.config.seed}`} controller={controller} />
+          <EdgeArrows />
+          <div className="hud-safe pointer-events-none z-30">
+            <AdventureMap controller={controller} />
+          </div>
+        </>
+      )}
       <MatchTouchControls />
     </div>
   );

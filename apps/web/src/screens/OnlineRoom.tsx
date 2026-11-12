@@ -5,6 +5,9 @@ import { MAX_ROOM_SLOTS, type LobbyInfo, type OnlineMode, type StartInfo } from 
 import { sfx } from '../audio/Sfx';
 import { Hud } from '../hud/Hud';
 import { HeroReveal } from '../ui/HeroReveal';
+import { AdventureMap } from '../ui/AdventureMap';
+import { ChapterCard } from '../ui/ChapterCard';
+import { EdgeArrows } from '../ui/EdgeArrows';
 import { deviceLabel, devicesOfLocal, type DeviceId, type UiEvent } from '../input/InputManager';
 import { ME, useProfile } from '../store/useProfile';
 import { ONLINE_MODES } from '@4walls/protocol';
@@ -72,6 +75,15 @@ function OnlineMatch({ start, locals, mode, onLeave, reconnecting }: { start: St
       <GameScene controller={controller} />
       <Hud mode={mode} onResume={() => controller.toggleMenu(false)} onExit={onLeave} exitLabel="Sair da sala" resultNote="Voltando à sala…" />
       <HeroReveal controller={controller} />
+      {controller.state.adventure && (
+        <>
+          <ChapterCard key={`chapter-${controller.state.config.seed}`} controller={controller} />
+          <EdgeArrows />
+          <div className="hud-safe pointer-events-none z-30">
+            <AdventureMap controller={controller} />
+          </div>
+        </>
+      )}
       <MatchTouchControls />
       {reconnecting && <ReconnectBanner />}
     </div>

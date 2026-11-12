@@ -415,7 +415,8 @@ export class ArenaRoom extends Room {
       const acc = accId ? store.get(accId) : null;
       const p = g.players.find((pp) => pp.slot === s.slot);
       if (!acc || !p || !s.connected) continue;
-      const outcome: MatchPerformance['outcome'] =
+      // The endless Adventure has no winner: a journey is measured by how far it got.
+      const outcome: MatchPerformance['outcome'] = g.mode === 'adventure' ? 'draw' :
         result.outcome === 'victory' ? 'win' : result.outcome === 'defeat' ? 'loss' : result.outcome === 'draw' ? 'draw' : result.winnerIds.includes(p.id) ? 'win' : 'loss';
       const t = this.tallyOf(p.id);
       const report = store.recordMatch(
@@ -432,6 +433,7 @@ export class ArenaRoom extends Room {
           bosses: [...this.bossesDown],
           bossRushClear: g.mode === 'bossrush' && result.outcome === 'victory',
           seconds,
+          depth: g.adventure?.depth ?? 0,
         },
         s.slot,
       );

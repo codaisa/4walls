@@ -3,6 +3,9 @@ import type { AbilityId, BiomeId, BombKind, BossId, Dir, GameConfig, GameEventId
 export interface Grid {
   w: number;
   h: number;
+  /** World coordinates of the grid's first cell (0 for arenas; the Adventure window slides). */
+  x0: number;
+  y0: number;
   cells: Uint8Array;
 }
 
@@ -157,17 +160,40 @@ export interface EnemyState {
   frozenUntil: number;
   /** Adventure: region the enemy guards (-1 elsewhere). */
   regionId: number;
+  /** Adventure depth makes Magmitos faster (1 = normal). */
+  speedMul?: number;
 }
 
+export type RegionObjectiveKind = 'clear' | 'key';
+
+/** What opens a region's exit gate. */
+export interface RegionObjective {
+  kind: RegionObjectiveKind;
+  progress: number;
+  goal: number;
+  done: boolean;
+}
+
+/** Direction from one region to the next on the endless world lattice (never back west). */
+export type RegionDir = 'E' | 'N' | 'S';
+
 export interface RegionState {
+  /** Depth index (0 = first region). Unique for the whole journey. */
   id: number;
   name: string;
+  /** Chapter subtitle ("O despertar", "A chave perdida"...). */
+  chapter: string;
   biome: BiomeId;
-  /** Chunk position in the world lattice. */
+  /** Chunk position on the world lattice. */
   cx: number;
   cy: number;
+  objective: RegionObjective;
+  /** Players may be here (the previous gate opened). */
   unlocked: boolean;
+  /** Objective done: the exit gate is open. */
   cleared: boolean;
+  /** Corridor cell at the edge this region is entered from (null for the first region). */
+  entry: { x: number; y: number } | null;
 }
 
 export interface GateState {
@@ -180,20 +206,57 @@ export interface GateState {
   to: number;
   open: boolean;
   openedTick: number;
+  /** 'exit' opens forward; 'back' is the gate sealed behind the group (never opens). */
+  kind?: 'exit' | 'back';
 }
 
-/** Continuous-world state: regions, sealed gates and what each player has already seen. */
+export type PropKind = 'chest' | 'key';
+
+/**
+ * Adventure props. Chest: opened by walking onto it or by a blast, drops loot (rare = secret).
+ * Key: picked up by walking onto it, carried above the carrier's head, dropped where they fall,
+ * delivered at the region's exit gate.
+ */
+export interface PropState {
+  id: number;
+  kind: PropKind;
+  region: number;
+  x: number;
+  y: number;
+  /** chest: closed | open; key: idle | carried | used */
+  state: 'closed' | 'open' | 'idle' | 'carried' | 'used';
+  rare?: boolean;
+  carrierId?: string | null;
+  /** Where a key returns if it is lost. */
+  homeX?: number;
+  homeY?: number;
+  tick: number;
+}
+
+/** Endless, streamed world: a window of 1–3 live regions on an infinite lattice. */
 export interface AdventureState {
   chunkW: number;
   chunkH: number;
+  /** Deepest region a living player has entered. */
+  depth: number;
+  /** Live regions (the window), in id order. */
   regions: RegionState[];
   gates: GateState[];
-  /** Region id of every cell (-1 = outside every region). */
+  /** Region id of every grid cell (-1 = outside every region). */
   regionOf: Int16Array;
   /** 1 once any player has seen the cell. */
   explored: Uint8Array;
   /** Caged heroes waiting to be rescued (one per region). */
   cages: CageState[];
+  props: PropState[];
+  /** The gate behind the group closes at this tick unless everyone is already through. */
+  closing: { region: number; atTick: number } | null;
+  /** Every region entered so far (for the journey map and the results). */
+  journey: { id: number; name: string; biome: BiomeId }[];
+  /** Lattice chain: dirs[i] goes from region i to region i + 1 (grown on demand). */
+  dirs: RegionDir[];
+  /** Changes whenever regions attach or detach (renderers rebuild on it). */
+  windowKey: string;
 }
 
 /**
@@ -275,6 +338,18 @@ export type GameEvent =
   /** Adventure: a fallen ally comes back when a gate opens. */
   | { type: 'playerRevived'; playerId: string; x: number; y: number }
   | { type: 'cageOpened'; cageId: number; x: number; y: number }
+  /** Endless Adventure streaming: a region joined / left the live window (clients rebuild the same world). */
+  | { type: 'regionAttached'; region: number }
+  | { type: 'regionDetached'; region: number }
+  | { type: 'regionEntered'; region: number }
+  | { type: 'gateClosing'; region: number; atTick: number }
+  | { type: 'gateClosed'; region: number }
+  | { type: 'objectiveProgress'; region: number; progress: number; goal: number }
+  | { type: 'chestOpened'; propId: number; x: number; y: number; rare: boolean; byId: string | null }
+  | { type: 'keyPicked'; propId: number; playerId: string }
+  | { type: 'keyDropped'; propId: number; x: number; y: number }
+  | { type: 'keyDelivered'; propId: number; playerId: string; region: number }
+  | { type: 'secretFound'; x: number; y: number; byId: string }
   /** A rescued hero joins: `revived` = a fallen ally came back as them, otherwise the rescuer turned into them. */
   | { type: 'heroJoined'; playerId: string; byId: string; characterId: string; previousId: string; revived: boolean; x: number; y: number }
   | { type: 'bossSpawned'; boss: BossId; index: number; total: number }

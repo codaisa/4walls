@@ -2,6 +2,7 @@ import { Cell, DIR_VEC, RULES, TICK_DT, secToTicks, type Dir, type PlayerInput }
 import { getCell } from './grid';
 import type { GameState, PlayerState } from './types';
 import { bombAt, canBombEnter, isFrozen, isSolidForPlayer } from './world';
+import { carriesKey } from './adventure';
 
 const EPS = 1e-6;
 /** How far off-lane (in cells) a player may be for the game to slide them around a corner into the other lane. */
@@ -108,7 +109,7 @@ export function stepPlayerMovement(s: GameState, p: PlayerState, input: PlayerIn
     p.facing = dir;
     const bx = p.x;
     const by = p.y;
-    const turbo = s.tick < (p.turboUntil ?? 0) ? RULES.turboMult : 1;
+    const turbo = (s.tick < (p.turboUntil ?? 0) ? RULES.turboMult : 1) * (carriesKey(s, p.id) ? 0.9 : 1);
     movePlayer(s, p, dir, p.speed * TICK_DT * (icy ? ICE_SPEED_BONUS : 1) * turbo);
     p.moving = p.x !== bx || p.y !== by;
     if (!p.moving) {

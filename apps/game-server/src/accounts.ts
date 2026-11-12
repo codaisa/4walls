@@ -164,7 +164,7 @@ export class AccountStore {
 
   ranking(board: RankingBoard, limit = 50, meId?: string): { entries: RankingEntry[]; me: RankingEntry | null; season: string } {
     const season = currentSeason().id;
-    const value = (a: StoredAccount) => (board === 'wins' ? a.stats.wins : board === 'season' ? (a.seasonXp[season] ?? 0) : a.xp);
+    const value = (a: StoredAccount) => (board === 'wins' ? a.stats.wins : board === 'season' ? (a.seasonXp[season] ?? 0) : board === 'depth' ? (a.stats.bestDepth ?? 0) : a.xp);
     const sorted = [...this.accounts.values()]
       .filter((a) => a.stats.matches > 0)
       .sort((a, b) => value(b) - value(a) || b.xp - a.xp || a.createdAt - b.createdAt);

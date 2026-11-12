@@ -14,7 +14,7 @@ type Next = (err?: unknown) => void;
  *   GET   /api/me               → the account (Authorization: Bearer <id.token>)
  *   PATCH /api/me               → { name?, characterId?, colorIndex?, loadout? }
  *   POST  /api/shop/buy         → { itemId }
- *   GET   /api/ranking?board=xp|wins|season
+ *   GET   /api/ranking?board=xp|wins|season|depth
  */
 export function accountApi(store: AccountStore) {
   const creates = new Map<string, { at: number; n: number }>();
@@ -31,7 +31,7 @@ export function accountApi(store: AccountStore) {
     try {
       const route = `${req.method} ${url.pathname}`;
       if (route === 'GET /api/ranking') {
-        const board = (['xp', 'wins', 'season'] as RankingBoard[]).find((b) => b === url.searchParams.get('board')) ?? 'xp';
+        const board = (['xp', 'wins', 'season', 'depth'] as RankingBoard[]).find((b) => b === url.searchParams.get('board')) ?? 'xp';
         const me = store.auth(bearer(req));
         return send(res, 200, store.ranking(board, Number(url.searchParams.get('limit')) || 50, me?.id));
       }

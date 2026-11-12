@@ -161,6 +161,8 @@ export interface PlayerStats {
   bestWinStreak: number;
   playSeconds: number;
   byMode: Partial<Record<ModeId, { matches: number; wins: number }>>;
+  /** Furthest Adventure region reached (regions crossed). */
+  bestDepth: number;
 }
 
 export const EMPTY_STATS: PlayerStats = {
@@ -180,6 +182,7 @@ export const EMPTY_STATS: PlayerStats = {
   bestWinStreak: 0,
   playSeconds: 0,
   byMode: {},
+  bestDepth: 0,
 };
 
 export type AchievementId = 'first_win' | 'demolisher' | 'hunter' | 'veteran' | 'golem_slayer' | 'guardian_slayer' | 'boss_rush' | 'champion' | 'streak' | 'collector';
@@ -230,6 +233,8 @@ export interface MatchPerformance {
   /** Whole Boss Rush cleared. */
   bossRushClear: boolean;
   seconds: number;
+  /** Endless Adventure: regions crossed in this journey (0 elsewhere). */
+  depth?: number;
 }
 
 export interface MatchReward {
@@ -254,6 +259,8 @@ export function matchReward(p: MatchPerformance): MatchReward {
   add('Power-ups', Math.min(40, p.powerups * 4));
   add('Chefões derrotados', p.bosses.length * 100);
   if (p.bossRushClear) add('Boss Rush completo', 150);
+  // Endless Adventure: every region crossed pays, a bit more the deeper it was.
+  if (p.depth) add('Regiões atravessadas', Math.min(1500, Math.round(25 * p.depth + 1.5 * p.depth * p.depth)));
   const xp = lines.reduce((n, l) => n + l.xp, 0);
   const coins = Math.round(xp / 4) + (p.outcome === 'win' ? 20 : 0);
   return { xp, coins, lines };
@@ -277,6 +284,7 @@ export function applyMatchToStats(s: PlayerStats, p: MatchPerformance): PlayerSt
   for (const b of p.bosses) n.bossKills[b] = (n.bossKills[b] ?? 0) + 1;
   n.bossRushClears += p.bossRushClear ? 1 : 0;
   n.playSeconds += Math.round(p.seconds);
+  n.bestDepth = Math.max(s.bestDepth ?? 0, p.depth ?? 0);
   const m = n.byMode[p.mode] ?? { matches: 0, wins: 0 };
   n.byMode[p.mode] = { matches: m.matches + 1, wins: m.wins + (p.outcome === 'win' ? 1 : 0) };
   return n;
@@ -340,7 +348,7 @@ export interface RankingEntry {
   matches: number;
 }
 
-export type RankingBoard = 'xp' | 'wins' | 'season';
+export type RankingBoard = 'xp' | 'wins' | 'season' | 'depth';
 
 /** Items earned (not bought) for this level / achievements / season XP. */
 export function earnedItems(level: number, achievements: readonly string[], seasonXp: Record<string, number>): string[] {

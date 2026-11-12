@@ -38,13 +38,19 @@ export interface HudEvent {
 
 export interface HudAdventure {
   regionName: string;
-  /** 1-based index of the region the lead player stands in. */
+  chapter: string;
+  /** 1-based region number (the journey is endless). */
   index: number;
-  total: number;
-  cleared: number;
-  /** Magmitos left in the current region. */
-  enemiesLeft: number;
+  /** Deepest region reached (1-based). */
+  depth: number;
+  objective: 'clear' | 'key';
+  progress: number;
+  goal: number;
+  /** Key objective: somebody carries the key. */
+  keyCarried: boolean;
   gateOpen: boolean;
+  /** Seconds until the gate behind closes (null when nothing is closing). */
+  closingIn: number | null;
 }
 
 export interface HudBoss {

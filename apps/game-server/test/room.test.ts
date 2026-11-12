@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client, type Room } from '@colyseus/sdk';
-import { ROOM_NAME, isValidCode, type InputTuple, type LobbyInfo, type Snapshot, type StartInfo } from '@4walls/protocol';
+import { ROOM_NAME, applySnapshot, isValidCode, type InputTuple, type LobbyInfo, type Snapshot, type StartInfo } from '@4walls/protocol';
+import { createGame, type GameState } from '@4walls/core';
+import { matchMaker } from 'colyseus';
 import { createServer } from '../src/server';
 
 const PORT = 25790;
@@ -221,6 +223,46 @@ describe('online rooms', () => {
     for (let i = 9; i <= 16; i++) a.room.send('input', { seq: i, i: [[0, -1, i === 9 ? 1 : 0]] });
     await waitFor(() => a.snaps.some((s) => s.ev.some((e) => e.type === 'bombPlaced')), 3000);
     await Promise.all([a.room.leave(), b.room.leave()]);
+  });
+
+  it('endless adventure online: a client mirror rebuilds the same world from snapshots as the window slides', async () => {
+    const a = await createRoom();
+    a.room.send('join_slot', { localId: 'kb1' });
+    await waitFor(() => a.lobby!.slots.length === 1);
+    a.room.send('mode', { mode: 'adventure' });
+    await waitFor(() => a.lobby!.mode === 'adventure');
+    a.room.send('start', {});
+    const start = await waitFor(() => a.start);
+    const room = matchMaker.getLocalRoomById(a.room.roomId) as unknown as { game: GameState | null };
+    const g = await waitFor(() => room.game?.phase === 'playing' && room.game);
+    // The client side: a fresh game from the StartInfo, fed every snapshot from now on.
+    const mirror = createGame(start.config);
+    let applied = 0;
+    a.room.onMessage('snap', (snap: Snapshot) => {
+      applySnapshot(mirror, snap);
+      applied++;
+    });
+    for (let id = 0; id < 3; id++) {
+      for (const e of g.enemies) if (e.regionId === id) e.alive = false;
+      const key = g.adventure!.props.find((p) => p.kind === 'key' && p.region === id);
+      if (key) key.state = 'used';
+      await waitFor(() => g.adventure!.regions.find((r) => r.id === id)?.cleared);
+      const next = g.adventure!.regions.find((r) => r.id === id + 1)!;
+      const p = g.players[0];
+      p.x = p.px = next.entry!.x;
+      p.y = p.py = next.entry!.y;
+      await waitFor(() => g.adventure!.depth === id + 1 && !g.adventure!.regions.some((r) => r.id === id));
+    }
+    await sleep(150);
+    const before = applied;
+    await waitFor(() => applied > before + 2);
+    expect(mirror.adventure!.windowKey).toBe(g.adventure!.windowKey);
+    expect(mirror.adventure!.depth).toBe(3);
+    expect([mirror.grid.x0, mirror.grid.y0, mirror.grid.w, mirror.grid.h]).toEqual([g.grid.x0, g.grid.y0, g.grid.w, g.grid.h]);
+    expect(Array.from(mirror.grid.cells)).toEqual(Array.from(g.grid.cells));
+    expect(mirror.adventure!.gates.map((x) => [x.id, x.open])).toEqual(g.adventure!.gates.map((x) => [x.id, x.open]));
+    expect(mirror.adventure!.journey.map((j) => j.name)).toEqual(g.adventure!.journey.map((j) => j.name));
+    await a.room.leave();
   });
 
   it('ignores malformed input payloads', async () => {

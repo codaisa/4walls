@@ -97,6 +97,27 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
       sfx.go();
       hud.set({ banner: { text: 'PORTÃO ABERTO!', key: tick } });
       break;
+    case 'gateClosed':
+      sfx.alarm(1);
+      break;
+    case 'chestOpened':
+      sfx.chest(e.rare);
+      if (e.rare) hud.set({ banner: { text: 'TESOURO SECRETO!', key: tick + 3 } });
+      break;
+    case 'secretFound':
+      sfx.secret();
+      hud.set({ banner: { text: 'PASSAGEM SECRETA!', key: tick + 4 } });
+      break;
+    case 'keyPicked':
+      sfx.keyPick();
+      hud.set({ banner: { text: 'CHAVE NA MÃO! LEVE ATÉ O PORTÃO', key: tick + 5 } });
+      break;
+    case 'keyDropped':
+      sfx.keyDrop();
+      break;
+    case 'keyDelivered':
+      sfx.unlockGate();
+      break;
     case 'playerRevived':
       sfx.pickup();
       hud.set({ banner: { text: 'ALIADOS DE VOLTA!', key: tick + 1 } });
@@ -227,14 +248,19 @@ function adventureInfo(s: GameState): HudAdventure | null {
   let rid = lead ? regionAt(s, lead.x, lead.y) : -1;
   // Corridors/gates belong to no region: keep showing the furthest unlocked one.
   if (rid < 0) rid = Math.max(0, ...adv.regions.filter((r) => r.unlocked).map((r) => r.id));
-  const r = adv.regions[rid];
+  const r = adv.regions.find((x) => x.id === rid) ?? adv.regions[0];
+  const closingIn = adv.closing ? Math.max(0, Math.ceil((adv.closing.atTick - s.tick) / 60)) : null;
   return {
     regionName: r.name,
-    index: rid + 1,
-    total: adv.regions.length,
-    cleared: adv.regions.filter((x) => x.cleared).length,
-    enemiesLeft: s.enemies.filter((e) => e.alive && e.regionId === rid).length,
+    chapter: r.chapter,
+    index: r.id + 1,
+    depth: adv.depth + 1,
+    objective: r.objective.kind,
+    progress: r.objective.kind === 'clear' ? s.enemies.filter((e) => e.alive && e.regionId === r.id).length : r.objective.progress,
+    goal: r.objective.goal,
+    keyCarried: adv.props.some((p) => p.kind === 'key' && p.region === r.id && p.state === 'carried'),
     gateOpen: r.cleared,
+    closingIn,
   };
 }
 

@@ -614,3 +614,124 @@ textarea {
     opacity: 0.8;
   }
 }
+
+/* ───────────── Adventure chapter card (ui/ChapterCard.tsx) ───────────── */
+.chapter-card {
+  animation: ch-out 0.5s ease-in 3.1s forwards;
+}
+.chapter-inner {
+  position: relative;
+  padding: 0.5rem 2.6rem 0.7rem;
+  background: linear-gradient(90deg, transparent, rgba(16, 6, 10, 0.86) 14%, rgba(16, 6, 10, 0.86) 86%, transparent);
+  animation: ch-in 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+.chapter-inner::before,
+.chapter-inner::after {
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ffcf6a, transparent);
+}
+.chapter-inner::before {
+  top: 0;
+}
+.chapter-inner::after {
+  bottom: 0;
+}
+.chapter-index {
+  color: #ffcf6a;
+  font-size: clamp(0.8rem, 3.6vh, 1.2rem);
+  letter-spacing: 0.35em;
+}
+.chapter-name {
+  color: #fff4dc;
+  font-size: clamp(1.8rem, 11vh, 4.4rem);
+  line-height: 1;
+  text-shadow: 0 3px 0 #3a1408, 0 0 24px rgba(255, 140, 60, 0.45);
+  animation: ch-name 0.6s cubic-bezier(0.3, 1.5, 0.5, 1) 0.15s both;
+}
+.chapter-sub {
+  margin-top: 0.15rem;
+  color: #ffd9a8;
+  font-style: italic;
+  font-weight: 800;
+  font-size: clamp(0.8rem, 4vh, 1.4rem);
+  animation: ch-fade 0.4s ease-out 0.45s both;
+}
+.chapter-goal {
+  margin-top: 0.35rem;
+  padding: 0.1rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(255, 210, 63, 0.92);
+  color: #3a1d00;
+  font-weight: 900;
+  font-size: clamp(0.7rem, 3.2vh, 1.05rem);
+  animation: ch-fade 0.4s ease-out 0.7s both;
+}
+@keyframes ch-in {
+  from {
+    opacity: 0;
+    transform: translateY(-40%) scaleX(0.6);
+  }
+}
+@keyframes ch-name {
+  from {
+    opacity: 0;
+    transform: scale(1.6);
+    letter-spacing: 0.2em;
+  }
+}
+@keyframes ch-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes ch-out {
+  to {
+    opacity: 0;
+    transform: translateY(-20%);
+  }
+}
+
+/* Edge arrows pointing at off-screen goals (ui/EdgeArrows.tsx). */
+.edge-arrow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border-radius: 999px;
+  background: rgba(16, 6, 10, 0.78);
+  border: 2px solid var(--arrow-color, #ffd23f);
+  box-shadow: 0 0 14px var(--arrow-color, #ffd23f);
+  font-size: 20px;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.edge-arrow .tip {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 10px solid var(--arrow-color, #ffd23f);
+  top: -12px;
+  left: 50%;
+  margin-left: -7px;
+  transform-origin: 7px 35px;
+}
+.edge-arrow .dist {
+  position: absolute;
+  bottom: -14px;
+  font-size: 10px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 1px 2px #000;
+}

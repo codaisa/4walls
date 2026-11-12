@@ -242,6 +242,41 @@ export function Fx() {
               });
             break;
           }
+          case 'chestOpened': {
+            // Coins and sparkles burst out of the chest.
+            for (let i = 0; i < (e.rare ? 44 : 26); i++)
+              solids.spawn({
+                x: e.x + ox, y: 0.55, z: e.y + oz,
+                vx: rnd(-2.2, 2.2), vy: rnd(3.5, 6.5), vz: rnd(-2.2, 2.2),
+                life: rnd(0.8, 1.4), size: rnd(0.05, 0.09), color: i % 3 ? '#ffd23f' : e.rare ? '#3fd0ff' : '#fff1b8',
+                gravity: 12, drag: 0.5, bounce: true,
+              });
+            for (let i = 0; i < 18; i++)
+              sparks.spawn({
+                x: e.x + ox + rnd(-0.3, 0.3), y: rnd(0.4, 0.9), z: e.y + oz + rnd(-0.3, 0.3),
+                vx: rnd(-0.4, 0.4), vy: rnd(1.5, 3.5), vz: rnd(-0.4, 0.4),
+                life: rnd(0.5, 0.9), size: rnd(0.06, 0.1), color: '#ffe08a', intensity: 3, drag: 1.5,
+              });
+            break;
+          }
+          case 'secretFound': {
+            // The cracked wall crumbles into rubble and dust.
+            for (let i = 0; i < 30; i++)
+              solids.spawn({
+                x: e.x + ox, y: 0.6, z: e.y + oz,
+                vx: rnd(-3, 3), vy: rnd(2, 5), vz: rnd(-3, 3),
+                life: rnd(0.8, 1.3), size: rnd(0.07, 0.14), color: i % 4 ? '#5a4a52' : '#ff9a4c',
+                gravity: 14, drag: 0.4, bounce: true,
+              });
+            for (let i = 0; i < 12; i++)
+              smoke.spawn({
+                x: e.x + ox + rnd(-0.3, 0.3), y: rnd(0.2, 0.8), z: e.y + oz + rnd(-0.3, 0.3),
+                vx: rnd(-1, 1), vy: rnd(0.3, 0.9), vz: rnd(-1, 1),
+                life: rnd(0.7, 1.2), size: rnd(0.35, 0.55), grow: 2, color: '#8a7a74', alpha: 0.5, drag: 2.5,
+              });
+            fx.shake = Math.min(1, fx.shake + 0.25);
+            break;
+          }
           case 'cageOpened': {
             for (let i = 0; i < 26; i++)
               solids.spawn({

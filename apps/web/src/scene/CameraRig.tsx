@@ -71,8 +71,11 @@ export function CameraRig() {
     let cx = follow ? (minX + maxX) / 2 : lerp((minX + maxX) / 2, 0, 0.6);
     let cz = follow ? (minZ + maxZ) / 2 : lerp((minZ + maxZ) / 2, 0, 0.6);
     const edge = close ? CLOSE_EDGE : 0;
-    cx = THREE.MathUtils.clamp(cx, Math.min(0, -w / 2 + halfW - edge), Math.max(0, w / 2 - halfW + edge));
-    cz = THREE.MathUtils.clamp(cz, Math.min(0, -h / 2 + halfD - edge), Math.max(0, h / 2 - halfD + edge));
+    // Arenas are centered on the origin; the endless Adventure's grid window sits in world space.
+    const gx = s.adventure ? s.grid.x0 + (w - 1) / 2 : 0;
+    const gz = s.adventure ? s.grid.y0 + (h - 1) / 2 : 0;
+    cx = THREE.MathUtils.clamp(cx, gx + Math.min(0, -w / 2 + halfW - edge), gx + Math.max(0, w / 2 - halfW + edge));
+    cz = THREE.MathUtils.clamp(cz, gz + Math.min(0, -h / 2 + halfD - edge), gz + Math.max(0, h / 2 - halfD + edge));
 
     // Solve the distance that fits the region's corners (floor and wall-top height) on screen.
     probe.fov = camera.fov;

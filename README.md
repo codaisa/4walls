@@ -109,17 +109,20 @@ Limites desta versão:
   - **Piso Congelado:** você desliza até bater.
 - **Áudio:** efeitos e música sintetizados no navegador, uma trilha por arena. Música e efeitos podem ser desligados no menu de pausa.
 
-- **Modo Aventura** (menu principal → *Aventura*, ou *Aventura* nas opções do lobby local, 1–4 jogadores):
-  - O mundo tem 5 regiões em formato de ilha irregular, ligadas por corredores e geradas por seed: vulcão → transição → floresta.
-  - A câmera segue os jogadores.
-  - Exploda os Magmitos de uma região para abrir o **portão** selado da próxima.
-  - Cada portão aberto **traz de volta os aliados caídos**: eles reaparecem junto ao portão, piscando com alguns segundos de proteção, e mantêm os power-ups. Quem saiu da sala online não volta.
-  - **Prisioneiros em celas:** cada região tem uma cela trancada.
-    - Exploda a cela e encoste no prisioneiro. O herói é sorteado entre todos os 9, menos o que quem recebe já está usando.
-    - Se houver um aliado caído, ele renasce como o herói. Senão, quem resgatou se transforma nele, mantendo os power-ups e com a habilidade nova já pronta.
-    - Aparece a tela **"ENTRA NA BRIGA!"**. Se o herói for novo para a sua conta, aparece também **NOVO PERSONAGEM!** e ele fica liberado no Ateliê e na sala.
-    - Desbloqueios valem nas partidas online, porque a conta fica no servidor.
-  - Vitória ao libertar todas as regiões. Sem limite de tempo e sem eventos aleatórios. Funciona local e online.
+- **Modo Aventura: jornada infinita** (na sala, o anfitrião escolhe *Aventura*; 1–4 jogadores):
+  - **Não termina:** só acaba quando o grupo inteiro cai. O placar é a **profundidade** (região alcançada), que dá XP crescente e vale para o ranking **Aventura**.
+  - **Regiões sem fim:** cada região é gerada na hora a partir da seed (bioma, formato, objetivo, nome). As 5 primeiras formam a introdução roteirizada; depois tudo é sorteado e a dificuldade sobe sem parar: mais Magmitos, mais rápidos e mais blocos, até um teto.
+  - **Mundo em streaming:** só ficam vivas a região anterior, a atual e a próxima. Quando todos passam pelo portão, **o portão de trás se fecha** (em 15 s, quem ficar para trás é puxado) e a região antiga é descartada.
+  - **Objetivos por região:** explodir todos os Magmitos, ou **achar a chave** e levá-la até o cadeado do portão. Quem carrega a chave anda 10% mais devagar; se morrer, a chave cai ali.
+  - **Segredos e baús:** muros rachados com veios brilhantes escondem um baú raro; também há baús comuns. Abrem ao encostar ou com uma explosão.
+  - Cada portão aberto **traz de volta os aliados caídos**.
+  - **Prisioneiros em celas** (uma por região): resgate heróis brasileiros (veja *Heróis resgatáveis*).
+  - **Navegação:**
+    - cartão de capítulo ao entrar em cada região;
+    - objetivo no HUD;
+    - setas na borda da tela apontando para o portão, a chave e a cela;
+    - **minimapa** no PC (M ou Select abre o mapa grande);
+    - botão 🗺️ no celular, que abre o **mapa da jornada**.
 
 - **Chefões (Boss Rush)** (menu principal → *Chefões*, ou *Chefões* nas opções do lobby local, 1–4 jogadores co-op):
   - Dois chefes em sequência. Todos os ataques são avisados no chão e os chefes enfurecem abaixo de metade da vida.

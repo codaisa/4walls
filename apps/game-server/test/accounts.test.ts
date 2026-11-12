@@ -180,13 +180,16 @@ describe('account API + match rewards', () => {
     const p = g.players[0];
     // Rescue cage after cage until the draw gives a non-starter hero (the draw is random).
     let hero = 'bombito';
-    for (const cage of g.adventure!.cages) {
-      g.grid.cells[cage.y * g.grid.w + cage.x] = 0;
-      await sleep(80);
-      p.x = p.px = cage.x;
-      p.y = p.py = cage.y;
+    const cage = g.adventure!.cages[0];
+    g.grid.cells[(cage.y - g.grid.y0) * g.grid.w + (cage.x - g.grid.x0)] = 0;
+    await sleep(80);
+    p.x = p.px = cage.x;
+    p.y = p.py = cage.y;
+    // The draw is random: free the same prisoner again until a non-starter hero shows up.
+    for (let tries = 0; tries < 30; tries++) {
       hero = await waitFor(() => (cage.state === 'rescued' ? p.characterId : null));
       if (!['bombito', 'ninja', 'engenheiro'].includes(hero)) break;
+      cage.state = 'free';
     }
     expect(['bombito', 'ninja', 'engenheiro']).not.toContain(hero);
     const acc = await waitFor(() => (pushed as { characters: string[] } | null)?.characters.includes(hero) && pushed);
