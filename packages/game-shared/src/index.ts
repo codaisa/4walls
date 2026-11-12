@@ -12,6 +12,8 @@ export enum Cell {
   Block = 2,
   /** Cracked wall (Adventure secrets): solid like a wall, a blast turns it into floor. */
   Cracked = 3,
+  /** Lava river (Adventure): nobody walks on it, blasts fly over it, falling in is fatal. */
+  Lava = 4,
 }
 
 export type Dir = 'up' | 'down' | 'left' | 'right';

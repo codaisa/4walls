@@ -1,6 +1,6 @@
 import { ADVENTURE, Cell, DIR_VEC, DIRS } from '@4walls/shared';
 import { describe, expect, it } from 'vitest';
-import { cellIndex, createGame, difficulty, getCell, inBounds, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
+import { cellIndex, createGame, difficulty, geyserPhase, getCell, inBounds, platformPos, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
 
 const make = (seed = 11, players = 1) => {
   const s = createGame({
@@ -21,6 +21,10 @@ function complete(s: GameState, id: number) {
   const r = region(s, id);
   if (r.objective.kind === 'clear') {
     for (const e of s.enemies) if (e.regionId === id) e.alive = false;
+  } else if (r.objective.kind === 'lever') {
+    const lever = s.adventure!.props.find((p) => p.kind === 'lever' && p.region === id)!;
+    const side = DIRS.map((d) => ({ x: lever.x + DIR_VEC[d].x, y: lever.y + DIR_VEC[d].y })).find((c) => getCell(s.grid, c.x, c.y) === Cell.Floor)!;
+    s.flames.push({ x: side.x, y: side.y, part: 'center', dir: null, bombId: 1, ownerId: 'p1', bornTick: s.tick, untilTick: s.tick + 30, kind: 'normal' });
   } else {
     const key = s.adventure!.props.find((p) => p.kind === 'key' && p.region === id)!;
     key.state = 'used';
@@ -40,6 +44,12 @@ function walkThrough(s: GameState, id: number) {
 
 /** Cells reachable from a point, treating crates (and cages) as passable and walls as not. */
 function reach(s: GameState, from: { x: number; y: number }) {
+  // River crossings (bridges, the platform's track) are walkable over time.
+  const crossing = new Set<number>();
+  for (const p of s.adventure!.props) {
+    if (p.kind === 'bridge') crossing.add(cellIndex(s.grid, p.x, p.y));
+    if (p.kind === 'platform') for (const c of p.track!) crossing.add(cellIndex(s.grid, c.x, c.y));
+  }
   const seen = new Set<number>([cellIndex(s.grid, from.x, from.y)]);
   const q = [from];
   while (q.length) {
@@ -50,7 +60,7 @@ function reach(s: GameState, from: { x: number; y: number }) {
       if (!inBounds(s.grid, x, y)) continue;
       const i = cellIndex(s.grid, x, y);
       const cell = getCell(s.grid, x, y);
-      if (seen.has(i) || cell === Cell.Wall) continue;
+      if (seen.has(i) || cell === Cell.Wall || (cell === Cell.Lava && !crossing.has(i))) continue;
       seen.add(i);
       q.push({ x, y });
     }
@@ -87,7 +97,7 @@ describe('endless adventure: world', () => {
     expect(regionInfo(7, 1).objective).toBe('key');
     const later = Array.from({ length: 40 }, (_, i) => regionInfo(7, 5 + i));
     expect(new Set(later.map((r) => r.name)).size).toBeGreaterThan(15);
-    expect(new Set(later.map((r) => r.objective))).toEqual(new Set(['clear', 'key']));
+    expect(new Set(later.map((r) => r.objective))).toEqual(new Set(['clear', 'key', 'lever']));
     expect(regionInfo(7, 12)).toEqual(regionInfo(7, 12));
   });
 
@@ -164,7 +174,8 @@ describe('endless adventure: the journey', () => {
         const g = exitGate(s, id);
         const gateNeighbor = DIRS.map((d) => ({ x: g.x + DIR_VEC[d].x, y: g.y + DIR_VEC[d].y })).some((c) => inBounds(s.grid, c.x, c.y) && seen.has(cellIndex(s.grid, c.x, c.y)) && regionAt(s, c.x, c.y) === id);
         expect(gateNeighbor, `seed ${seed} region ${id}: exit`).toBe(true);
-        for (const p of s.adventure!.props.filter((pp) => pp.region === id && pp.kind !== 'brazier')) {
+        const isletOf = (pp: { x: number; y: number }) => DIRS.filter((d) => getCell(s.grid, pp.x + DIR_VEC[d].x, pp.y + DIR_VEC[d].y) === Cell.Lava).length >= 2;
+        for (const p of s.adventure!.props.filter((pp) => pp.region === id && !['brazier', 'lever', 'bridge', 'platform'].includes(pp.kind) && !isletOf(pp))) {
           // Secret chests sit behind a cracked wall: open it for the check.
           for (const d of DIRS) {
             const x = p.x + DIR_VEC[d].x;
@@ -173,8 +184,8 @@ describe('endless adventure: the journey', () => {
           }
           expect(reach(s, start).has(cellIndex(s.grid, p.x, p.y)), `seed ${seed} region ${id}: ${p.kind}`).toBe(true);
         }
-        // Braziers stand like pillars: one of their sides must be reachable to light them.
-        for (const b of s.adventure!.props.filter((pp) => pp.region === id && pp.kind === 'brazier')) {
+        // Braziers and levers stand like pillars: one of their sides must be reachable.
+        for (const b of s.adventure!.props.filter((pp) => pp.region === id && (pp.kind === 'brazier' || pp.kind === 'lever'))) {
           const side = DIRS.some((d) => {
             const x = b.x + DIR_VEC[d].x;
             const y = b.y + DIR_VEC[d].y;
@@ -334,5 +345,121 @@ describe('endless adventure: M2 mechanics', () => {
     }
     expect(chest.state).toBe('closed');
     expect(s.events.some((e) => e.type === 'missionDone')).toBe(true);
+  });
+});
+
+describe('endless adventure: M3 lava river', () => {
+  /** Region 3 ("Rio de Magma", index 2) is the scripted river. */
+  const atRiver = (seed = 3, players = 1) => {
+    const s = make(seed, players);
+    for (const id of [0, 1]) {
+      complete(s, id);
+      walkThrough(s, id);
+    }
+    for (const p of s.players) p.invulnUntil = 0;
+    s.enemies = [];
+    return s;
+  };
+  const props = (s: GameState, kind: string) => s.adventure!.props.filter((p) => p.region === 2 && p.kind === kind);
+  const floorSide = (s: GameState, c: { x: number; y: number }) => DIRS.map((d) => ({ x: c.x + DIR_VEC[d].x, y: c.y + DIR_VEC[d].y })).find((q) => getCell(s.grid, q.x, q.y) === Cell.Floor)!;
+
+  it('"A travessia": a lava band with a raised drawbridge, fragile planks, a shuttle, a lever and geysers', () => {
+    for (let seed = 1; seed <= 25; seed++) {
+      const s = atRiver(seed);
+      expect(region(s, 2).objective.kind).toBe('lever');
+      const draw = props(s, 'bridge').filter((b) => b.variant === 'draw');
+      expect(draw.length, `seed ${seed}`).toBeGreaterThanOrEqual(2);
+      for (const b of draw) expect(getCell(s.grid, b.x, b.y)).toBe(Cell.Lava);
+      expect(props(s, 'lever')).toHaveLength(1);
+      expect(props(s, 'platform').length + props(s, 'bridge').filter((b) => b.variant === 'fragile').length, `seed ${seed}`).toBeGreaterThan(0);
+      expect(props(s, 'geyser').length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('a blast next to the lever lowers the drawbridge and opens the exit gate', () => {
+    const s = atRiver();
+    complete(s, 2);
+    for (const b of props(s, 'bridge').filter((x) => x.variant === 'draw')) {
+      expect(b.state).toBe('lowered');
+      expect(getCell(s.grid, b.x, b.y)).toBe(Cell.Floor);
+    }
+    expect(exitGate(s, 2).open).toBe(true);
+  });
+
+  it('fragile planks shake, give way under whoever stays, then come back', () => {
+    let s = atRiver(1, 2);
+    for (let seed = 2; !props(s, 'bridge').some((b) => b.variant === 'fragile'); seed++) s = atRiver(seed, 2);
+    const plank = props(s, 'bridge').find((b) => b.variant === 'fragile')!;
+    const p = s.players[0];
+    p.x = p.px = plank.x;
+    p.y = p.py = plank.y;
+    step(s, {});
+    expect(plank.state).toBe('cracking');
+    let fell = false;
+    for (let i = 0; i < 61; i++) {
+      step(s, {});
+      fell ||= s.events.some((e) => e.type === 'playerFell');
+    }
+    expect(plank.state).toBe('fallen');
+    expect(getCell(s.grid, plank.x, plank.y)).toBe(Cell.Lava);
+    expect(p.alive).toBe(false);
+    expect(fell).toBe(true);
+    for (let i = 0; i < 361; i++) step(s, {});
+    expect(plank.state).toBe('solid');
+    expect(getCell(s.grid, plank.x, plank.y)).toBe(Cell.Floor);
+  });
+
+  it('the shuttle platform carries its rider across the river', () => {
+    let s = atRiver(1, 2);
+    for (let seed = 2; !props(s, 'platform').length; seed++) s = atRiver(seed, 2);
+    const plat = props(s, 'platform')[0];
+    // Wait for it at the near bank, step on, ride.
+    for (let i = 0; i < 400 && platformPos(plat, s.tick).x !== plat.track![0].x + 0 * 1; i++) step(s, {});
+    let guard = 0;
+    while (!(platformPos(plat, s.tick).i === 0 && platformPos(plat, s.tick + 30).i === 0) && guard++ < 600) step(s, {});
+    const p = s.players[0];
+    p.x = p.px = plat.track![0].x;
+    p.y = p.py = plat.track![0].y;
+    const far = plat.track![plat.track!.length - 1];
+    for (let i = 0; i < 400 && !(Math.round(p.x) === far.x && Math.round(p.y) === far.y); i++) step(s, {});
+    expect(p.alive).toBe(true);
+    expect([Math.round(p.x), Math.round(p.y)]).toEqual([far.x, far.y]);
+    // Only the platform's cell is floor; the rest of its track is lava.
+    for (const c of plat.track!) expect(getCell(s.grid, c.x, c.y)).toBe(c.x === plat.x && c.y === plat.y ? Cell.Floor : Cell.Lava);
+  });
+
+  it('a geyser warns, then erupts like a flame: deadly, and it sets bombs off', () => {
+    const s = atRiver();
+    const g = props(s, 'geyser')[0];
+    while (geyserPhase(g, s.tick + 1) !== 0) step(s, {});
+    const p = s.players[0];
+    p.x = p.px = g.x;
+    p.y = p.py = g.y;
+    step(s, {});
+    expect(s.events.some((e) => e.type === 'geyserErupt')).toBe(true);
+    step(s, {});
+    expect(p.alive).toBe(false);
+  });
+
+  it('nobody walks into lava, but a jump clears one cell of it', () => {
+    const s = atRiver();
+    const lavaCell = props(s, 'bridge').find((b) => b.variant === 'draw')!;
+    const bank = floorSide(s, lavaCell);
+    const p = s.players[0];
+    p.x = p.px = bank.x;
+    p.y = p.py = bank.y;
+    const dir = DIRS.find((d) => bank.x + DIR_VEC[d].x === lavaCell.x && bank.y + DIR_VEC[d].y === lavaCell.y)!;
+    for (let i = 0; i < 30; i++) step(s, { p1: { move: dir, bomb: false, ability: false } });
+    expect(getCell(s.grid, Math.round(p.x), Math.round(p.y))).toBe(Cell.Floor);
+    expect(p.alive).toBe(true);
+    // Jumping from the bank over one lava cell onto a free cell (if any) is allowed.
+    setCell(s.grid, lavaCell.x + DIR_VEC[dir].x, lavaCell.y + DIR_VEC[dir].y, Cell.Floor);
+    p.x = p.px = bank.x;
+    p.y = p.py = bank.y;
+    p.maneuverReadyTick = 0;
+    step(s, { p1: { move: dir, bomb: false, ability: false, jump: true } });
+    for (let i = 0; i < 40; i++) step(s, {});
+    expect(p.alive).toBe(true);
+    expect([Math.round(p.x), Math.round(p.y)]).toEqual([lavaCell.x + DIR_VEC[dir].x, lavaCell.y + DIR_VEC[dir].y]);
   });
 });

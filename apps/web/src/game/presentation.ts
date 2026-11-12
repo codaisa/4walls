@@ -118,6 +118,28 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
     case 'sparkAlert':
       sfx.sparkAlert();
       break;
+    case 'bridgeCracking':
+      sfx.creak();
+      break;
+    case 'bridgeFell':
+      sfx.lavaSplash();
+      break;
+    case 'playerFell':
+      sfx.lavaSplash();
+      break;
+    case 'sankInLava':
+      sfx.hiss();
+      break;
+    case 'geyserWarn':
+      sfx.rumble();
+      break;
+    case 'geyserErupt':
+      sfx.geyser();
+      break;
+    case 'leverPulled':
+      sfx.lever();
+      hud.set({ banner: { text: 'A PONTE LEVADIÇA BAIXOU!', key: tick + 8 } });
+      break;
     case 'brazierLit':
       sfx.brazier();
       if (e.lit < e.goal) hud.set({ banner: { text: `BRASEIRO ${e.lit}/${e.goal}`, key: tick + 6 } });

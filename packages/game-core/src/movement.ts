@@ -145,7 +145,8 @@ export function startManeuver(s: GameState, p: PlayerState, kind: 'roll' | 'jump
     }
   } else {
     const c1 = getCell(s.grid, cx + v.x, cy + v.y);
-    const overable = c1 === Cell.Floor || (c1 === Cell.Block && s.tick < p.ghostUntil);
+    // Hop over a bomb, open floor or a single cell of lava (never land in it).
+    const overable = c1 === Cell.Floor || c1 === Cell.Lava || (c1 === Cell.Block && s.tick < p.ghostUntil);
     if (overable && !isSolidForPlayer(s, p, cx + v.x * 2, cy + v.y * 2) && !bombAt(s, cx + v.x * 2, cy + v.y * 2)) n = 2;
     else if (!isSolidForPlayer(s, p, cx + v.x, cy + v.y)) n = 1;
   }

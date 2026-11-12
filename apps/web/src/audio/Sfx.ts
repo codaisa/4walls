@@ -203,6 +203,31 @@ class SfxEngine {
     [523, 659, 784, 1046, 784, 1046, 1318].forEach((f, i) => this.tone(f, 0.18, { type: 'square', gain: 0.07, delay: i * 0.08, bus: 'ui' }));
   }
 
+  /** River: creaking planks, a splash of lava, the geyser's rumble and roar, the lever's clank. */
+  creak() {
+    this.tone(160, 0.5, { to: 120, type: 'sawtooth', gain: 0.05 });
+    this.burst(0.3, 900, 200, 0.12, 2);
+  }
+  lavaSplash() {
+    this.burst(0.5, 1200, 150, 0.4, 0.8);
+    this.tone(90, 0.4, { to: 40, type: 'sine', gain: 0.25 });
+  }
+  hiss() {
+    this.burst(0.35, 7000, 2500, 0.12, 4);
+  }
+  rumble() {
+    this.tone(55, 1.1, { to: 70, type: 'sawtooth', gain: 0.08 });
+  }
+  geyser() {
+    this.burst(0.8, 2600, 300, 0.5, 0.7);
+    this.tone(120, 0.5, { to: 260, type: 'square', gain: 0.08 });
+  }
+  lever() {
+    this.tone(330, 0.08, { type: 'square', gain: 0.14 });
+    this.tone(220, 0.12, { type: 'square', gain: 0.14, delay: 0.1 });
+    this.tone(70, 1.4, { to: 50, type: 'sawtooth', gain: 0.1, delay: 0.2 });
+  }
+
   // ── Rescued heroes ──
   /** "Joins the fight!": a whoosh, a brass stab and (new hero) a fanfare. */
   heroReveal(isNew: boolean) {

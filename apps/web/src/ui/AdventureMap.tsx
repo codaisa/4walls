@@ -31,6 +31,11 @@ function drawMap(ctx: CanvasRenderingContext2D, s: GameState, W: number, H: numb
       if (!reg) continue;
       const c = getCell(g, x, y);
       if (c === Cell.Wall || c === Cell.Cracked) continue;
+      if (c === Cell.Lava) {
+        ctx.fillStyle = reg.unlocked ? '#d9481f' : 'rgba(255,90,30,0.25)';
+        ctx.fillRect(px(x), py(y), cell, cell);
+        continue;
+      }
       if (!reg.unlocked) {
         ctx.fillStyle = 'rgba(255,255,255,0.07)';
         ctx.fillRect(px(x), py(y), cell, cell);

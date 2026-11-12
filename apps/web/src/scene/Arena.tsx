@@ -43,7 +43,15 @@ export function Arena({ theme }: { theme: ArenaTheme }) {
     // Cage cells are crates in the rules but drawn by <Cages />.
     const cageSet = new Set(adventure?.cages.map((c) => k(c.x, c.y)) ?? []);
     // Braziers stand on wall cells in the rules but are drawn by <AdventureProps />.
-    const propSet = new Set(adventure?.props.filter((p) => p.kind === 'brazier').map((p) => k(p.x, p.y)) ?? []);
+    const propSet = new Set(adventure?.props.filter((p) => p.kind === 'brazier' || p.kind === 'lever').map((p) => k(p.x, p.y)) ?? []);
+    // The lava river is an open channel down to the magma sea; bridges and the shuttle platform
+    // are drawn by <AdventureProps /> (their cells change between lava and floor while playing).
+    const riverSet = new Set<string>();
+    for (const p of adventure?.props ?? []) {
+      if (p.kind === 'bridge') riverSet.add(k(p.x, p.y));
+      if (p.kind === 'platform') for (const c of p.track ?? []) riverSet.add(k(c.x, c.y));
+    }
+    const isRiver = (x: number, y: number) => getCell(grid, x, y) === Cell.Lava || riverSet.has(k(x, y));
     // getCell is Wall outside the grid window; cracked walls get a floor tile (they can be blown open).
     const solid = (x: number, y: number) => getCell(grid, x, y) === Cell.Wall && !gateSet.has(k(x, y)) && !propSet.has(k(x, y));
     const walkable = (x: number, y: number) => !solid(x, y);
@@ -57,10 +65,15 @@ export function Arena({ theme }: { theme: ArenaTheme }) {
     const pillars: { x: number; y: number }[] = [];
     const blocks: { x: number; y: number }[] = [];
     const cracked: { x: number; y: number }[] = [];
+    const lava: { x: number; y: number }[] = [];
     const base: { x: number; y: number }[] = [];
     for (let y = grid.y0; y < grid.y0 + h; y++)
       for (let x = grid.x0; x < grid.x0 + w; x++) {
         if (walkable(x, y)) {
+          if (isRiver(x, y)) {
+            lava.push({ x, y });
+            continue;
+          }
           floor.push({ x, y });
           base.push({ x, y });
           const cell = getCell(grid, x, y);
@@ -72,7 +85,7 @@ export function Arena({ theme }: { theme: ArenaTheme }) {
         base.push({ x, y });
         (near8(x, y, isVoid) ? border : pillars).push({ x, y });
       }
-    return { floor, border, pillars, blocks, cracked, base };
+    return { floor, border, pillars, blocks, cracked, base, lava };
     // The layout only changes when a new match (new grid) starts.
   }, [grid, w, h, adventure]);
 
@@ -271,6 +284,7 @@ export function Arena({ theme }: { theme: ArenaTheme }) {
       <instancedMesh ref={capRef} args={[tree ? geo.canopy : geo.cap, tree ? mat.canopy : mat.cap, layout.pillars.length]} castShadow />
       <instancedMesh ref={blockRef} args={[geo.block, mat.block, blockCount]} castShadow receiveShadow />
       <instancedMesh ref={markRef} args={[geo.mark, mat.mark, blockCount]} />
+      {layout.lava.length > 0 && <LavaRiver cells={layout.lava} />}
       {layout.cracked.length > 0 && <CrackedWalls cells={layout.cracked} color={look(layout.cracked[0].x, layout.cracked[0].y).pillar} />}
       {/* Arena dressing; the adventure world is too large for fixed corner props and backdrops. */}
       {!adventure && <Corners w={w} h={h} theme={theme} />}
@@ -587,4 +601,35 @@ function CrackedWalls({ cells, color }: { cells: { x: number; y: number }[]; col
       <instancedMesh ref={glow} args={[geo.vein, mat.vein, cells.length * 4]} />
     </>
   );
+}
+
+/**
+ * Lava river: the channel between the banks shows the magma sea far below; a glowing surface just
+ * under the floor makes it read as a river of fire, with heat shimmering along the banks.
+ */
+function LavaRiver({ cells }: { cells: { x: number; y: number }[] }) {
+  const { ox, oz } = useGame();
+  const surf = useRef<THREE.InstancedMesh>(null!);
+  const mat = useMemo(() => new THREE.MeshBasicMaterial({ color: new THREE.Color(1.25, 0.3, 0.05), toneMapped: false }), []);
+  const geo = useMemo(() => new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), []);
+  useLayoutEffect(() => {
+    cells.forEach((c, i) => {
+      dummy.position.set(c.x + ox, -0.42, c.y + oz);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      surf.current.setMatrixAt(i, dummy.matrix);
+      // Crusty patches: some cells darker, a few hotter.
+      const v = h01(c.x, c.y, 2);
+      tmpColor.setRGB(0.7 + v * 0.45, 0.6 + v * 0.5, 0.6 + h01(c.x, c.y, 3) * 0.4);
+      surf.current.setColorAt(i, tmpColor);
+    });
+    commit(surf.current);
+  }, [cells, ox, oz]);
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    const k = 0.85 + 0.15 * Math.sin(t * 1.7);
+    mat.color.setRGB(1.25 * k, 0.3 * k + 0.05 * Math.sin(t * 3.1), 0.05);
+  });
+  return <instancedMesh ref={surf} args={[geo, mat, cells.length]} />;
 }

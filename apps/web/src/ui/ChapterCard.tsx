@@ -10,7 +10,8 @@ interface Card {
   objective: string;
 }
 
-const objectiveText = (kind: 'clear' | 'key') => (kind === 'key' ? '🔑 Ache a chave e leve até o portão' : '💥 Exploda todos os Magmitos');
+const objectiveText = (kind: 'clear' | 'key' | 'lever') =>
+  kind === 'key' ? '🔑 Ache a chave e leve até o portão' : kind === 'lever' ? '⚙️ Cruze o rio de lava e exploda a alavanca' : '💥 Exploda todos os Magmitos';
 let seq = 1;
 
 /**

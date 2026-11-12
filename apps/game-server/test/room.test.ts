@@ -246,6 +246,9 @@ describe('online rooms', () => {
       for (const e of g.enemies) if (e.regionId === id) e.alive = false;
       const key = g.adventure!.props.find((p) => p.kind === 'key' && p.region === id);
       if (key) key.state = 'used';
+      const lever = g.adventure!.props.find((p) => p.kind === 'lever' && p.region === id);
+      if (lever) lever.state = 'on';
+      g.players[0].invulnUntil = 1e9; // Fagulhas and geysers stay out of this test
       await waitFor(() => g.adventure!.regions.find((r) => r.id === id)?.cleared);
       const next = g.adventure!.regions.find((r) => r.id === id + 1)!;
       const p = g.players[0];

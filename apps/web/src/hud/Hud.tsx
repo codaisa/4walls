@@ -243,6 +243,8 @@ function AdventurePanel() {
   if (!a) return null;
   const objective = a.gateOpen ? (
     <span className="text-violet-200">✦ Portão aberto: siga em frente</span>
+  ) : a.objective === 'lever' ? (
+    <span className="text-orange-200">⚙️ Cruze o rio e exploda a alavanca</span>
   ) : a.objective === 'key' ? (
     <span className="text-amber-200">🔑 {a.keyCarried ? 'Leve a chave ao portão' : 'Ache a chave do portão'}</span>
   ) : (

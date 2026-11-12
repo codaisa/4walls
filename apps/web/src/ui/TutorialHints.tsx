@@ -8,7 +8,7 @@ import { isTouchDevice } from '../input/InputManager';
  * Contextual Adventure tips. Each one shows once per device, at the moment it matters (first bomb,
  * first Fagulha, first secret wall…), worded for the controls in hand. Never blocks the game.
  */
-type HintId = 'bomb' | 'escape' | 'powerup' | 'cage' | 'cracked' | 'key' | 'spark' | 'brazier' | 'vent' | 'map';
+type HintId = 'bomb' | 'escape' | 'powerup' | 'cage' | 'cracked' | 'key' | 'spark' | 'brazier' | 'vent' | 'map' | 'river' | 'fragile' | 'geyser' | 'lever';
 
 const KEY = '4walls.hints';
 const seenSet = (): Set<string> => {
@@ -51,6 +51,14 @@ function text(id: HintId, touch: boolean): { icon: string; body: string } {
       return { icon: '🔥', body: 'Braseiro apagado: acenda os 3 com explosões ao lado e ganhe um tesouro.' };
     case 'vent':
       return { icon: '🌫️', body: 'Respiro de cinza: a nuvem esconde o chão e as bombas. Cuidado!' };
+    case 'river':
+      return { icon: '🌋', body: `Rio de lava! Atravesse pela ponte frágil, pela plataforma ou ${touch ? 'pule 1 casa (Y)' : 'pule 1 casa'}. Cair é fatal.` };
+    case 'fragile':
+      return { icon: '🪵', body: 'Ponte frágil: ela range e desaba em 1 segundo. Atravesse sem parar!' };
+    case 'geyser':
+      return { icon: '♨️', body: 'Gêiser: quando borbulhar em vermelho, saia de cima!' };
+    case 'lever':
+      return { icon: '⚙️', body: 'Exploda ao lado da alavanca para baixar a ponte levadiça e abrir o portão.' };
     case 'map':
       return { icon: '🗺️', body: touch ? 'Toque em 🗺️ (no canto) para ver o mapa da jornada.' : 'Aperte M para ver o mapa da jornada.' };
   }
@@ -102,6 +110,10 @@ export function TutorialHints({ controller }: { controller: MatchView }) {
       if (near(s, me, (x, y) => getCell(s.grid, x, y) === Cell.Cracked, 3)) want('cracked');
       if (adv.props.some((p) => p.kind === 'brazier' && p.state === 'unlit' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 3)) want('brazier');
       if (adv.props.some((p) => p.kind === 'vent' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 3)) want('vent');
+      if (near(s, me, (x, y) => getCell(s.grid, x, y) === Cell.Lava, 3)) want('river');
+      if (adv.props.some((p) => p.kind === 'geyser' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 3)) want('geyser');
+      if (adv.props.some((p) => p.kind === 'lever' && p.state === 'off' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 4)) want('lever');
+      if (adv.props.some((p) => p.kind === 'bridge' && p.state === 'cracking' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 1)) want('fragile');
       // Show the next tip when the current one is done.
       setHint((h) => {
         if (h || !queue.current.length) return h;

@@ -167,7 +167,7 @@ export interface EnemyState {
   speedMul?: number;
 }
 
-export type RegionObjectiveKind = 'clear' | 'key';
+export type RegionObjectiveKind = 'clear' | 'key' | 'lever';
 
 /** What opens a region's exit gate. */
 export interface RegionObjective {
@@ -213,7 +213,7 @@ export interface GateState {
   kind?: 'exit' | 'back';
 }
 
-export type PropKind = 'chest' | 'key' | 'brazier' | 'vent';
+export type PropKind = 'chest' | 'key' | 'brazier' | 'vent' | 'bridge' | 'platform' | 'geyser' | 'lever';
 
 /**
  * Adventure props. Chest: opened by walking onto it or by a blast, drops loot (rare = secret).
@@ -227,7 +227,11 @@ export interface PropState {
   x: number;
   y: number;
   /** chest: closed | open | hidden (mission reward); key: idle | carried | used; brazier: unlit | lit; vent: idle */
-  state: 'closed' | 'open' | 'idle' | 'carried' | 'used' | 'hidden' | 'unlit' | 'lit';
+  state: 'closed' | 'open' | 'idle' | 'carried' | 'used' | 'hidden' | 'unlit' | 'lit' | 'solid' | 'cracking' | 'fallen' | 'raised' | 'lowered' | 'off' | 'on';
+  /** bridge: a fragile plank bridge or a drawbridge plank (lowered by the lever). */
+  variant?: 'fragile' | 'draw';
+  /** platform: the river cells it shuttles across, from the near bank to the far one. */
+  track?: { x: number; y: number }[];
   rare?: boolean;
   carrierId?: string | null;
   /** Where a key returns if it is lost. */
@@ -356,6 +360,14 @@ export type GameEvent =
   | { type: 'sparkAlert'; enemyId: number; x: number; y: number }
   | { type: 'brazierLit'; propId: number; x: number; y: number; region: number; lit: number; goal: number }
   | { type: 'missionDone'; region: number; x: number; y: number }
+  | { type: 'bridgeCracking'; propId: number; x: number; y: number }
+  | { type: 'bridgeFell'; propId: number; x: number; y: number }
+  | { type: 'bridgeRestored'; propId: number; x: number; y: number }
+  | { type: 'playerFell'; playerId: string; x: number; y: number }
+  | { type: 'sankInLava'; x: number; y: number }
+  | { type: 'geyserWarn'; propId: number; x: number; y: number }
+  | { type: 'geyserErupt'; propId: number; x: number; y: number }
+  | { type: 'leverPulled'; propId: number; x: number; y: number; region: number }
   /** A rescued hero joins: `revived` = a fallen ally came back as them, otherwise the rescuer turned into them. */
   | { type: 'heroJoined'; playerId: string; byId: string; characterId: string; previousId: string; revived: boolean; x: number; y: number }
   | { type: 'bossSpawned'; boss: BossId; index: number; total: number }

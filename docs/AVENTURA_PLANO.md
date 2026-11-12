@@ -5,7 +5,7 @@ antes da próxima:
 
 | # | Tarefa | Depende de | Status |
 |---|---|---|---|
-| 1 | **Mapa**: regiões viram fases, objetivos, mecânicas de ambiente, segredos, navegação, arcos | — | **M1 e M2 concluídos**; M3–M5 a seguir |
+| 1 | **Mapa**: regiões viram fases, objetivos, mecânicas de ambiente, segredos, navegação, arcos | — | **M1, M2 e M3 concluídos**; M4–M5 a seguir |
 | 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | Esboço (seção 5) |
 | 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Esboço (seção 6) |
 

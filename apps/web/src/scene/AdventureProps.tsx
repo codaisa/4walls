@@ -2,7 +2,7 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import type { PropState } from '@4walls/core';
+import { GEYSER_PERIOD, GEYSER_WARN, geyserPhase, platformPos, type PropState } from '@4walls/core';
 import { lerp, useGame } from './context';
 
 const wood = new THREE.MeshStandardMaterial({ color: '#8a4f24', roughness: 0.75 });
@@ -27,7 +27,19 @@ export function AdventureProps() {
   return (
     <>
       {props.map((p) =>
-        p.kind === 'chest' ? <Chest key={p.id} id={p.id} /> : p.kind === 'key' ? <GateKey key={p.id} id={p.id} /> : p.kind === 'brazier' ? <Brazier key={p.id} id={p.id} /> : <AshVent key={p.id} id={p.id} />,
+        p.kind === 'chest' ? <Chest key={p.id} id={p.id} /> : p.kind === 'key' ? <GateKey key={p.id} id={p.id} /> : p.kind === 'brazier' ? (
+          <Brazier key={p.id} id={p.id} />
+        ) : p.kind === 'vent' ? (
+          <AshVent key={p.id} id={p.id} />
+        ) : p.kind === 'bridge' ? (
+          <Bridge key={p.id} id={p.id} />
+        ) : p.kind === 'platform' ? (
+          <Platform key={p.id} id={p.id} />
+        ) : p.kind === 'geyser' ? (
+          <Geyser key={p.id} id={p.id} />
+        ) : (
+          <Lever key={p.id} id={p.id} />
+        ),
       )}
       <GateLocks />
     </>
@@ -334,6 +346,229 @@ function AshVent({ id }: { id: number }) {
             <icosahedronGeometry args={[0.6, 1]} />
           </mesh>
         ))}
+      </group>
+    </group>
+  );
+}
+
+// ───────────────────────────── the lava river ─────────────────────────────
+
+const plank = new THREE.MeshStandardMaterial({ color: '#7a4a28', roughness: 0.8 });
+const plankDark = new THREE.MeshStandardMaterial({ color: '#4e2e18', roughness: 0.85 });
+const rope = new THREE.MeshStandardMaterial({ color: '#c9a36b', roughness: 0.9 });
+const obsidian = new THREE.MeshStandardMaterial({ color: '#241c2c', roughness: 0.25, metalness: 0.3 });
+const rune = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.2, 2.2, 3.2), toneMapped: false });
+const lavaHot = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1, 0.15), toneMapped: false });
+const warnMat = new THREE.MeshBasicMaterial({ color: '#ff3a1a', transparent: true, opacity: 0.6, toneMapped: false, depthWrite: false });
+const gemOff = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 0.3, 0.2), toneMapped: false });
+const gemOn = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 2.6, 0.8), toneMapped: false });
+
+/** Which way the far bank is from a river cell (the drawbridge hinges there). */
+function farSide(controller: ReturnType<typeof useGame>['controller'], p: PropState): [number, number] {
+  const adv = controller.state.adventure!;
+  const gate = adv.gates.find((g) => g.kind !== 'back' && g.from === p.region);
+  const dx = (gate?.x ?? p.x) - p.x;
+  const dy = (gate?.y ?? p.y) - p.y;
+  return Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx) || 1, 0] : [0, Math.sign(dy) || 1];
+}
+
+/**
+ * Bridge planks over the lava. Fragile: they shake when stepped on, crack and drop into the river,
+ * then are rebuilt. Drawbridge: raised flaps that swing down when the lever is blown.
+ */
+function Bridge({ id }: { id: number }) {
+  const { controller, ox, oz } = useGame();
+  const get = useProp(id);
+  const p0 = get()!;
+  const root = useRef<THREE.Group>(null!);
+  const hinge = useRef<THREE.Group>(null!);
+  const cracks = useRef<THREE.Mesh>(null!);
+  const fallAt = useRef<number | null>(null);
+  const draw = p0.variant === 'draw';
+  const [fx, fz] = draw ? farSide(controller, p0) : [1, 0];
+  // Hinge on the far-bank edge; "raised" swings the flap up around it.
+  const yaw = Math.atan2(fx, fz);
+  useFrame(({ clock }) => {
+    const p = get();
+    if (!p) return;
+    const t = clock.elapsedTime;
+    if (draw) {
+      const k = p.state === 'lowered' ? Math.min(1, (controller.state.tick - p.tick) / 40) : 0;
+      hinge.current.rotation.x = -(1 - k) * 1.35 * (1 - 0.08 * Math.sin(k * Math.PI * 3) * (1 - k));
+      return;
+    }
+    if (p.state === 'fallen') {
+      if (fallAt.current === null) fallAt.current = performance.now();
+      const k = Math.min(1, (performance.now() - fallAt.current) / 700);
+      root.current.position.y = -k * k * 1.6;
+      root.current.rotation.z = k * 0.6;
+      root.current.visible = k < 1;
+      return;
+    }
+    fallAt.current = null;
+    root.current.visible = true;
+    root.current.rotation.z = 0;
+    const shaking = p.state === 'cracking';
+    root.current.position.y = shaking ? Math.sin(t * 50) * 0.025 : 0;
+    root.current.position.x = shaking ? Math.sin(t * 37) * 0.02 : 0;
+    cracks.current.visible = shaking;
+  });
+  return (
+    <group position={[p0.x + ox, 0, p0.y + oz]}>
+      {draw ? (
+        <group rotation-y={yaw}>
+          <group ref={hinge} position={[0, -0.02, 0.5]}>
+            <group position={[0, 0, -0.5]}>
+              {[-0.33, 0, 0.33].map((x) => (
+                <mesh key={x} position={[x, -0.05, 0]} material={plank} castShadow receiveShadow>
+                  <boxGeometry args={[0.3, 0.1, 0.98]} />
+                </mesh>
+              ))}
+              {[-0.48, 0.48].map((x) => (
+                <mesh key={x} position={[x, 0.02, 0]} material={iron}>
+                  <boxGeometry args={[0.05, 0.08, 1]} />
+                </mesh>
+              ))}
+            </group>
+          </group>
+        </group>
+      ) : (
+        <group ref={root}>
+          {[-0.36, -0.12, 0.12, 0.36].map((z, i) => (
+            <mesh key={z} position={[0, -0.06, z]} rotation={[0, (i % 2 ? 0.05 : -0.04), 0]} material={i % 2 ? plankDark : plank} castShadow receiveShadow>
+              <boxGeometry args={[0.96, 0.08, 0.2]} />
+            </mesh>
+          ))}
+          {[-0.46, 0.46].map((x) => (
+            <mesh key={x} position={[x, 0.05, 0]} material={rope}>
+              <boxGeometry args={[0.04, 0.04, 1]} />
+            </mesh>
+          ))}
+          <mesh ref={cracks} position={[0, -0.01, 0]} rotation={[-Math.PI / 2, 0, 0.4]} visible={false}>
+            <planeGeometry args={[0.8, 0.06]} />
+            <meshBasicMaterial color="#1a0d06" />
+          </mesh>
+        </group>
+      )}
+    </group>
+  );
+}
+
+/** Shuttle: an obsidian slab floating over the lava with glowing runes, gliding bank to bank. */
+function Platform({ id }: { id: number }) {
+  const { controller, ox, oz } = useGame();
+  const get = useProp(id);
+  const root = useRef<THREE.Group>(null!);
+  useFrame(({ clock }) => {
+    const p = get();
+    if (!p || !p.track) return;
+    const pos = platformPos(p, controller.tickF);
+    root.current.position.set(pos.x + ox, Math.sin(clock.elapsedTime * 2 + id) * 0.025, pos.y + oz);
+  });
+  return (
+    <group ref={root}>
+      <mesh position={[0, -0.12, 0]} material={obsidian} castShadow receiveShadow>
+        <cylinderGeometry args={[0.52, 0.42, 0.24, 8]} />
+      </mesh>
+      <mesh position={[0, -0.32, 0]} material={obsidian}>
+        <coneGeometry args={[0.4, 0.35, 8]} />
+      </mesh>
+      {[0, 1, 2, 3].map((k) => (
+        <mesh key={k} position={[Math.cos((k / 4) * Math.PI * 2 + 0.4) * 0.36, 0.006, Math.sin((k / 4) * Math.PI * 2 + 0.4) * 0.36]} rotation={[-Math.PI / 2, 0, 0]} material={rune}>
+          <circleGeometry args={[0.05, 6]} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.004, 0]} rotation={[-Math.PI / 2, 0, 0]} material={rune}>
+        <ringGeometry args={[0.18, 0.22, 6]} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Geyser: a vent ring that bubbles red before throwing a column of lava into the air. */
+function Geyser({ id }: { id: number }) {
+  const { controller, ox, oz } = useGame();
+  const get = useProp(id);
+  const p0 = get()!;
+  const column = useRef<THREE.Mesh>(null!);
+  const warn = useRef<THREE.Mesh>(null!);
+  const bubbles = useRef<THREE.Group>(null!);
+  useFrame(({ clock }) => {
+    const p = get();
+    if (!p) return;
+    const ph = geyserPhase(p, Math.floor(controller.tickF));
+    const t = clock.elapsedTime;
+    const warning = ph >= GEYSER_PERIOD - GEYSER_WARN;
+    warn.current.visible = warning;
+    if (warning) (warn.current.material as THREE.MeshBasicMaterial).opacity = 0.35 + 0.35 * Math.abs(Math.sin(t * 12));
+    bubbles.current.scale.setScalar(warning ? 1.4 : 0.8);
+    bubbles.current.children.forEach((b, i) => {
+      b.position.y = 0.05 + ((t * (warning ? 1.6 : 0.5) + i * 0.37) % 1) * 0.3;
+    });
+    const burst = ph < 42;
+    column.current.visible = burst;
+    if (burst) {
+      const k = ph / 42;
+      const h = Math.sin(Math.min(1, k * 2.2) * Math.PI * 0.5) * (1 - Math.max(0, k - 0.7) / 0.3) * 2.6;
+      column.current.scale.set(1 + Math.sin(t * 30) * 0.06, Math.max(0.01, h), 1);
+      column.current.position.y = h / 2;
+    }
+  });
+  return (
+    <group position={[p0.x + ox, 0, p0.y + oz]}>
+      <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]} material={stone}>
+        <ringGeometry args={[0.24, 0.46, 9]} />
+      </mesh>
+      <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]} material={lavaHot}>
+        <circleGeometry args={[0.25, 12]} />
+      </mesh>
+      <mesh ref={warn} position={[0, 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]} material={warnMat} visible={false}>
+        <ringGeometry args={[0.46, 0.56, 24]} />
+      </mesh>
+      <group ref={bubbles}>
+        {[0, 1, 2, 3].map((i) => (
+          <mesh key={i} position={[Math.cos(i * 1.7) * 0.12, 0.1, Math.sin(i * 1.7) * 0.12]} material={lavaHot}>
+            <sphereGeometry args={[0.045, 8, 6]} />
+          </mesh>
+        ))}
+      </group>
+      <mesh ref={column} material={lavaHot} visible={false}>
+        <cylinderGeometry args={[0.18, 0.3, 1, 12, 1, true]} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Lever: a stone post with an iron handle. A blast beside it throws it down (red gem → green). */
+function Lever({ id }: { id: number }) {
+  const { controller, ox, oz } = useGame();
+  const get = useProp(id);
+  const p0 = get()!;
+  const handle = useRef<THREE.Group>(null!);
+  const gem = useRef<THREE.Mesh>(null!);
+  useFrame(() => {
+    const p = get();
+    if (!p) return;
+    const on = p.state === 'on';
+    const k = on ? Math.min(1, (controller.state.tick - p.tick) / 18) : 0;
+    handle.current.rotation.x = 0.7 - k * 1.4;
+    gem.current.material = on ? gemOn : gemOff;
+  });
+  return (
+    <group position={[p0.x + ox, 0, p0.y + oz]}>
+      <mesh position={[0, 0.3, 0]} material={stone} castShadow receiveShadow>
+        <boxGeometry args={[0.5, 0.6, 0.5]} />
+      </mesh>
+      <mesh ref={gem} position={[0, 0.45, 0.26]} material={gemOff}>
+        <octahedronGeometry args={[0.07, 0]} />
+      </mesh>
+      <group ref={handle} position={[0, 0.62, 0]}>
+        <mesh position={[0, 0.25, 0]} material={iron} castShadow>
+          <cylinderGeometry args={[0.035, 0.035, 0.5, 8]} />
+        </mesh>
+        <mesh position={[0, 0.52, 0]} material={gold}>
+          <sphereGeometry args={[0.08, 12, 8]} />
+        </mesh>
       </group>
     </group>
   );

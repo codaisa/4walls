@@ -242,6 +242,44 @@ export function Fx() {
               });
             break;
           }
+          case 'bridgeFell':
+          case 'playerFell':
+          case 'sankInLava': {
+            // A gulp of lava: hot droplets and a puff of smoke.
+            for (let i = 0; i < 22; i++)
+              sparks.spawn({
+                x: e.x + ox, y: 0.05, z: e.y + oz,
+                vx: rnd(-1.8, 1.8), vy: rnd(2.5, 5), vz: rnd(-1.8, 1.8),
+                life: rnd(0.4, 0.8), size: rnd(0.06, 0.12), color: i % 2 ? '#ff7a1a' : '#ffd23f', intensity: 3, drag: 0.8,
+              });
+            for (let i = 0; i < 6; i++)
+              smoke.spawn({
+                x: e.x + ox + rnd(-0.2, 0.2), y: 0.2, z: e.y + oz + rnd(-0.2, 0.2),
+                vx: rnd(-0.4, 0.4), vy: rnd(0.6, 1.2), vz: rnd(-0.4, 0.4),
+                life: rnd(0.8, 1.3), size: rnd(0.3, 0.5), grow: 2, color: '#3a2a26', alpha: 0.5, drag: 2,
+              });
+            break;
+          }
+          case 'geyserErupt': {
+            for (let i = 0; i < 34; i++)
+              sparks.spawn({
+                x: e.x + ox + rnd(-0.15, 0.15), y: rnd(0.3, 2.2), z: e.y + oz + rnd(-0.15, 0.15),
+                vx: rnd(-1.5, 1.5), vy: rnd(1, 4), vz: rnd(-1.5, 1.5),
+                life: rnd(0.5, 1.0), size: rnd(0.07, 0.13), color: i % 3 ? '#ff6a1a' : '#ffe08a', intensity: 3, drag: 0.6,
+              });
+            fx.shake = Math.min(1, fx.shake + 0.15);
+            break;
+          }
+          case 'leverPulled': {
+            for (let i = 0; i < 24; i++)
+              sparks.spawn({
+                x: e.x + ox, y: 0.9, z: e.y + oz,
+                vx: rnd(-2, 2), vy: rnd(1, 3.5), vz: rnd(-2, 2),
+                life: rnd(0.4, 0.8), size: rnd(0.05, 0.09), color: '#ffe08a', intensity: 3, drag: 1.4,
+              });
+            fx.shake = Math.min(1, fx.shake + 0.35);
+            break;
+          }
           case 'brazierLit': {
             for (let i = 0; i < 30; i++)
               sparks.spawn({

@@ -43,7 +43,7 @@ function subRng(seed: number, id: number, salt: number) {
 const SCRIPTED: { name: string; chapter: string; biome: BiomeId; objective: RegionObjectiveKind }[] = [
   { name: 'Caldeira Rasa', chapter: 'O despertar', biome: 'volcanic', objective: 'clear' },
   { name: 'Campos de Cinza', chapter: 'A infestação', biome: 'volcanic', objective: 'key' },
-  { name: 'Rio de Magma', chapter: 'A travessia', biome: 'volcanic', objective: 'clear' },
+  { name: 'Rio de Magma', chapter: 'A travessia', biome: 'volcanic', objective: 'lever' },
   { name: 'Ponte de Obsidiana', chapter: 'O guardião', biome: 'transition', objective: 'key' },
   { name: 'Bosque Chamuscado', chapter: 'A corrupção', biome: 'forest', objective: 'clear' },
 ];
@@ -65,6 +65,7 @@ const NAME_PARTS: Record<BiomeId, { head: string[]; tail: string[] }> = {
 const CHAPTERS: Record<RegionObjectiveKind, string[]> = {
   clear: ['A limpeza', 'O cerco', 'A emboscada', 'A infestação', 'O enxame'],
   key: ['A chave perdida', 'O cadeado', 'A busca', 'O segredo do portão', 'A relíquia'],
+  lever: ['A travessia', 'A ponte levadiça', 'O rio de fogo', 'A outra margem'],
 };
 /** Biome rhythm of every arc (5 regions for now; varied arcs come with the next milestones). */
 const ARC_BIOMES: BiomeId[] = ['volcanic', 'volcanic', 'volcanic', 'transition', 'forest'];
@@ -74,7 +75,9 @@ export function regionInfo(seed: number, id: number) {
   if (id < SCRIPTED.length) return SCRIPTED[id];
   const r = subRng(seed, id, 3);
   const biome = ARC_BIOMES[id % ARC_BIOMES.length];
-  const objective: RegionObjectiveKind = nextRandom(r) < 0.45 ? 'key' : 'clear';
+  // A lava river cuts some regions in two (never in the forest): cross it and pull the lever.
+  const roll = nextRandom(r);
+  const objective: RegionObjectiveKind = biome !== 'forest' && roll < 0.22 ? 'lever' : roll < 0.55 ? 'key' : 'clear';
   const parts = NAME_PARTS[biome];
   const name = `${parts.head[randInt(r, parts.head.length)]} ${parts.tail[randInt(r, parts.tail.length)]}`;
   const chapter = CHAPTERS[objective][randInt(r, CHAPTERS[objective].length)];
@@ -99,7 +102,7 @@ export function difficulty(depth: number) {
 
 /** Map mechanics of a region: shape, Fagulhas, ash vents, the braziers side mission. */
 export interface RegionMods {
-  shape: 'island' | 'plaza';
+  shape: 'island' | 'plaza' | 'river';
   sparks: number;
   vents: number;
   braziers: boolean;
@@ -114,15 +117,17 @@ export function regionMods(seed: number, id: number): RegionMods {
     { shape: 'plaza', sparks: 2, vents: 1, braziers: true },
     { shape: 'island', sparks: 1, vents: 0, braziers: false },
   ];
-  if (scripted[id]) return { ...scripted[id]!, sparks: Math.min(scripted[id]!.sparks, enemies - 1) };
+  const river = regionInfo(seed, id).objective === 'lever';
+  if (scripted[id]) return { ...scripted[id]!, ...(river ? { shape: 'river' as const, braziers: false } : {}), sparks: Math.min(scripted[id]!.sparks, enemies - 1) };
   const r = subRng(seed, id, 5);
   const biome = regionInfo(seed, id).biome;
+  const shapeRoll = nextRandom(r);
   return {
-    shape: nextRandom(r) < 0.35 ? 'plaza' : 'island',
+    shape: river ? 'river' : shapeRoll < 0.35 ? 'plaza' : 'island',
     // Fagulhas take a growing share of the Magmitos as the journey goes on.
     sparks: Math.min(enemies - 1, Math.floor(enemies * Math.min(0.5, 0.15 + 0.03 * (id - 5)))),
     vents: biome === 'forest' ? 0 : nextRandom(r) < 0.55 ? 1 + randInt(r, 2) : 0,
-    braziers: nextRandom(r) < 0.4,
+    braziers: !river && nextRandom(r) < 0.4,
   };
 }
 
@@ -193,6 +198,7 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
   };
 
   // 1. Organic island: a noisy ellipse inside the chunk (1-cell margin), pillars on even/even.
+  const island = new Uint8Array(CW * CH);
   const p1 = nextRandom(r) * Math.PI * 2;
   const p2 = nextRandom(r) * Math.PI * 2;
   for (let y = oy + 1; y < oy + CH - 1; y++)
@@ -201,7 +207,9 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
       const dy = (y + 0.5 - (oy + 7)) / 5.5;
       const t = Math.atan2(dy, dx);
       const rr = 1 + 0.17 * Math.sin(3 * t + p1) + 0.1 * Math.sin(5 * t + p2);
-      if (dx * dx + dy * dy <= rr * rr) set(x, y, mod2(x) === 0 && mod2(y) === 0 ? Cell.Wall : Cell.Floor);
+      if (dx * dx + dy * dy > rr * rr) continue;
+      island[at(x, y)] = 1;
+      set(x, y, mod2(x) === 0 && mod2(y) === 0 ? Cell.Wall : Cell.Floor);
     }
 
   const mods = regionMods(seed, id);
@@ -236,6 +244,69 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
   if (entry) carve(entry);
   set(exit.x, exit.y, Cell.Wall); // sealed until the objective is done
 
+  // 2b. Lava river: a band across the island between the center and the exit gate.
+  const riverPlan = mods.shape === 'river' ? planRiver() : null;
+  function planRiver() {
+    const vertical = exitDir === 'E'; // the band is a few columns (runs north-south)
+    const band = exitDir === 'E' ? [ox + 10, ox + 11, ox + 12] : exitDir === 'N' ? [oy + 4, oy + 5] : [oy + CH - 6, oy + CH - 5];
+    const inBand = (x: number, y: number) => band.includes(vertical ? x : y);
+    for (let y = oy; y < oy + CH; y++) for (let x = ox; x < ox + CW; x++) if (island[at(x, y)] && inBand(x, y)) set(x, y, Cell.Lava);
+    // Crossing lines run perpendicular to the band: the corridor's line is the drawbridge.
+    const along = (k: number, t: number): Pt => (vertical ? { x: t, y: k } : { x: k, y: t });
+    const nearBank = band[0] - 1;
+    const farBank = band[band.length - 1] + 1;
+    const lineOk = (k: number) => {
+      const a = along(k, nearBank);
+      const b = along(k, farBank);
+      return island[at(a.x, a.y)] === 1 && island[at(b.x, b.y)] === 1;
+    };
+    const mainLine = vertical ? oy + 7 : ox + 7;
+    const options = [-2, 2, -3, 3, -4, 4, -1, 1].map((d) => mainLine + d).filter((k) => lineOk(k));
+    const fragileLine = options[0] ?? null;
+    const platformLine = options.find((k) => fragileLine === null || Math.abs(k - fragileLine) >= 2 && Math.sign(k - mainLine) !== Math.sign(fragileLine - mainLine)) ?? options.find((k) => k !== fragileLine) ?? null;
+    const cellsOf = (k: number) => band.map((t) => along(k, t));
+    for (const k of [mainLine, fragileLine, platformLine]) {
+      if (k === null) continue;
+      for (const t of [nearBank - 1, nearBank, farBank, farBank + 1]) {
+        const c = along(k, t);
+        if (island[at(c.x, c.y)]) set(c.x, c.y, Cell.Floor);
+        corridor.add(at(c.x, c.y));
+      }
+    }
+    // The lever stands on the far bank, beside where the drawbridge lands.
+    const landing = along(mainLine, farBank);
+    // Always present (the objective depends on it): right beside the landing, even at the coast.
+    const leverSpot = [1, -1].map((d) => along(mainLine + d, farBank)).find((c) => island[at(c.x, c.y)] === 1) ?? along(mainLine + 1, farBank);
+    set(leverSpot.x, leverSpot.y, Cell.Wall);
+    island[at(leverSpot.x, leverSpot.y)] = 1;
+    corridor.add(at(leverSpot.x, leverSpot.y));
+    // A secret islet in the middle of a wide river: only a jump gets you there.
+    let islet: Pt | null = null;
+    if (band.length === 3) {
+      const used = [mainLine, fragileLine, platformLine];
+      const rows = options.filter((k) => !used.includes(k) && used.every((u) => u === null || Math.abs(u - k) >= 2));
+      if (rows.length) {
+        islet = along(rows[0], band[1]);
+        set(islet.x, islet.y, Cell.Floor);
+        corridor.add(at(islet.x, islet.y));
+        for (const t of [nearBank, farBank]) {
+          const c = along(rows[0], t);
+          set(c.x, c.y, Cell.Floor);
+          corridor.add(at(c.x, c.y));
+        }
+      }
+    }
+    // Cells of the river that can actually be crossed (for placing things on the far side).
+    const crossings = new Set<number>();
+    for (const k of [mainLine, fragileLine, platformLine])
+      if (k !== null)
+        for (const c of cellsOf(k)) {
+          crossings.add(at(c.x, c.y));
+          corridor.add(at(c.x, c.y)); // nothing else is ever placed on a crossing
+        }
+    return { vertical, band, nearBank, farBank, mainLine, fragileLine, platformLine, cellsOf, landing, leverSpot, islet, along, crossings };
+  }
+
   // 3. The first region has a safe spawn pocket in the middle.
   const spawns: Pt[] = id === 0 ? [center, { x: center.x + 2, y: center.y }, { x: center.x - 2, y: center.y }, { x: center.x, y: center.y + 2 }] : [];
   for (const sp of spawns) {
@@ -263,6 +334,8 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
       const nx = c.x + DIR_VEC[d].x;
       const ny = c.y + DIR_VEC[d].y;
       if (!inChunk(nx, ny) || get(nx, ny) === Cell.Wall || dist.has(at(nx, ny))) continue;
+      // Lava only where a bridge or the platform crosses it.
+      if (get(nx, ny) === Cell.Lava && !riverPlan?.crossings.has(at(nx, ny))) continue;
       dist.set(at(nx, ny), dist.get(at(c.x, c.y))! + 1);
       queue.push({ x: nx, y: ny });
     }
@@ -270,7 +343,7 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
   const reachable = (x: number, y: number) => dist.has(at(x, y));
   const candidates = (pred: (x: number, y: number) => boolean) => {
     const out: Pt[] = [];
-    for (let y = oy; y < oy + CH; y++) for (let x = ox; x < ox + CW; x++) if (reachable(x, y) && !reserved(x, y) && pred(x, y)) out.push({ x, y });
+    for (let y = oy; y < oy + CH; y++) for (let x = ox; x < ox + CW; x++) if (reachable(x, y) && !reserved(x, y) && get(x, y) !== Cell.Lava && pred(x, y)) out.push({ x, y });
     return out;
   };
   const taken: Pt[] = [];
@@ -278,7 +351,7 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
 
   const props: Omit<PropState, 'tick'>[] = [];
   let propSeq = 0;
-  const propId = () => id * 16 + propSeq++;
+  const propId = () => id * 64 + propSeq++;
 
   // 5. Objective: a key on a pedestal far from the exit gate.
   if (info.objective === 'key') {
@@ -288,6 +361,39 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
     set(k.x, k.y, Cell.Floor);
     taken.push(k);
     props.push({ id: propId(), kind: 'key', region: id, x: k.x, y: k.y, state: 'idle', carrierId: null, homeX: k.x, homeY: k.y });
+  }
+
+  // 5b. River crossings: drawbridge (raised until the lever), fragile planks, a shuttle platform,
+  // the lever, geysers on the banks and the islet's treasure.
+  if (riverPlan) {
+    const rp = riverPlan;
+    for (const c of rp.cellsOf(rp.mainLine)) props.push({ id: propId(), kind: 'bridge', variant: 'draw', region: id, x: c.x, y: c.y, state: 'raised' });
+    if (rp.fragileLine !== null)
+      for (const c of rp.cellsOf(rp.fragileLine)) {
+        set(c.x, c.y, Cell.Floor);
+        props.push({ id: propId(), kind: 'bridge', variant: 'fragile', region: id, x: c.x, y: c.y, state: 'solid' });
+      }
+    if (rp.platformLine !== null) {
+      const track = rp.cellsOf(rp.platformLine);
+      set(track[0].x, track[0].y, Cell.Floor);
+      props.push({ id: propId(), kind: 'platform', region: id, x: track[0].x, y: track[0].y, state: 'idle', track });
+    }
+    props.push({ id: propId(), kind: 'lever', region: id, x: rp.leverSpot.x, y: rp.leverSpot.y, state: 'off' });
+    if (rp.islet) {
+      taken.push(rp.islet);
+      props.push({ id: propId(), kind: 'chest', region: id, x: rp.islet.x, y: rp.islet.y, state: 'closed', rare: true });
+    }
+    // Geysers on the near bank, two cells from the river.
+    const bankSpots = candidates((x, y) => {
+      if (get(x, y) !== Cell.Floor || !free(x, y)) return false;
+      const t = rp.vertical ? x : y;
+      return Math.abs(t - rp.nearBank) <= 2 || Math.abs(t - rp.farBank) <= 1;
+    });
+    for (let g = 0; g < 2 + (id > 6 ? 1 : 0) && bankSpots.length; g++) {
+      const [c] = bankSpots.splice(randInt(r, bankSpots.length), 1);
+      taken.push(c);
+      props.push({ id: propId(), kind: 'geyser', region: id, x: c.x, y: c.y, state: 'idle' });
+    }
   }
 
   // 6. One caged hero per region (it blocks like a crate until blown open).
@@ -410,7 +516,7 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
     biome: info.biome,
     cx,
     cy,
-    objective: { kind: info.objective, progress: 0, goal: info.objective === 'key' ? 1 : diff.enemies, done: false },
+    objective: { kind: info.objective, progress: 0, goal: info.objective === 'clear' ? diff.enemies : 1, done: false },
     unlocked: id === 0,
     cleared: false,
     entry,
@@ -585,6 +691,8 @@ export function updateAdventure(s: GameState) {
   const adv = s.adventure;
   if (!adv) return;
   if (s.tick % 3 === 0) revealAround(s);
+  updateRiver(s);
+  updateLavaFalls(s);
   updateCages(s);
   updateProps(s);
   updateObjectives(s);
@@ -599,6 +707,7 @@ function updateObjectives(s: GameState) {
     let progress = o.progress;
     if (o.kind === 'clear') progress = Math.max(0, o.goal - s.enemies.filter((e) => e.alive && e.regionId === r.id).length);
     else if (o.kind === 'key') progress = adv.props.some((p) => p.kind === 'key' && p.region === r.id && p.state === 'used') ? 1 : 0;
+    else if (o.kind === 'lever') progress = adv.props.some((p) => p.kind === 'lever' && p.region === r.id && p.state === 'on') ? 1 : 0;
     if (progress !== o.progress) {
       o.progress = progress;
       s.events.push({ type: 'objectiveProgress', region: r.id, progress, goal: o.goal });
@@ -660,6 +769,152 @@ function updateProgress(s: GameState) {
   for (const r of behind) detachRegion(s, r.id);
   adv.closing = null;
   s.events.push({ type: 'gateClosed', region: c.region });
+}
+
+// ───────────────────────────── the lava river ─────────────────────────────
+
+const FRAGILE_CRACK = 60; // ticks a fragile bridge shakes before giving way
+const FRAGILE_BACK = 360; // ticks until it is rebuilt
+export const GEYSER_PERIOD = 330;
+export const GEYSER_WARN = 72;
+const GEYSER_BURST = 42;
+const PLATFORM_MOVE = 48; // ticks per cell
+const PLATFORM_WAIT = 72; // ticks at each bank
+
+/**
+ * Shuttle platform position along its track at a (fractional) tick: wait at the near bank, glide
+ * across, wait at the far bank, glide back. Pure function of the tick: clients draw it the same.
+ */
+export function platformPos(p: PropState, tick: number): { x: number; y: number; i: number } {
+  const track = p.track!;
+  const n = track.length;
+  const leg = (n - 1) * PLATFORM_MOVE;
+  const cycle = 2 * (PLATFORM_WAIT + leg);
+  const t = (((tick + p.id * 37) % cycle) + cycle) % cycle;
+  let f: number; // 0..n-1 along the track
+  if (t < PLATFORM_WAIT) f = 0;
+  else if (t < PLATFORM_WAIT + leg) f = (t - PLATFORM_WAIT) / PLATFORM_MOVE;
+  else if (t < 2 * PLATFORM_WAIT + leg) f = n - 1;
+  else f = n - 1 - (t - 2 * PLATFORM_WAIT - leg) / PLATFORM_MOVE;
+  const i = Math.min(n - 2, Math.max(0, Math.floor(f)));
+  const k = n > 1 ? f - i : 0;
+  const a = track[i];
+  const b = track[Math.min(n - 1, i + 1)];
+  return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, i: Math.round(f) };
+}
+
+/** Geyser phase at a tick: 0..GEYSER_PERIOD-1 (bursts at 0, warns in the last GEYSER_WARN ticks). */
+export const geyserPhase = (p: PropState, tick: number) => (((tick + p.id * 61) % GEYSER_PERIOD) + GEYSER_PERIOD) % GEYSER_PERIOD;
+
+const airborne = (p: PlayerState) => p.maneuver?.kind === 'jump';
+
+function updateRiver(s: GameState) {
+  const adv = s.adventure!;
+  for (const pr of adv.props) {
+    if (pr.kind === 'bridge' && pr.variant === 'fragile') {
+      if (pr.state === 'solid') {
+        const on = s.players.some((p) => p.alive && !airborne(p) && Math.round(p.x) === pr.x && Math.round(p.y) === pr.y);
+        if (on) {
+          pr.state = 'cracking';
+          pr.tick = s.tick;
+          s.events.push({ type: 'bridgeCracking', propId: pr.id, x: pr.x, y: pr.y });
+        }
+      } else if (pr.state === 'cracking' && s.tick - pr.tick >= FRAGILE_CRACK) {
+        pr.state = 'fallen';
+        pr.tick = s.tick;
+        setCell(s.grid, pr.x, pr.y, Cell.Lava);
+        s.events.push({ type: 'bridgeFell', propId: pr.id, x: pr.x, y: pr.y });
+      } else if (pr.state === 'fallen' && s.tick - pr.tick >= FRAGILE_BACK) {
+        pr.state = 'solid';
+        pr.tick = s.tick;
+        setCell(s.grid, pr.x, pr.y, Cell.Floor);
+        s.events.push({ type: 'bridgeRestored', propId: pr.id, x: pr.x, y: pr.y });
+      }
+    } else if (pr.kind === 'platform' && pr.track) {
+      const before = platformPos(pr, s.tick - 1);
+      const now = platformPos(pr, s.tick);
+      const dx = now.x - before.x;
+      const dy = now.y - before.y;
+      if (dx || dy) {
+        // Riders move with it (not someone mid-jump).
+        for (const p of s.players)
+          if (p.alive && !airborne(p) && Math.abs(p.x - before.x) < 0.55 && Math.abs(p.y - before.y) < 0.55) {
+            p.x += dx;
+            p.y += dy;
+            p.px += dx;
+            p.py += dy;
+          }
+      }
+      const cell = pr.track[now.i];
+      if (cell.x !== pr.x || cell.y !== pr.y) {
+        setCell(s.grid, pr.x, pr.y, Cell.Lava);
+        setCell(s.grid, cell.x, cell.y, Cell.Floor);
+        for (const b of s.bombs)
+          if (b.x === pr.x && b.y === pr.y) {
+            b.x = cell.x;
+            b.y = cell.y;
+            b.fromX = cell.x;
+            b.fromY = cell.y;
+          }
+        pr.x = cell.x;
+        pr.y = cell.y;
+      }
+    } else if (pr.kind === 'geyser') {
+      const ph = geyserPhase(pr, s.tick);
+      if (ph === GEYSER_PERIOD - GEYSER_WARN) s.events.push({ type: 'geyserWarn', propId: pr.id, x: pr.x, y: pr.y });
+      if (ph === 0) {
+        s.flames.push({ x: pr.x, y: pr.y, part: 'center', dir: null, bombId: -1, ownerId: '', bornTick: s.tick, untilTick: s.tick + GEYSER_BURST, kind: 'normal' });
+        s.events.push({ type: 'geyserErupt', propId: pr.id, x: pr.x, y: pr.y });
+      }
+    } else if (pr.kind === 'lever' && pr.state === 'off') {
+      const hit = DIRS.some((d) => flamesAt(s, pr.x + DIR_VEC[d].x, pr.y + DIR_VEC[d].y).some((f) => f.bombId !== -1));
+      if (!hit) continue;
+      pr.state = 'on';
+      pr.tick = s.tick;
+      s.events.push({ type: 'leverPulled', propId: pr.id, x: pr.x, y: pr.y, region: pr.region });
+      for (const b of adv.props)
+        if (b.kind === 'bridge' && b.variant === 'draw' && b.region === pr.region && b.state === 'raised') {
+          b.state = 'lowered';
+          b.tick = s.tick;
+          setCell(s.grid, b.x, b.y, Cell.Floor);
+        }
+    }
+  }
+}
+
+/** Whatever stands on lava (not jumping over it) is lost: players, Magmitos, bombs, power-ups. */
+function updateLavaFalls(s: GameState) {
+  const lava = (x: number, y: number) => getCell(s.grid, Math.round(x), Math.round(y)) === Cell.Lava;
+  for (const p of s.players) {
+    if (!p.alive || airborne(p) || !lava(p.x, p.y)) continue;
+    // A fall ignores shields: nothing to stand on.
+    p.alive = false;
+    p.diedTick = s.tick;
+    p.moving = false;
+    p.passBombs = [];
+    p.maneuver = null;
+    s.events.push({ type: 'playerFell', playerId: p.id, x: p.x, y: p.y });
+    s.events.push({ type: 'playerDied', playerId: p.id, byId: null, x: p.x, y: p.y });
+  }
+  for (const e of s.enemies)
+    if (e.alive && lava(e.x, e.y)) {
+      e.alive = false;
+      e.diedTick = s.tick;
+      s.events.push({ type: 'enemyDied', enemyId: e.id, byId: '', x: e.x, y: e.y });
+    }
+  const sink = <T extends { x: number; y: number }>(list: T[]) =>
+    list.filter((o) => {
+      if (!lava(o.x, o.y)) return true;
+      s.events.push({ type: 'sankInLava', x: o.x, y: o.y });
+      return false;
+    });
+  // Bombs still flying (thrown with the glove) cross the river safely.
+  s.bombs = s.bombs.filter((b) => {
+    if (s.tick < b.flightUntil || !lava(b.x, b.y)) return true;
+    s.events.push({ type: 'sankInLava', x: b.x, y: b.y });
+    return false;
+  });
+  s.powerups = sink(s.powerups);
 }
 
 // ───────────────────────────── props: chests and keys ─────────────────────────────

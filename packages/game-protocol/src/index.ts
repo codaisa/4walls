@@ -181,7 +181,7 @@ export interface AdvSnap {
   p: [number, number, number, number, string][];
   cl: [number, number] | null;
 }
-const PROP_STATES = ['closed', 'open', 'idle', 'carried', 'used', 'hidden', 'unlit', 'lit'] as const;
+const PROP_STATES = ['closed', 'open', 'idle', 'carried', 'used', 'hidden', 'unlit', 'lit', 'solid', 'cracking', 'fallen', 'raised', 'lowered', 'off', 'on'] as const;
 
 /** Authoritative snapshot (~30×/s, msgpack-encoded by Colyseus). Floats rounded to 3 decimals. */
 export interface Snapshot {
