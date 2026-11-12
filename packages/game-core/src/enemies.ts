@@ -110,6 +110,10 @@ export function updateEnemies(s: GameState) {
       updateMimic(s, e);
       continue;
     }
+    if (e.kind === 'mote') {
+      updateMote(s, e);
+      continue;
+    }
     if (e.kind === 'spark' && updateSpark(s, e)) continue;
     let budget = (e.kind === 'spark' ? RULES.sparkSpeed * TICK_DT : step) * (e.speedMul ?? 1);
     while (budget > 1e-6) {
@@ -428,4 +432,40 @@ function spit(s: GameState, e: EnemyState) {
     return;
   }
   // Boxed in: it just digests it.
+}
+
+// ───────────────────────────── B5: the corrupted boss's motes ─────────────────────────────
+
+export const MOTE_SPEED = 1.5;
+
+/** A violet mote drifts cell by cell toward the closest player (a little random, never through bombs). */
+function updateMote(s: GameState, e: EnemyState) {
+  let budget = MOTE_SPEED * TICK_DT * (e.speedMul ?? 1);
+  while (budget > 1e-6) {
+    if (e.x === e.tx && e.y === e.ty) {
+      const near = nearestPlayer(s, e.x, e.y);
+      const options = DIRS.filter((d) => passable(s, e.x + DIR_VEC[d].x, e.y + DIR_VEC[d].y));
+      if (!options.length || !near) break;
+      const dist = (d: Dir) => Math.abs(near.p.x - (e.x + DIR_VEC[d].x)) + Math.abs(near.p.y - (e.y + DIR_VEC[d].y));
+      const closer = options.filter((d) => dist(d) < near.d - 0.5);
+      const pool = closer.length && nextRandom(s) < 0.75 ? closer : options;
+      e.dir = pool[randInt(s, pool.length)];
+      e.tx = e.x + DIR_VEC[e.dir].x;
+      e.ty = e.y + DIR_VEC[e.dir].y;
+    }
+    if (!passable(s, e.tx, e.ty) && e.dir && !(Number.isInteger(e.x) && Number.isInteger(e.y))) {
+      const back = OPPOSITE[e.dir];
+      const v = DIR_VEC[back];
+      e.dir = back;
+      e.tx = v.x < 0 ? Math.floor(e.x) : v.x > 0 ? Math.ceil(e.x) : e.x;
+      e.ty = v.y < 0 ? Math.floor(e.y) : v.y > 0 ? Math.ceil(e.y) : e.y;
+    } else if (!passable(s, e.tx, e.ty)) {
+      e.tx = e.x;
+      e.ty = e.y;
+      break;
+    }
+    const before = Math.abs(e.tx - e.x) + Math.abs(e.ty - e.y);
+    stepTo(e, budget);
+    budget -= before;
+  }
 }

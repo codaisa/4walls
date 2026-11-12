@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOSSES, Cell, secToTicks, type GameConfig } from '@4walls/shared';
-import { createGame, getCell, rootLines, slamCells, step, type GameState } from '../src';
+import { createGame, getCell, rootLines, setCell, slamCells, step, type GameState } from '../src';
 
 const config = (players = 1): GameConfig => ({
   mode: 'bossrush',
@@ -8,6 +8,8 @@ const config = (players = 1): GameConfig => ({
   width: 0,
   height: 0,
   players: Array.from({ length: players }, (_, i) => ({ id: `p${i + 1}`, slot: i, characterId: 'bombito', name: `P${i + 1}` })),
+  // The classic machine (the reworked bosses have their own tests).
+  classicBosses: true,
 });
 
 function run(s: GameState, ticks: number) {
@@ -200,5 +202,140 @@ describe('Guardião Ancião', () => {
     burnBoss(s);
     run(s, secToTicks(2.5));
     expect(s.result).toMatchObject({ outcome: 'victory', reason: 'bossesDefeated' });
+  });
+});
+
+describe('B5: reworked bosses everywhere, variants and medals', () => {
+  const rush = (bosses: ('golem' | 'guardian')[] = ['golem'], players = 1) => {
+    const s = createGame({ ...config(players), classicBosses: false, bosses });
+    run(s, s.countdownTicks + 1);
+    for (const p of s.players) p.invulnUntil = 1e9;
+    return s;
+  };
+  const kill = (s: GameState) => {
+    const b = s.boss!;
+    b.plates = 0;
+    b.hp = 1;
+    b.invulnUntil = 0;
+    b.frozenUntil = 0;
+    if (b.action === 'burrowed' || b.action === 'leaping') b.action = 'walk';
+    burnBoss(s);
+    const out: GameState['events'] = [];
+    step(s, {});
+    out.push(...s.events);
+    return out;
+  };
+
+  it('the Boss Rush golem is the reworked one: armor plates and a lava ring arena', () => {
+    const s = rush(['golem']);
+    const b = s.boss!;
+    expect(b).toMatchObject({ kind: 'golem', reworked: true, plates: 15 });
+    expect(b.arena).toEqual({ x0: 1, y0: 1, x1: s.grid.w - 2, y1: s.grid.h - 2 });
+    // A blast on an armored side only knocks a plate off.
+    const hp = b.hp;
+    burnBoss(s);
+    step(s, {});
+    expect(b.hp).toBe(hp);
+    expect(b.plates).not.toBe(15);
+  });
+
+  it('the Boss Rush guardian grows its own three support roots and tears loose when they fall', () => {
+    const s = rush(['guardian']);
+    const b = s.boss!;
+    expect(b).toMatchObject({ kind: 'guardian', reworked: true, rooted: true });
+    expect(b.anchors).toHaveLength(3);
+    for (const a of b.anchors!) expect(getCell(s.grid, a.x, a.y)).toBe(Cell.Wall);
+    const a0 = b.anchors![0];
+    const side = [
+      { x: a0.x, y: a0.y + 1 },
+      { x: a0.x, y: a0.y - 1 },
+      { x: a0.x + 1, y: a0.y },
+      { x: a0.x - 1, y: a0.y },
+    ].find((c) => getCell(s.grid, c.x, c.y) !== Cell.Wall)!;
+    const seen: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      s.flames.push({ x: side.x, y: side.y, part: 'center', dir: null, bombId: 800 + i, ownerId: 'p1', bornTick: s.tick + 1, untilTick: s.tick + 3, kind: 'normal' });
+      run(s, 1);
+      seen.push(...s.events.map((e) => e.type));
+      run(s, 4);
+    }
+    expect(a0.hp).toBe(0);
+    expect(getCell(s.grid, a0.x, a0.y)).toBe(Cell.Floor);
+    expect(seen).toContain('rootPurified');
+    for (const a of b.anchors!) {
+      a.hp = 0;
+      setCell(s.grid, a.x, a.y, Cell.Floor);
+    }
+    run(s, 1);
+    expect(s.events.some((e) => e.type === 'bossUprooted')).toBe(true);
+    expect(b.rooted).toBe(false);
+  });
+
+  it('a clean, quick win is gold (three drops); someone falling costs a medal', () => {
+    const s = rush(['golem', 'golem'], 2);
+    const before = s.powerups.length;
+    const ev = kill(s);
+    const d = ev.find((e) => e.type === 'bossDefeated');
+    expect(d).toMatchObject({ tier: 3, goals: { noDeaths: true, inTime: true, allAlive: true } });
+    expect(s.powerups.length - before).toBe(3);
+    run(s, secToTicks(2.2) + secToTicks(2.5) + 3);
+    expect(s.boss?.kind).toBe('golem');
+    const p2 = s.players[1];
+    p2.invulnUntil = 0;
+    p2.shield = 0;
+    s.flames.push({ x: Math.round(p2.x), y: Math.round(p2.y), part: 'center', dir: null, bombId: 700, ownerId: 'meteor', bornTick: s.tick, untilTick: s.tick + 2, kind: 'normal' });
+    run(s, 2);
+    expect(p2.alive).toBe(false);
+    const d2 = kill(s).find((e) => e.type === 'bossDefeated');
+    expect(d2).toMatchObject({ tier: 1, goals: { noDeaths: false, inTime: true, allAlive: false } });
+  });
+
+  it('mist: strikes fall from the fog now and then', () => {
+    const s = rush(['golem']);
+    const b = s.boss!;
+    b.mod = 'mist';
+    b.nextMistTick = s.tick;
+    b.nextAttackTick = 1e9;
+    run(s, 2);
+    expect(s.meteors.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('corrupted: violet motes come for the players, one extra phase, and they vanish with it', () => {
+    const s = rush(['golem']);
+    const b = s.boss!;
+    b.mod = 'corrupted';
+    b.nextMoteTick = s.tick;
+    run(s, 2);
+    expect(s.enemies.filter((e) => e.alive && e.kind === 'mote').length).toBeGreaterThan(0);
+    // Four phases now: the last one at 15%.
+    b.plates = 0;
+    b.hp = Math.floor(b.maxHp * 0.15);
+    b.phase = 2;
+    b.invulnUntil = 0;
+    b.frozenUntil = 0;
+    burnBoss(s);
+    step(s, {});
+    expect(s.events.find((e) => e.type === 'bossPhase')).toMatchObject({ phase: 3, last: true });
+    run(s, 70);
+    kill(s);
+    expect(s.enemies.filter((e) => e.alive && e.kind === 'mote')).toHaveLength(0);
+  });
+
+  it('motes drift toward the player and die to a blast', () => {
+    const s = rush(['golem']);
+    const b = s.boss!;
+    b.mod = 'corrupted';
+    b.nextMoteTick = s.tick;
+    b.nextAttackTick = 1e9;
+    run(s, 2);
+    const m = s.enemies.find((e) => e.kind === 'mote')!;
+    const p = s.players[0];
+    const d0 = Math.abs(m.x - p.x) + Math.abs(m.y - p.y);
+    b.nextMoteTick = 1e9;
+    run(s, 180);
+    expect(Math.abs(m.x - p.x) + Math.abs(m.y - p.y)).toBeLessThan(d0);
+    s.flames.push({ x: Math.round(m.x), y: Math.round(m.y), part: 'center', dir: null, bombId: 701, ownerId: 'p1', bornTick: s.tick, untilTick: s.tick + 3, kind: 'normal' });
+    run(s, 1);
+    expect(m.alive).toBe(false);
   });
 });

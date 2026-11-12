@@ -942,8 +942,9 @@ describe('endless adventure: B2 the reworked Golem', () => {
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) expect(regionAt(s, spot.x + dx, spot.y + dy)).toBe(4);
   });
 
-  it('the Boss Rush golem keeps its classic rules (no plates, no lava)', () => {
+  it('the classic golem (classicBosses) has no plates and no lava', () => {
     const s = make(3, 1);
+    s.config.classicBosses = true;
     spawnBoss(s, 'golem');
     expect(s.boss!.plates).toBeUndefined();
     expect(lavaRing(s, s.boss!)).toEqual([]);
@@ -1274,5 +1275,25 @@ describe('endless adventure: B4 elites and the Mimic Chest', () => {
     expect(opened.some((x) => x.type === 'chestOpened')).toBe(true);
     expect(s.enemies.filter((x) => x.kind === 'mimic')).toHaveLength(1);
     expect(s.powerups.length + (opened.filter((x) => x.type === 'powerupCollected').length) - before).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('endless adventure: B5 the boss comes back with the arc variant', () => {
+  it('a chamber in a night / mist / corrupted arc wakes a boss with that twist, stronger every lap', () => {
+    const SEED = 3;
+    let id = 0;
+    for (; id < 60; id++) {
+      const info = regionInfo(SEED, id);
+      if (info.objective === 'boss' && info.variant !== 'normal') break;
+    }
+    const info = regionInfo(SEED, id);
+    const s = make(SEED, 1);
+    for (let k = 0; k < id; k++) {
+      complete(s, k);
+      walkThrough(s, k);
+    }
+    for (let i = 0; i < 120 && !s.boss; i++) step(s, {});
+    expect(s.boss).toMatchObject({ regionId: id, mod: info.variant, reworked: true });
+    expect(s.boss!.level).toBeGreaterThanOrEqual(1);
   });
 });

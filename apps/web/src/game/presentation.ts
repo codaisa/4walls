@@ -1,4 +1,4 @@
-import { activeBombCount, regionAt, type GameEvent, type GameState } from '@4walls/core';
+import { activeBombCount, regionAt, type GameEvent, type GameState, anchorsLeft } from '@4walls/core';
 import { BOSSES, CHARACTERS, GAME_EVENTS, POWERUPS, secToTicks, type CharacterId } from '@4walls/shared';
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
@@ -310,6 +310,26 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
     case 'bossDefeated':
       sfx.explosion(1.6, true);
       hud.set({ banner: { text: BOSSES[e.boss].name.toUpperCase() + ' CAIU!', key: tick } });
+      // B5: the medal a moment later (the fall gets its own beat first).
+      if (e.tier) {
+        const medal = MEDALS[e.tier - 1];
+        const goals = e.goals;
+        return window.setTimeout(() => {
+          sfx.prize();
+          hud.set({
+            banner: {
+              text: e.tier === 3 || !goals ? `${medal}!` : `${medal} · FALTOU: ${[!goals.noDeaths && 'NINGUÉM CAIR', !goals.inTime && 'TEMPO', !goals.allAlive && 'TODOS DE PÉ'].filter(Boolean).join(', ')}`,
+              key: tick + 21,
+            },
+          });
+        }, 1700);
+      }
+      break;
+    case 'mistStrike':
+      sfx.hiss();
+      break;
+    case 'motesSummoned':
+      sfx.laugh();
       break;
     case 'gameOver': {
       const good = e.result.outcome === 'victory' || e.result.outcome === 'winner';
@@ -416,6 +436,8 @@ function adventureInfo(s: GameState): HudAdventure | null {
 }
 
 /** Boss Rush health bar data (null when no boss is in the arena). */
+const MEDALS = ['🥉 MEDALHA DE BRONZE', '🥈 MEDALHA DE PRATA', '🥇 MEDALHA DE OURO'];
+
 function bossInfo(s: GameState): HudBoss | null {
   const b = s.boss;
   if (!b) return null;
@@ -431,7 +453,8 @@ function bossInfo(s: GameState): HudBoss | null {
     total: s.bossesDefeated + s.bossQueue.length + (dead ? 0 : 1),
     dead,
     ...(b.regionId !== undefined ? { arc: (s.adventure?.regions.find((r) => r.id === b.regionId)?.arc ?? 0) + 1, level: b.level ?? 0 } : {}),
-    ...(b.rooted ? { roots: s.adventure?.props.filter((p) => p.kind === 'root' && p.region === b.regionId && p.state === 'intact').length ?? 0 } : {}),
+    ...(b.rooted ? { roots: anchorsLeft(s, b) } : {}),
+    ...(b.mod ? { mod: b.mod } : {}),
     ...(b.plates !== undefined ? { plates: [1, 2, 4, 8].filter((m) => b.plates! & m).length, core: b.action === 'stunned' } : {}),
   };
 }

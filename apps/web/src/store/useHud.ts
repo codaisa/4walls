@@ -73,6 +73,8 @@ export interface HudBoss {
   core?: boolean;
   /** Adventure Guardian: support roots still standing while it is rooted. */
   roots?: number;
+  /** B5: the arc variant twisting the fight. */
+  mod?: 'night' | 'mist' | 'corrupted';
 }
 
 export interface HudState {

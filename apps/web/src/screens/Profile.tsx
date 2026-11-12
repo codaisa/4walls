@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { ACHIEVEMENTS, SLOT_COLORS, currentSeason, type ModeId } from '@4walls/shared';
+import { ACHIEVEMENTS, SLOT_COLORS, currentSeason, type ModeId, type PlayerStats } from '@4walls/shared';
 import { sfx } from '../audio/Sfx';
 import { ensureAccount, useAccount } from '../store/useAccount';
 import { useProfile } from '../store/useProfile';
@@ -86,6 +86,8 @@ export function Profile() {
               </div>
 
               <Atlas found={s!.atlas ?? []} best={s!.bestDepth ?? 0} />
+
+              <Bestiary s={s!} />
 
               <div className="hud-panel px-3 py-2">
                 <h2 className="mb-1 text-xs font-bold uppercase tracking-widest text-amber-100/60">Por modo</h2>
@@ -176,6 +178,39 @@ const ATLAS_VARIANTS = [
 ] as const;
 
 /** Adventure atlas: every biome × mood seen on a journey (the deeper laps bring new moods). */
+const MEDAL_ICON = ['—', '🥉', '🥈', '🥇'];
+
+/** B5: the bosses and beasts met in the Adventure (strongest beaten, best medal). */
+function Bestiary({ s }: { s: PlayerStats }) {
+  const rows = [
+    { icon: '🌋', name: 'Golem Vulcânico', kills: s.bossKills.golem ?? 0, b: s.bestiary?.golem },
+    { icon: '🌳', name: 'Guardião Ancião', kills: s.bossKills.guardian ?? 0, b: s.bestiary?.guardian },
+  ];
+  return (
+    <div className="hud-panel px-3 py-2" data-testid="bestiary">
+      <h2 className="mb-1 text-xs font-bold uppercase tracking-widest text-amber-100/60">Bestiário</h2>
+      {rows.map((r) => (
+        <div key={r.name} className={`flex items-center justify-between gap-2 text-sm ${r.kills ? '' : 'opacity-45'}`}>
+          <span className="truncate">
+            {r.kills ? r.icon : '❔'} {r.kills ? r.name : '???'}
+          </span>
+          <span className="shrink-0 text-white/70">
+            {r.kills}× · {r.b ? `Nv. ${r.b.best} ${MEDAL_ICON[r.b.medal] ?? ''}` : '—'}
+          </span>
+        </div>
+      ))}
+      <div className="mt-0.5 flex justify-between text-sm">
+        <span>🧰 Baús Miméticos</span>
+        <span className="text-white/70">{s.mimics ?? 0}</span>
+      </div>
+      <div className="flex justify-between text-sm">
+        <span>👑 Elites</span>
+        <span className="text-white/70">{s.elites ?? 0}</span>
+      </div>
+    </div>
+  );
+}
+
 function Atlas({ found, best }: { found: string[]; best: number }) {
   const have = new Set(found);
   return (

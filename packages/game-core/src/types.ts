@@ -147,7 +147,8 @@ export interface ArenaEventState {
 export interface EnemyState {
   id: number;
   /** magmite = wandering lava blob; sprout = Guardião's summoned seedling. */
-  kind: 'magmite' | 'sprout' | 'spark' | 'mimic';
+  /** mote: the violet wisp a corrupted boss calls (B5); it drifts after the closest player. */
+  kind: 'magmite' | 'sprout' | 'spark' | 'mimic' | 'mote';
   /**
    * Fagulha: wander → alert (telegraph) → charge in a line → rest.
    * Mimic: reveal → hunt ⇄ crouch → leap, hunt → chew → hunt (spitting the bomb back).
@@ -365,6 +366,25 @@ export interface BossState {
   rooted?: boolean;
   /** Next tick it may heal while rooted. */
   regenAt?: number;
+  /** B5: the reworked boss (every Adventure boss, and Boss Rush unless classic). */
+  reworked?: boolean;
+  /** B5: the arc's variant twists the fight (night: seen only by its light; mist: strikes from the fog; corrupted: violet motes and one more phase). */
+  mod?: 'night' | 'mist' | 'corrupted';
+  /** Boss Rush Guardian: its support roots live on the boss itself (the Adventure uses chamber props). */
+  anchors?: { x: number; y: number; hp: number }[];
+  /** B5 rewards: when the fight started, the par time and who fell during it. */
+  bornTick?: number;
+  parSec?: number;
+  fallen?: string[];
+  nextMistTick?: number;
+  nextMoteTick?: number;
+}
+
+/** B5: what the fight earned (bronze 1, silver 2, gold 3) and which goals were met. */
+export interface BossGoals {
+  noDeaths: boolean;
+  inTime: boolean;
+  allAlive: boolean;
 }
 
 export type GameEvent =
@@ -379,7 +399,7 @@ export type GameEvent =
   | { type: 'shieldBroken'; playerId: string }
   | { type: 'playerDied'; playerId: string; byId: string | null; x: number; y: number }
   | { type: 'playerFrozen'; playerId: string; x: number; y: number }
-  | { type: 'enemyDied'; enemyId: number; byId: string; x: number; y: number }
+  | { type: 'enemyDied'; enemyId: number; byId: string; x: number; y: number; kind?: EnemyState['kind']; elite?: boolean }
   | { type: 'abilityUsed'; playerId: string; ability: AbilityId; x: number; y: number; fromX: number; fromY: number }
   | { type: 'bombKicked'; bombId: number; playerId: string }
   | { type: 'bombThrown'; bombId: number; playerId: string; fromX: number; fromY: number; x: number; y: number }
@@ -466,7 +486,10 @@ export type GameEvent =
   | { type: 'bossSpores'; x: number; y: number }
   | { type: 'bossBurrow'; x: number; y: number }
   | { type: 'bossEmerge'; x: number; y: number }
-  | { type: 'bossDefeated'; boss: BossId; x: number; y: number }
+  | { type: 'bossDefeated'; boss: BossId; x: number; y: number; level?: number; tier?: number; goals?: BossGoals }
+  /** B5: variant twists. */
+  | { type: 'mistStrike'; x: number; y: number }
+  | { type: 'motesSummoned'; cells: { x: number; y: number }[] }
   | { type: 'gameOver'; result: GameResult };
 
 export interface GameResult {

@@ -498,4 +498,6 @@ export interface GameConfig {
   regions?: number;
   /** Boss Rush: bosses to fight in order (default BOSS_RUSH). */
   bosses?: BossId[];
+  /** Boss Rush with the classic (pre-B5) Golem and Guardian (tests and regressions). */
+  classicBosses?: boolean;
 }

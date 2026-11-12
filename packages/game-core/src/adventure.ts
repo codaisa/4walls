@@ -921,7 +921,7 @@ function wakeGuardian(s: GameState, reg: RegionState) {
   const hp = Math.max(6, Math.round(BOSSES[kind].hp * BOSS_HP_BY_PLAYERS[players - 1] * levelMul));
   const c = chamberCenter(reg);
   const arena = { x0: reg.cx * CW + 1, y0: reg.cy * CH + 1, x1: reg.cx * CW + CW - 2, y1: reg.cy * CH + CH - 2 };
-  spawnBoss(s, kind, { x: c.x, y: c.y, regionId: reg.id, level, hp, speedMul: Math.min(1.4, 1 + 0.06 * level), arena });
+  spawnBoss(s, kind, { x: c.x, y: c.y, regionId: reg.id, level, hp, speedMul: Math.min(1.4, 1 + 0.06 * level), arena, ...(reg.variant !== 'normal' ? { mod: reg.variant } : {}) });
 }
 
 // ───────────────────────────── the live window ─────────────────────────────

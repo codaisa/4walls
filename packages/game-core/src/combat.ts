@@ -57,7 +57,7 @@ export function applyDamage(s: GameState) {
       e.diedTick = s.tick;
       const owner = s.players.find((p) => p.id === lethal.ownerId);
       if (owner) owner.kills++;
-      s.events.push({ type: 'enemyDied', enemyId: e.id, byId: lethal.ownerId, x: e.x, y: e.y });
+      s.events.push({ type: 'enemyDied', enemyId: e.id, byId: lethal.ownerId, x: e.x, y: e.y, kind: e.kind, ...(e.elite ? { elite: true } : {}) });
       enemyDown(s, e);
       continue;
     }

@@ -1,10 +1,10 @@
-import { BOSSES, BOSS_ARENA, Cell, DIRS, DIR_VEC, OPPOSITE, RULES, TICK_DT, secToTicks, type BossDef, type BossId, type Dir } from '@4walls/shared';
+import { BOSSES, BOSS_ARENA, Cell, DIRS, DIR_VEC, OPPOSITE, POWERUPS, RULES, TICK_DT, secToTicks, type BossDef, type BossId, type Dir, type PowerupType } from '@4walls/shared';
 import { destroyBlock } from './bombs';
 import { hitPlayer } from './combat';
 import { cellIndex, createGrid, getCell, inBounds, setCell } from './grid';
 import { nextRandom, pickWeighted, randInt } from './rng';
-import type { BossAttack, BossState, Flame, GameState, Grid, PlayerState } from './types';
-import { cellOf, isPit, newId } from './world';
+import type { BossAttack, BossGoals, BossState, Flame, GameState, Grid, PlayerState } from './types';
+import { cellOf, flamesAt, isPit, newId } from './world';
 
 /** Bosses cover the 3×3 cells around their center; players touching that body die. */
 const BODY_HALF = 1;
@@ -57,17 +57,32 @@ export interface BossSpawn {
   speedMul: number;
   /** The chamber's open floor (inclusive). */
   arena?: { x0: number; y0: number; x1: number; y1: number };
+  /** B5: the arc's variant twist. */
+  mod?: 'night' | 'mist' | 'corrupted';
 }
 
 /** All four plates. */
 export const ALL_PLATES = 15;
 /** The reworked Adventure Golem (armor, lava, leap); Boss Rush keeps the classic one. */
-export const reworkedGolem = (b: { kind: BossId; regionId?: number }) => b.kind === 'golem' && b.regionId !== undefined;
-/** The reworked Adventure Guardian (support roots, then a mobile phase). */
-export const reworkedGuardian = (b: { kind: BossId; regionId?: number }) => b.kind === 'guardian' && b.regionId !== undefined;
-/** Support roots of its chamber still standing. */
-export const anchorsLeft = (s: GameState, b: { regionId?: number }) =>
-  s.adventure?.props.filter((p) => p.kind === 'root' && p.region === b.regionId && p.state === 'intact').length ?? 0;
+export const reworkedGolem = (b: { kind: BossId; reworked?: boolean }) => b.kind === 'golem' && !!b.reworked;
+/** The reworked Guardian (support roots, then a mobile phase). */
+export const reworkedGuardian = (b: { kind: BossId; reworked?: boolean }) => b.kind === 'guardian' && !!b.reworked;
+/** The Guardian's support roots still standing (chamber props in the Adventure, its own in Boss Rush). */
+export function anchorCells(s: GameState, b: { regionId?: number; anchors?: { x: number; y: number; hp: number }[] }) {
+  if (b.anchors) return b.anchors.filter((a) => a.hp > 0).map((a) => ({ x: a.x, y: a.y }));
+  return (s.adventure?.props ?? []).filter((p) => p.kind === 'root' && p.region === b.regionId && p.state === 'intact').map((p) => ({ x: p.x, y: p.y }));
+}
+export const anchorsLeft = (s: GameState, b: { regionId?: number; anchors?: { x: number; y: number; hp: number }[] }) => anchorCells(s, b).length;
+
+/** Boss Rush Guardian: where its three support roots grow (relative to the arena's middle). */
+const RUSH_ROOTS = [
+  { x: 0, y: -5 },
+  { x: -6, y: 3 },
+  { x: 6, y: 3 },
+];
+const RARE_DROPS: PowerupType[] = ['shield', 'kick', 'remote', 'glove', 'ghost', 'boots', 'infernal', 'ice'];
+/** Seconds to beat for the "in time" goal (a little more every lap). */
+const PAR_SEC: Record<BossId, number> = { golem: 95, guardian: 105 };
 
 export function spawnBoss(s: GameState, kind: BossId, at?: BossSpawn) {
   const def = BOSSES[kind];
@@ -76,6 +91,19 @@ export function spawnBoss(s: GameState, kind: BossId, at?: BossSpawn) {
   const y = at?.y ?? Math.floor(h / 2);
   crushFootprint(s, x, y);
   const hp = at?.hp ?? def.hp;
+  // B5: every Adventure boss and the Boss Rush ones are the reworked versions (unless classic).
+  const reworked = !!at || !s.config.classicBosses;
+  const arena = at?.arena ?? (reworked ? { x0: s.grid.x0 + 1, y0: s.grid.y0 + 1, x1: s.grid.x0 + w - 2, y1: s.grid.y0 + h - 2 } : undefined);
+  const level = at?.level ?? 0;
+  const born = Math.max(s.tick, s.countdownTicks);
+  let anchors: { x: number; y: number; hp: number }[] | undefined;
+  if (reworked && !at && kind === 'guardian') {
+    anchors = RUSH_ROOTS.map((r) => ({ x: x + r.x, y: y + r.y, hp: 3 })).filter((c) => inBounds(s.grid, c.x, c.y));
+    for (const c of anchors) {
+      setCell(s.grid, c.x, c.y, Cell.Wall);
+      s.powerups = s.powerups.filter((p) => p.x !== c.x || p.y !== c.y);
+    }
+  }
   s.boss = {
     kind,
     x, y, px: x, py: y, tx: x, ty: y,
@@ -97,9 +125,12 @@ export function spawnBoss(s: GameState, kind: BossId, at?: BossSpawn) {
     diedTick: -1,
     phase: 0,
     ...(at ? { regionId: at.regionId, level: at.level, speedMul: at.speedMul } : {}),
-    ...(at?.arena ? { arena: at.arena } : {}),
-    ...(at && kind === 'golem' ? { plates: ALL_PLATES, lava: [] } : {}),
-    ...(at && kind === 'guardian' ? { rooted: true, regenAt: s.tick + secToTicks(REGEN_SEC) } : {}),
+    ...(arena ? { arena } : {}),
+    ...(reworked ? { reworked: true, bornTick: born, parSec: PAR_SEC[kind] + 20 * level, fallen: [] } : {}),
+    ...(reworked && kind === 'golem' ? { plates: ALL_PLATES, lava: [] } : {}),
+    ...(reworked && kind === 'guardian' ? { rooted: true, regenAt: s.tick + secToTicks(REGEN_SEC) } : {}),
+    ...(anchors ? { anchors } : {}),
+    ...(at?.mod ? { mod: at.mod, nextMistTick: born + secToTicks(5), nextMoteTick: born + secToTicks(6) } : {}),
   };
   const total = s.bossesDefeated + s.bossQueue.length + 1;
   s.events.push({ type: 'bossSpawned', boss: kind, index: s.bossesDefeated, total });
@@ -127,8 +158,11 @@ export function updateBoss(s: GameState) {
     return;
   }
   if (takeDamage(s, b, def)) return; // just died
+  if (b.fallen) for (const p of s.players) if (!p.alive && !p.left && p.diedTick >= (b.bornTick ?? 0) && !b.fallen.includes(p.id)) b.fallen.push(p.id);
   updateLava(s, b);
+  if (b.anchors) hitAnchors(s, b);
   if (b.rooted) updateAnchors(s, b);
+  if (b.mod) updateMod(s, b);
   if (s.tick < b.frozenUntil) return; // frozen solid: harmless and still
   if (b.action !== 'burrowed' && b.action !== 'leaping') touchPlayers(s, b);
 
@@ -270,7 +304,7 @@ function takeDamage(s: GameState, b: BossState, def: BossDef): boolean {
       s.meteors = [];
       b.targets = [];
       for (const e of s.enemies) {
-        if (e.alive && e.kind === 'sprout') {
+        if (e.alive && (e.kind === 'sprout' || e.kind === 'mote')) {
           e.alive = false;
           e.diedTick = s.tick;
           s.events.push({ type: 'enemyDied', enemyId: e.id, byId: 'boss', x: e.x, y: e.y });
@@ -278,7 +312,11 @@ function takeDamage(s: GameState, b: BossState, def: BossDef): boolean {
       }
       const owner = s.players.find((p) => p.id === f.ownerId);
       if (owner) owner.kills++;
-      s.events.push({ type: 'bossDefeated', boss: b.kind, x: b.x, y: b.y });
+      if (b.reworked) {
+        const { tier, goals } = fightTier(s, b);
+        s.events.push({ type: 'bossDefeated', boss: b.kind, x: b.x, y: b.y, level: b.level ?? 0, tier, goals });
+        dropReward(s, b, tier);
+      } else s.events.push({ type: 'bossDefeated', boss: b.kind, x: b.x, y: b.y });
       coolLava(s, b);
       if (reworkedGuardian(b)) witherBrambles(s, b);
       // Adventure: the chamber's objective is this boss.
@@ -292,8 +330,11 @@ function takeDamage(s: GameState, b: BossState, def: BossDef): boolean {
 }
 
 /** Thresholds of this encounter: deeper Adventure bosses get an extra, faster phase. */
-const phasesOf = (b: BossState, def: BossDef) =>
-  b.regionId !== undefined && def.adventurePhases ? def.adventurePhases : (b.level ?? 0) > 0 && def.deepPhases ? def.deepPhases : def.phases;
+const phasesOf = (b: BossState, def: BossDef) => {
+  const base = b.reworked && def.adventurePhases ? def.adventurePhases : (b.level ?? 0) > 0 && def.deepPhases ? def.deepPhases : def.phases;
+  // Corrupted: one more phase near the end.
+  return b.mod === 'corrupted' ? [...base, 0.15] : base;
+};
 
 /**
  * Crossing a health threshold starts the next phase. Phase 1 is the enraged one (faster, wider
@@ -310,8 +351,9 @@ function enterPhase(s: GameState, b: BossState, def: BossDef) {
     b.enraged = true;
     s.events.push({ type: 'bossEnraged' });
   }
-  if (b.regionId === undefined) return;
+  if (!b.reworked) return;
   s.events.push({ type: 'bossPhase', phase: want, last: want === phasesOf(b, def).length });
+  if (b.mod === 'corrupted') summonMotes(s, b, 2);
   b.invulnUntil = Math.max(b.invulnUntil, s.tick + secToTicks(1));
   for (const p of s.adventure?.props ?? []) if (p.kind === 'totem' && p.region === b.regionId && p.state === 'used') p.state = 'idle';
   if (reworkedGolem(b)) golemPhase(s, b, def, want);
@@ -368,7 +410,115 @@ function witherBrambles(s: GameState, b: BossState) {
       cells.push({ x: p.x, y: p.y });
     }
   }
+  for (const a of b.anchors ?? []) {
+    if (a.hp <= 0) continue;
+    a.hp = 0;
+    setCell(s.grid, a.x, a.y, Cell.Floor);
+    cells.push({ x: a.x, y: a.y });
+  }
   if (cells.length) s.events.push({ type: 'bramblesWithered', cells });
+}
+
+/** Boss Rush Guardian: blasts next to its own support roots break them (3 each). */
+function hitAnchors(s: GameState, b: BossState) {
+  const anchors = b.anchors!;
+  anchors.forEach((a, i) => {
+    if (a.hp <= 0) return;
+    const hit = DIRS.some((d) =>
+      flamesAt(s, a.x + DIR_VEC[d].x, a.y + DIR_VEC[d].y).some((f) => f.bornTick === s.tick && f.bombId >= 0 && s.players.some((p) => p.id === f.ownerId)),
+    );
+    if (!hit) return;
+    a.hp--;
+    if (a.hp > 0) {
+      s.events.push({ type: 'rootHit', propId: -1 - i, x: a.x, y: a.y, hp: a.hp });
+      return;
+    }
+    setCell(s.grid, a.x, a.y, Cell.Floor);
+    s.events.push({ type: 'rootPurified', propId: -1 - i, x: a.x, y: a.y, left: anchors.filter((q) => q.hp > 0).length, chamber: true });
+  });
+}
+
+// ───────────────────────────── B5: variants, rewards ─────────────────────────────
+
+/**
+ * Mist: now and then a strike falls out of the fog (marked meteors on the players).
+ * Corrupted: violet motes keep coming while it lives (a few at a time).
+ */
+function updateMod(s: GameState, b: BossState) {
+  if (b.action === 'dead') return;
+  const level = b.level ?? 0;
+  if (b.mod === 'mist' && s.tick >= (b.nextMistTick ?? 0)) {
+    b.nextMistTick = s.tick + secToTicks(Math.max(4, 7 - 0.5 * level));
+    callMeteors(s, 2 + Math.min(3, level));
+    s.events.push({ type: 'mistStrike', x: b.x, y: b.y });
+  }
+  if (b.mod === 'corrupted' && s.tick >= (b.nextMoteTick ?? 0)) {
+    b.nextMoteTick = s.tick + secToTicks(9);
+    summonMotes(s, b, 1 + (level >= 2 ? 1 : 0));
+  }
+}
+
+/** Violet motes rise at the arena's edge, away from the players (a few alive at most). */
+function summonMotes(s: GameState, b: BossState, count: number) {
+  const max = 2 + Math.min(2, b.level ?? 0);
+  const alive = s.enemies.filter((e) => e.alive && e.kind === 'mote').length;
+  const n = Math.min(count, Math.max(0, max - alive));
+  if (!n) return;
+  const a = b.arena;
+  const free: { x: number; y: number }[] = [];
+  const x0 = a?.x0 ?? s.grid.x0 + 1;
+  const y0 = a?.y0 ?? s.grid.y0 + 1;
+  const x1 = a?.x1 ?? s.grid.x0 + s.grid.w - 2;
+  const y1 = a?.y1 ?? s.grid.y0 + s.grid.h - 2;
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      if (getCell(s.grid, x, y) !== Cell.Floor || !inArena(s, b, x, y) || s.bombs.some((bb) => bb.x === x && bb.y === y)) continue;
+      if (Math.max(Math.abs(x - cellOf(b.x)), Math.abs(y - cellOf(b.y))) < 2) continue;
+      if (s.players.some((p) => p.alive && Math.abs(p.x - x) + Math.abs(p.y - y) < 5)) continue;
+      if (s.enemies.some((e) => e.alive && Math.round(e.x) === x && Math.round(e.y) === y)) continue;
+      free.push({ x, y });
+    }
+  const cells: { x: number; y: number }[] = [];
+  for (let i = 0; i < n && free.length; i++) {
+    const [c] = free.splice(randInt(s, free.length), 1);
+    s.enemies.push({ id: newId(s), kind: 'mote', x: c.x, y: c.y, px: c.x, py: c.y, dir: null, tx: c.x, ty: c.y, alive: true, diedTick: -1, frozenUntil: s.tick + secToTicks(0.8), regionId: b.regionId ?? -1, speedMul: b.speedMul ?? 1 });
+    cells.push(c);
+  }
+  if (cells.length) s.events.push({ type: 'motesSummoned', cells });
+}
+
+/** Bronze for beating it; silver with two of the three goals; gold with all three. */
+export function fightTier(s: GameState, b: BossState): { tier: number; goals: BossGoals } {
+  const secs = (s.tick - (b.bornTick ?? 0)) * TICK_DT;
+  const goals: BossGoals = {
+    noDeaths: !(b.fallen ?? []).length && s.players.every((p) => p.left || p.alive || p.diedTick < (b.bornTick ?? 0)),
+    inTime: secs <= (b.parSec ?? Infinity),
+    allAlive: s.players.every((p) => p.left || p.alive),
+  };
+  const met = Number(goals.noDeaths) + Number(goals.inTime) + Number(goals.allAlive);
+  return { tier: met === 3 ? 3 : met === 2 ? 2 : 1, goals };
+}
+
+/** The reward drops around where it fell: a power-up, plus a rare one per medal above bronze. */
+function dropReward(s: GameState, b: BossState, tier: number) {
+  const loot: PowerupType[] = [pickWeighted(s, Object.values(POWERUPS), (d) => d.weight).type];
+  for (let i = 1; i < tier; i++) loot.push(RARE_DROPS[randInt(s, RARE_DROPS.length)]);
+  const bx = cellOf(b.x);
+  const by = cellOf(b.y);
+  const spots: { x: number; y: number }[] = [];
+  for (let r = 0; r <= 2 && spots.length < loot.length; r++)
+    for (let y = by - r; y <= by + r; y++)
+      for (let x = bx - r; x <= bx + r; x++) {
+        if (Math.max(Math.abs(x - bx), Math.abs(y - by)) !== r) continue;
+        if (getCell(s.grid, x, y) !== Cell.Floor || s.powerups.some((p) => p.x === x && p.y === y) || s.bombs.some((bb) => bb.x === x && bb.y === y)) continue;
+        spots.push({ x, y });
+      }
+  loot.forEach((type, i) => {
+    const c = spots[i] ?? { x: bx, y: by };
+    const id = newId(s);
+    s.powerups.push({ id, type, x: c.x, y: c.y, bornTick: s.tick });
+    s.events.push({ type: 'powerupSpawned', id, x: c.x, y: c.y, powerup: type });
+  });
 }
 
 // ───────────────────────────── the Adventure Golem ─────────────────────────────
@@ -545,7 +695,8 @@ function chooseAttack(s: GameState, b: BossState, def: BossDef) {
     // It wants to ram walls (the charge leaves its core open) and, in its last phase, to leap.
     const charge = options.find((o) => o.a === 'charge');
     if (charge) charge.w = 5;
-    if ((b.phase ?? 0) >= 2) options.push({ a: 'leap', w: 4 });
+    // Its leap comes from phase 2 — from phase 1 once it has come back twice.
+    if ((b.phase ?? 0) >= ((b.level ?? 0) >= 2 ? 1 : 2)) options.push({ a: 'leap', w: 4 });
   }
   if (!options.length) return;
   let attack = pickWeighted(s, options, (o) => o.w).a;
@@ -617,7 +768,7 @@ export function rootLines(s: GameState, b: { x: number; y: number; enraged: bool
 function rootTargets(s: GameState, b: BossState, target: PlayerState) {
   const cells = rootLines(s, b, target);
   const alive = s.players.filter((p) => p.alive);
-  if (b.regionId === undefined || alive.length < 3) return cells;
+  if (!b.reworked || alive.length < 3) return cells;
   const far = alive.reduce((best, p) => (Math.abs(p.x - target.x) + Math.abs(p.y - target.y) > Math.abs(best.x - target.x) + Math.abs(best.y - target.y) ? p : best), target);
   const seen = new Set(cells.map((c) => c.y * s.grid.w + c.x));
   for (const c of rootLines(s, { ...b, enraged: false }, far)) if (!seen.has(c.y * s.grid.w + c.x)) cells.push(c);
@@ -706,13 +857,15 @@ function performAttack(s: GameState, b: BossState, def: BossDef) {
   const attack = b.attack;
   // Phase 2 and beyond (deep encounters) attack more often.
   const lastBreath = (b.phase ?? 0) >= 2 || (reworkedGuardian(b) && (b.phase ?? 0) >= 1);
-  const cooldown = secToTicks((b.enraged ? def.enragedAttackEverySec : def.attackEverySec) * (lastBreath ? 0.8 : 1));
+  // B5: every lap it comes back quicker between attacks (down to 65%).
+  const lap = Math.max(0.65, 1 - 0.06 * (b.level ?? 0));
+  const cooldown = secToTicks((b.enraged ? def.enragedAttackEverySec : def.attackEverySec) * (lastBreath ? 0.8 : 1) * lap);
   if (attack === 'slam') {
     fireCells(s, b, slamCells(s, b));
     s.events.push({ type: 'bossSlam', x: b.x, y: b.y });
     setAction(s, b, 'recover', def.recoverSec);
   } else if (attack === 'meteors') {
-    callMeteors(s, b.enraged ? def.enragedMeteors : def.meteors);
+    callMeteors(s, (b.enraged ? def.enragedMeteors : def.meteors) + Math.min(4, b.level ?? 0));
     s.events.push({ type: 'bossRoar', x: b.x, y: b.y });
     setAction(s, b, 'recover', def.recoverSec * 0.5);
   } else if (attack === 'charge' && b.chargeDir) {

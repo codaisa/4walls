@@ -84,6 +84,11 @@ export const COSMETICS: Record<string, CosmeticDef> = Object.fromEntries(
     C({ id: 'title_guardiao', slot: 'title', name: 'Amigo da Floresta', desc: 'Derrotou o Guardião Ancião.', rarity: 'epic', price: 0, achievement: 'guardian_slayer' }),
     C({ id: 'title_rei', slot: 'title', name: 'Rei da Arena', desc: 'Venceu 25 partidas.', rarity: 'epic', price: 0, achievement: 'champion' }),
     C({ id: 'title_lenda', slot: 'title', name: 'Lenda', desc: 'Chegou ao nível 20.', rarity: 'legendary', price: 0, level: 20 }),
+    // B5: medals and the Adventure's beasts.
+    C({ id: 'title_forjado', slot: 'title', name: 'Forjado na Lava', desc: 'Medalha de ouro contra o Golem.', rarity: 'legendary', price: 0, achievement: 'golem_gold' }),
+    C({ id: 'title_coracao', slot: 'title', name: 'Coração da Floresta', desc: 'Medalha de ouro contra o Guardião.', rarity: 'legendary', price: 0, achievement: 'guardian_gold' }),
+    C({ id: 'title_mimico', slot: 'title', name: 'Domador de Mímicos', desc: 'Venceu 5 Baús Miméticos.', rarity: 'epic', price: 0, achievement: 'mimic_hunter' }),
+    C({ id: 'title_implacavel', slot: 'title', name: 'Implacável', desc: 'Venceu um chefe que já tinha voltado duas vezes.', rarity: 'epic', price: 0, achievement: 'deep_boss' }),
   ].map((d) => [d.id, d]),
 );
 
@@ -165,6 +170,11 @@ export interface PlayerStats {
   bestDepth: number;
   /** Adventure atlas: landscapes discovered, as "biome:variant" (e.g. "forest:night"). */
   atlas: string[];
+  /** B5 bestiary: per boss, the strongest encounter beaten (level + 1) and the best medal (1–3). */
+  bestiary: Partial<Record<BossId, { best: number; medal: number }>>;
+  /** Baús Miméticos and Adventure elites beaten. */
+  mimics: number;
+  elites: number;
 }
 
 export const EMPTY_STATS: PlayerStats = {
@@ -186,9 +196,12 @@ export const EMPTY_STATS: PlayerStats = {
   byMode: {},
   bestDepth: 0,
   atlas: [],
+  bestiary: {},
+  mimics: 0,
+  elites: 0,
 };
 
-export type AchievementId = 'first_win' | 'demolisher' | 'hunter' | 'veteran' | 'golem_slayer' | 'guardian_slayer' | 'boss_rush' | 'champion' | 'streak' | 'collector' | 'explorer' | 'cartographer';
+export type AchievementId = 'first_win' | 'demolisher' | 'hunter' | 'veteran' | 'golem_slayer' | 'guardian_slayer' | 'boss_rush' | 'champion' | 'streak' | 'collector' | 'explorer' | 'cartographer' | 'golem_gold' | 'guardian_gold' | 'mimic_hunter' | 'elite_hunter' | 'deep_boss';
 
 export interface AchievementDef {
   id: AchievementId;
@@ -213,6 +226,11 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'champion', name: 'Campeão', desc: 'Vença 25 partidas.', icon: '⭐', coins: 500, progress: (s) => [s.wins, 25] },
   { id: 'explorer', name: 'Desbravador', desc: 'Chegue à região 10 da Aventura.', icon: '🧭', coins: 200, progress: (s) => [s.bestDepth ?? 0, 9] },
   { id: 'cartographer', name: 'Cartógrafo', desc: 'Descubra 6 paisagens do atlas.', icon: '🗺️', coins: 300, progress: (s) => [s.atlas?.length ?? 0, 6] },
+  { id: 'golem_gold', name: 'Forjado na Lava', desc: 'Medalha de ouro contra o Golem.', icon: '🥇', coins: 400, progress: (s) => [(s.bestiary?.golem?.medal ?? 0) >= 3 ? 1 : 0, 1] },
+  { id: 'guardian_gold', name: 'Coração da Floresta', desc: 'Medalha de ouro contra o Guardião.', icon: '🏅', coins: 400, progress: (s) => [(s.bestiary?.guardian?.medal ?? 0) >= 3 ? 1 : 0, 1] },
+  { id: 'mimic_hunter', name: 'Domador de Mímicos', desc: 'Vença 5 Baús Miméticos.', icon: '🧰', coins: 250, progress: (s) => [s.mimics ?? 0, 5] },
+  { id: 'elite_hunter', name: 'Caça-Coroas', desc: 'Derrote 20 inimigos de elite.', icon: '👑', coins: 250, progress: (s) => [s.elites ?? 0, 20] },
+  { id: 'deep_boss', name: 'Implacável', desc: 'Vença um chefe que já voltou duas vezes.', icon: '💀', coins: 500, progress: (s) => [Math.max(0, ...Object.values(s.bestiary ?? {}).map((b) => b?.best ?? 0)) >= 3 ? 1 : 0, 1] },
 ];
 
 export const achievementDone = (a: AchievementDef, s: PlayerStats) => {
@@ -242,6 +260,11 @@ export interface MatchPerformance {
   depth?: number;
   /** Endless Adventure: landscapes ("biome:variant") seen in this journey. */
   atlas?: string[];
+  /** B5: each reworked boss beaten (team credit), its level and the medal earned (1–3). */
+  bossFights?: { boss: BossId; level: number; tier: number }[];
+  /** Baús Miméticos and elites this player finished off. */
+  mimics?: number;
+  elites?: number;
 }
 
 export interface MatchReward {
@@ -265,6 +288,9 @@ export function matchReward(p: MatchPerformance): MatchReward {
   add('Blocos', Math.min(50, p.blocks));
   add('Power-ups', Math.min(40, p.powerups * 4));
   add('Chefões derrotados', p.bosses.length * 100);
+  // B5 medals: bronze 50, silver 110, gold 200 XP per boss.
+  add('Medalhas de chefe', (p.bossFights ?? []).reduce((n, f) => n + ([0, 50, 110, 200][f.tier] ?? 0), 0));
+  add('Mímicos e elites', Math.min(120, (p.mimics ?? 0) * 30 + (p.elites ?? 0) * 8));
   if (p.bossRushClear) add('Boss Rush completo', 150);
   // Endless Adventure: every region crossed pays, a bit more the deeper it was.
   if (p.depth) add('Regiões atravessadas', Math.min(1500, Math.round(25 * p.depth + 1.5 * p.depth * p.depth)));
@@ -293,6 +319,13 @@ export function applyMatchToStats(s: PlayerStats, p: MatchPerformance): PlayerSt
   n.playSeconds += Math.round(p.seconds);
   n.bestDepth = Math.max(s.bestDepth ?? 0, p.depth ?? 0);
   n.atlas = [...new Set([...(s.atlas ?? []), ...(p.atlas ?? [])])].sort();
+  n.bestiary = { ...(s.bestiary ?? {}) };
+  for (const f of p.bossFights ?? []) {
+    const was = n.bestiary[f.boss] ?? { best: 0, medal: 0 };
+    n.bestiary[f.boss] = { best: Math.max(was.best, f.level + 1), medal: Math.max(was.medal, f.tier) };
+  }
+  n.mimics = (s.mimics ?? 0) + (p.mimics ?? 0);
+  n.elites = (s.elites ?? 0) + (p.elites ?? 0);
   const m = n.byMode[p.mode] ?? { matches: 0, wins: 0 };
   n.byMode[p.mode] = { matches: m.matches + 1, wins: m.wins + (p.outcome === 'win' ? 1 : 0) };
   return n;

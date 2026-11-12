@@ -1,4 +1,4 @@
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Bloom, EffectComposer, ToneMapping, Vignette } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -97,6 +97,7 @@ export function GameScene({ controller }: { controller: MatchView }) {
         <color attach="background" args={[theme.background]} />
         <fog attach="fog" args={[theme.background, theme.fog[0], theme.fog[1]]} />
         <GameLoop />
+        <HitStop />
         <hemisphereLight args={theme.hemi} />
         <ambientLight intensity={0.15} color={theme.ambient} />
         <directionalLight
@@ -153,4 +154,27 @@ export function GameScene({ controller }: { controller: MatchView }) {
     )}
     </>
   );
+}
+
+/** The final blow on a boss: the picture holds for a heartbeat (only the drawing stops). */
+function HitStop() {
+  const { controller } = useGame();
+  const setFrameloop = useThree((st) => st.setFrameloop);
+  useEffect(() => {
+    let timer = 0;
+    const off = controller.on((e) => {
+      if (e.type !== 'bossDefeated') return;
+      window.setTimeout(() => {
+        setFrameloop('never');
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => setFrameloop('always'), 240);
+      }, 30);
+    });
+    return () => {
+      off();
+      window.clearTimeout(timer);
+      setFrameloop('always');
+    };
+  }, [controller, setFrameloop]);
+  return null;
 }

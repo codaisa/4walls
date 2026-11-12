@@ -122,3 +122,26 @@ describe('adventure atlas', () => {
     expect(s.bestDepth).toBe(12);
   });
 });
+
+describe('B5 bestiary and medals', () => {
+  it('boss medals pay XP and fill the bestiary (best level, best medal)', () => {
+    const p = perf({ mode: 'adventure', bosses: ['golem', 'guardian'], bossFights: [{ boss: 'golem', level: 2, tier: 3 }, { boss: 'guardian', level: 0, tier: 1 }], mimics: 1, elites: 3 });
+    const r = matchReward(p);
+    expect(r.lines.find((l) => l.label === 'Medalhas de chefe')?.xp).toBe(250);
+    expect(r.lines.find((l) => l.label === 'Mímicos e elites')?.xp).toBe(54);
+    const s = applyMatchToStats(EMPTY_STATS, p);
+    expect(s.bestiary).toEqual({ golem: { best: 3, medal: 3 }, guardian: { best: 1, medal: 1 } });
+    expect(s.mimics).toBe(1);
+    expect(s.elites).toBe(3);
+    const s2 = applyMatchToStats(s, perf({ bossFights: [{ boss: 'golem', level: 0, tier: 2 }] }));
+    expect(s2.bestiary.golem).toEqual({ best: 3, medal: 3 });
+    const done = ACHIEVEMENTS.filter((a) => a.progress(s)[0] >= a.progress(s)[1]).map((a) => a.id);
+    expect(done).toEqual(expect.arrayContaining(['golem_gold', 'deep_boss']));
+    expect(done).not.toContain('guardian_gold');
+  });
+
+  it('the new titles are earned by their achievements', () => {
+    expect(earnedItems(1, ['golem_gold', 'mimic_hunter'], {})).toEqual(expect.arrayContaining(['title_forjado', 'title_mimico']));
+    for (const id of ['title_forjado', 'title_coracao', 'title_mimico', 'title_implacavel']) expect(COSMETICS[id]).toBeTruthy();
+  });
+});

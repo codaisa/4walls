@@ -24,6 +24,7 @@ export function Enemies() {
   const mimic = useRef<(THREE.Group | null)[]>([]);
   const jaw = useRef<(THREE.Group | null)[]>([]);
   const marker = useRef<(THREE.Mesh | null)[]>([]);
+  const mote = useRef<(THREE.Group | null)[]>([]);
 
   const m = useMemo(
     () => ({
@@ -53,6 +54,9 @@ export function Enemies() {
       tongue: new THREE.MeshStandardMaterial({ color: '#e0506a', roughness: 0.35, emissive: '#600010', emissiveIntensity: 0.4 }),
       mEye: new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 2.4, 0.4), toneMapped: false }),
       mark: new THREE.MeshBasicMaterial({ color: '#ff3a2a', transparent: true, opacity: 0.6, toneMapped: false, depthWrite: false }),
+      // B5: the corrupted boss's motes.
+      moteCore: new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 0.7, 3.6), toneMapped: false }),
+      moteHalo: new THREE.MeshBasicMaterial({ color: '#9a3cff', transparent: true, opacity: 0.35, toneMapped: false, depthWrite: false }),
     }),
     [],
   );
@@ -92,11 +96,20 @@ export function Enemies() {
       const isSprout = e.kind === 'sprout';
       const isSpark = e.kind === 'spark';
       const isMimic = e.kind === 'mimic';
+      const isMote = e.kind === 'mote';
+      const mo = mote.current[i];
+      if (mo) {
+        mo.visible = isMote;
+        if (isMote) {
+          mo.rotation.y = t * 3 + i;
+          mo.position.y = 0.15 + Math.sin(t * 4 + i) * 0.08;
+        }
+      }
       const mg = magmite.current[i];
       const sp = sprout.current[i];
       const sk = spark.current[i];
       const mm = mimic.current[i];
-      if (mg) mg.visible = !isSprout && !isSpark && !isMimic;
+      if (mg) mg.visible = !isSprout && !isSpark && !isMimic && !isMote;
       if (mm) mm.visible = isMimic;
       g.scale.setScalar(isMimic ? 1.2 : e.elite ? (isSpark ? 1.35 : 1.45) : 1);
       const cr = crown.current[i];
@@ -244,6 +257,20 @@ export function Enemies() {
               {[-1, 1].map((side) => (
                 <mesh key={side} position={[side * 0.065, 0.36, 0.15]} material={m.pupil}>
                   <sphereGeometry args={[0.03, 8, 6]} />
+                </mesh>
+              ))}
+            </group>
+            {/* Mota violeta (B5) */}
+            <group ref={(g) => void (mote.current[i] = g)} visible={false}>
+              <mesh position={[0, 0.3, 0]} material={m.moteCore}>
+                <icosahedronGeometry args={[0.14, 1]} />
+              </mesh>
+              <mesh position={[0, 0.3, 0]} material={m.moteHalo}>
+                <sphereGeometry args={[0.26, 14, 10]} />
+              </mesh>
+              {[0, 1, 2].map((k) => (
+                <mesh key={k} position={[Math.cos((k / 3) * Math.PI * 2) * 0.28, 0.3 + (k - 1) * 0.06, Math.sin((k / 3) * Math.PI * 2) * 0.28]} material={m.moteCore}>
+                  <sphereGeometry args={[0.04, 8, 6]} />
                 </mesh>
               ))}
             </group>

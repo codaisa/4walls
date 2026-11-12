@@ -8,7 +8,7 @@ import { isTouchDevice } from '../input/InputManager';
  * Contextual Adventure tips. Each one shows once per device, at the moment it matters (first bomb,
  * first Fagulha, first secret wall…), worded for the controls in hand. Never blocks the game.
  */
-type HintId = 'bomb' | 'escape' | 'powerup' | 'cage' | 'cracked' | 'key' | 'spark' | 'brazier' | 'vent' | 'map' | 'river' | 'fragile' | 'geyser' | 'lever' | 'seal' | 'root' | 'grass' | 'chasm' | 'boss' | 'totem' | 'plates' | 'core' | 'anchors' | 'elite' | 'mimic';
+type HintId = 'bomb' | 'escape' | 'powerup' | 'cage' | 'cracked' | 'key' | 'spark' | 'brazier' | 'vent' | 'map' | 'river' | 'fragile' | 'geyser' | 'lever' | 'seal' | 'root' | 'grass' | 'chasm' | 'boss' | 'totem' | 'plates' | 'core' | 'anchors' | 'elite' | 'mimic' | 'motes' | 'night' | 'mist' | 'medals';
 
 const KEY = '4walls.hints';
 const seenSet = (): Set<string> => {
@@ -69,6 +69,14 @@ function text(id: HintId, touch: boolean): { icon: string; body: string } {
       return { icon: '🕳️', body: 'Abismo! Cair é fatal. Dá para pular 1 casa por cima.' };
     case 'boss':
       return { icon: '☠️', body: 'O guardião do arco! Saia das casas marcadas no chão e acerte o corpo dele com explosões.' };
+    case 'motes':
+      return { icon: '🟣', body: 'Chefe corrompido: motas violetas caçam você. Uma explosão as desfaz, e ele ganha uma fase a mais.' };
+    case 'night':
+      return { icon: '🌙', body: 'Chefe da noite: só dá para vê-lo pela própria luz. Fique de olho nas casas marcadas no chão!' };
+    case 'mist':
+      return { icon: '☁️', body: 'Chefe da névoa: de tempos em tempos caem golpes da neblina. Saia das marcas vermelhas!' };
+    case 'medals':
+      return { icon: '🥇', body: 'Medalhas: vença sem ninguém cair, dentro do tempo e com todos de pé para ganhar o ouro (e mais prêmios).' };
     case 'elite':
       return { icon: '👑', body: 'Inimigo de elite (de coroa)! O Magmito grande aguenta 3 explosões e a Fagulha grande se divide em duas.' };
     case 'mimic':
@@ -144,6 +152,10 @@ export function TutorialHints({ controller }: { controller: MatchView }) {
         want('boss');
         if (s.boss.plates !== undefined) want('plates');
         if (s.boss.rooted) want('anchors');
+        if (s.boss.mod === 'corrupted') want('motes');
+        if (s.boss.mod === 'night') want('night');
+        if (s.boss.mod === 'mist') want('mist');
+        want('medals');
         if (s.boss.plates !== undefined && s.boss.action === 'stunned') want('core');
         if (s.players.some((p) => !p.alive && !p.left) && adv.props.some((p) => p.kind === 'totem' && p.state === 'idle')) want('totem');
       }

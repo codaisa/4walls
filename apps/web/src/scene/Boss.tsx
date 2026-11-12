@@ -1,10 +1,10 @@
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { BossId } from '@4walls/shared';
 import { Guardian } from './Guardian';
 import * as THREE from 'three';
 import { Cell, DIR_VEC, type Dir } from '@4walls/shared';
-import { getCell, slamCells, type BossState, type GameState } from '@4walls/core';
+import { getCell, slamCells, type BossState, type GameState, anchorCells } from '@4walls/core';
 import { clamp01, damp, lerp, useGame } from './context';
 import { NOISE_GLSL } from './vfxShaders';
 
@@ -524,7 +524,7 @@ function RootTethers() {
     const s = controller.state;
     const b = s.boss;
     const t = clock.elapsedTime;
-    const roots = b?.rooted && b.action !== 'dead' ? (s.adventure?.props ?? []).filter((p) => p.kind === 'root' && p.region === b.regionId && p.state === 'intact') : [];
+    const roots = b?.rooted && b.action !== 'dead' ? anchorCells(s, b) : [];
     for (let i = 0; i < 3; i++) {
       const v = vines.current[i];
       const bd = beads.current[i];
@@ -559,6 +559,96 @@ function RootTethers() {
 }
 
 /** Shows the model of whichever boss is in the arena (the Boss Rush swaps them). */
+/** Boss Rush Guardian: its own support roots (gnarled stumps pulsing with sap). */
+function RushRoots() {
+  const { controller, ox, oz } = useGame();
+  const items = useRef<THREE.Group[]>([]);
+  const res = useMemo(
+    () => ({
+      trunk: new THREE.CylinderGeometry(0.22, 0.42, 1.1, 7, 1),
+      knot: new THREE.DodecahedronGeometry(0.2, 0),
+      bark: new THREE.MeshStandardMaterial({ color: '#5a3d24', roughness: 0.9, flatShading: true }),
+      sap: new THREE.MeshStandardMaterial({ color: '#2a5a18', emissive: new THREE.Color(0.2, 0.9, 0.15), roughness: 0.6 }),
+    }),
+    [],
+  );
+  useFrame(({ clock }) => {
+    const b = controller.state.boss;
+    const t = clock.elapsedTime;
+    for (let i = 0; i < 3; i++) {
+      const g = items.current[i];
+      if (!g) continue;
+      const a = b?.anchors?.[i];
+      g.visible = !!a && a.hp > 0;
+      if (!a || !g.visible) continue;
+      g.position.set(a.x + ox, 0, a.y + oz);
+      // Cracks show as it takes hits: it leans and shrinks a little.
+      const k = a.hp / 3;
+      g.scale.set(0.85 + 0.15 * k, 0.7 + 0.3 * k, 0.85 + 0.15 * k);
+      g.rotation.z = (1 - k) * 0.18 * Math.sin(i * 2.1);
+    }
+    res.sap.emissiveIntensity = 0.8 + 0.4 * Math.sin(t * 3);
+  });
+  return (
+    <>
+      {[0, 1, 2].map((i) => (
+        <group key={i} ref={(g) => { if (g) items.current[i] = g; }} visible={false}>
+          <mesh position={[0, 0.55, 0]} geometry={res.trunk} material={res.bark} castShadow />
+          {[0, 1, 2, 3].map((k) => (
+            <mesh key={k} position={[Math.cos(k * 1.7) * 0.3, 0.2 + k * 0.22, Math.sin(k * 1.7) * 0.3]} geometry={res.knot} material={k % 2 ? res.sap : res.bark} />
+          ))}
+        </group>
+      ))}
+    </>
+  );
+}
+
+/**
+ * B5 variant looks: at night the body sinks into darkness (only what glows stays readable);
+ * corrupted, a violet aura pulses under it.
+ */
+function BossMood({ children }: { children: ReactNode }) {
+  const { controller, ox, oz } = useGame();
+  const group = useRef<THREE.Group>(null!);
+  const aura = useRef<THREE.Mesh>(null!);
+  const last = useRef(0);
+  useFrame(({ clock }) => {
+    const b = controller.state.boss;
+    const t = clock.elapsedTime;
+    const night = b?.mod === 'night';
+    // Re-tint now and then (plates and parts can come back).
+    if (t - last.current > 0.5) {
+      last.current = t;
+      group.current.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+          const sm = mat as THREE.MeshStandardMaterial;
+          if (!sm.color || !('emissive' in sm)) continue;
+          if (!sm.userData.dayColor) sm.userData.dayColor = sm.color.clone();
+          sm.color.copy(sm.userData.dayColor as THREE.Color).multiplyScalar(night ? 0.12 : 1);
+        }
+      });
+    }
+    const corrupted = b?.mod === 'corrupted' && b.action !== 'dead';
+    aura.current.visible = !!corrupted;
+    if (corrupted && b) {
+      aura.current.position.set(b.x + ox, 0.04, b.y + oz);
+      aura.current.scale.setScalar(1 + 0.08 * Math.sin(t * 5));
+      (aura.current.material as THREE.MeshBasicMaterial).opacity = 0.35 + 0.15 * Math.sin(t * 3);
+    }
+  });
+  return (
+    <>
+      <group ref={group}>{children}</group>
+      <mesh ref={aura} rotation-x={-Math.PI / 2} visible={false}>
+        <ringGeometry args={[1.4, 2.1, 40]} />
+        <meshBasicMaterial color="#a040ff" transparent opacity={0.4} toneMapped={false} depthWrite={false} />
+      </mesh>
+    </>
+  );
+}
+
 export function Boss() {
   const { controller } = useGame();
   const [kind, setKind] = useState<BossId | null>(controller.state.boss?.kind ?? null);
@@ -571,7 +661,7 @@ export function Boss() {
     }
   });
   const lava = controller.state.adventure ? <ChamberLava /> : null;
-  if (kind === 'guardian') return <><Guardian /><RootTethers />{lava}</>;
-  if (kind === 'golem') return <><Golem />{lava}</>;
+  if (kind === 'guardian') return <><BossMood><Guardian /></BossMood><RootTethers /><RushRoots />{lava}</>;
+  if (kind === 'golem') return <><BossMood><Golem /></BossMood>{lava}</>;
   return lava;
 }

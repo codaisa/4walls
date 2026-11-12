@@ -205,6 +205,10 @@ function Armor({ b }: { b: { plates?: number; core?: boolean } }) {
   );
 }
 
+/** B5: the arc variant's twist on the fight. */
+const MOD_ICON = { night: '🌙', mist: '☁️', corrupted: '🟣' } as const;
+const MOD_NAME = { night: 'Noite: só se vê pela própria luz', mist: 'Névoa: golpes vêm da neblina', corrupted: 'Corrompido: motas violetas e uma fase a mais' } as const;
+
 /** The Guardian's support roots still standing. */
 function Roots({ n }: { n: number }) {
   return (
@@ -229,6 +233,7 @@ function BossBar() {
               {b.name}
             </span>
             <span className="shrink-0 text-[10px] font-bold opacity-75">
+              {b.mod && !b.dead && <span className="mr-1">{MOD_ICON[b.mod]}</span>}
               {b.plates !== undefined && !b.dead && <Armor b={b} />}
               {b.roots !== undefined && !b.dead && <Roots n={b.roots} />}
               {b.dead ? 'Derrotado!' : b.core ? 'NÚCLEO!' : b.roots !== undefined ? 'ENRAIZADO' : b.enraged ? 'ENFURECIDO' : `${b.hp}/${b.maxHp}`}
@@ -249,6 +254,7 @@ function BossBar() {
             {b.name}
           </span>
           <span className="text-xs font-bold opacity-75">
+            {b.mod && !b.dead && <span className="mr-1" title={MOD_NAME[b.mod]}>{MOD_ICON[b.mod]}</span>}
             {b.plates !== undefined && !b.dead && <Armor b={b} />}
             {b.roots !== undefined && !b.dead && <Roots n={b.roots} />}
             {b.dead ? 'Derrotado!' : b.core ? 'NÚCLEO EXPOSTO!' : b.roots !== undefined ? 'ENRAIZADO · SE CURA' : b.enraged ? 'ENFURECIDO' : b.title} ·{' '}

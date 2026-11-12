@@ -780,6 +780,24 @@ export function Fx() {
                 life: rnd(0.4, 0.7), size: rnd(0.2, 0.35), grow: 1.6, color: '#5a5048', alpha: 0.45, drag: 1.4,
               });
             break;
+          case 'motesSummoned':
+            for (const c of e.cells) {
+              shocks.spawn({ x: c.x + ox, y: 0.05, z: c.y + oz, life: 0.6, size: 0.4, grow: 2, color: '#b04aff', alpha: 0.9 });
+              for (let i = 0; i < 10; i++)
+                sparks.spawn({
+                  x: c.x + ox, y: 0.2, z: c.y + oz,
+                  vx: rnd(-1.2, 1.2), vy: rnd(1.5, 3.5), vz: rnd(-1.2, 1.2),
+                  life: rnd(0.5, 0.9), size: rnd(0.05, 0.1), color: '#d58cff', intensity: 3.5, gravity: 2, drag: 1,
+                });
+            }
+            break;
+          case 'mistStrike':
+            for (let i = 0; i < 14; i++)
+              smoke.spawn({
+                x: e.x + ox + rnd(-2, 2), y: rnd(1.5, 2.5), z: e.y + oz + rnd(-2, 2), vy: rnd(-0.2, 0.2),
+                life: rnd(1, 1.6), size: rnd(0.8, 1.2), grow: 1.6, color: '#c8d0dc', alpha: 0.35, drag: 1.2,
+              });
+            break;
           case 'mimicDefeated':
             shocks.spawn({ x: e.x + ox, y: 0.05, z: e.y + oz, life: 0.8, size: 1, grow: 3, color: '#ffd23f', alpha: 0.95 });
             for (let i = 0; i < 40; i++)

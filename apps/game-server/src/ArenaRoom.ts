@@ -76,8 +76,9 @@ export class ArenaRoom extends Room {
   /** Account behind each slot (only the logged-in profile player of a connection has one). */
   private slotAccount = new Map<number, string>();
   /** Per-player tallies of the running match (counted from game events). */
-  private tally = new Map<string, { kills: number; enemies: number; powerups: number }>();
+  private tally = new Map<string, { kills: number; enemies: number; powerups: number; mimics: number; elites: number }>();
   private bossesDown: BossId[] = [];
+  private bossFights: { boss: BossId; level: number; tier: number }[] = [];
 
   onCreate(options: CreateOptions = {}) {
     this.roomId = generateRoomCode((n) => new Uint8Array(randomBytes(n)));
@@ -310,8 +311,9 @@ export class ArenaRoom extends Room {
       ...(OWN_WORLD.includes(this.mode) ? { events: false } : {}),
       players: this.slots.map((s) => ({ id: `p${s.slot + 1}`, slot: s.slot, name: s.name, colorIndex: s.colorIndex, characterId: s.characterId, ...(s.loadout ? { loadout: s.loadout } : {}) })),
     });
-    this.tally = new Map(this.game.players.map((p) => [p.id, { kills: 0, enemies: 0, powerups: 0 }]));
+    this.tally = new Map(this.game.players.map((p) => [p.id, { kills: 0, enemies: 0, powerups: 0, mimics: 0, elites: 0 }]));
     this.bossesDown = [];
+    this.bossFights = [];
     this.queues.clear();
     this.held.clear();
     this.acks = {};
@@ -391,16 +393,24 @@ export class ArenaRoom extends Room {
   private count(events: GameEvent[]) {
     for (const e of events) {
       if (e.type === 'playerDied' && e.byId && e.byId !== e.playerId) this.tallyOf(e.byId).kills++;
-      else if (e.type === 'enemyDied') this.tallyOf(e.byId).enemies++;
+      else if (e.type === 'enemyDied') {
+        const t = this.tallyOf(e.byId);
+        t.enemies++;
+        if (e.kind === 'mimic') t.mimics++;
+        if (e.elite) t.elites++;
+      }
       else if (e.type === 'powerupCollected') this.tallyOf(e.playerId).powerups++;
-      else if (e.type === 'bossDefeated') this.bossesDown.push(e.boss);
+      else if (e.type === 'bossDefeated') {
+        this.bossesDown.push(e.boss);
+        if (e.tier) this.bossFights.push({ boss: e.boss, level: e.level ?? 0, tier: e.tier });
+      }
       else if (e.type === 'heroJoined') this.unlockHero(e.playerId, e.characterId);
     }
   }
 
   private tallyOf(id: string) {
     let t = this.tally.get(id);
-    if (!t) this.tally.set(id, (t = { kills: 0, enemies: 0, powerups: 0 }));
+    if (!t) this.tally.set(id, (t = { kills: 0, enemies: 0, powerups: 0, mimics: 0, elites: 0 }));
     return t;
   }
 
@@ -435,6 +445,9 @@ export class ArenaRoom extends Room {
           seconds,
           depth: g.adventure?.depth ?? 0,
           atlas: [...new Set((g.adventure?.journey ?? []).map((j) => `${j.biome}:${j.variant}`))],
+          bossFights: [...this.bossFights],
+          mimics: t.mimics,
+          elites: t.elites,
         },
         s.slot,
       );

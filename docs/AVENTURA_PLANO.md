@@ -6,7 +6,7 @@ antes da próxima:
 | # | Tarefa | Depende de | Status |
 |---|---|---|---|
 | 1 | **Mapa**: regiões viram fases, objetivos, mecânicas de ambiente, segredos, navegação, arcos | — | **Concluída** (M1–M5) |
-| 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | Em andamento: B1 a B4 concluídos (seção 5) |
+| 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | **Concluída** (B1–B5, seção 5) |
 | 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Esboço (seção 6) |
 
 Ponto de partida (como está hoje):
@@ -389,6 +389,22 @@ O `boss.ts` de hoje é uma máquina de estados (andar → preparar → atacar �
   - **Vida:** 4 explosões. Vencido, deixa um **baú duplo** dourado onde caiu, que só abre com a mão e dá 3 itens (um raro garantido). Não conta para a meta de "exploda todos".
 - **Dicas e avisos:** dicas novas para elites e para o Mímico; faixas "É UM BAÚ MIMÉTICO!" e "MÍMICO VENCIDO! BAÚ DUPLO!".
 - **Fica para depois:** o modelo do Mímico é feito de peças simples (sem GLB), como os outros inimigos.
+
+
+**Como ficou o B5 (infinito, variantes e medalhas — fecha a Tarefa 2):**
+- **Boss Rush com os chefes novos:** o Golem com placas, núcleo, lava e pulo; o Guardião com 3 raízes próprias (cotocos com seiva, 3 explosões cada) e a fase móvel. Os clássicos continuam no código só para testes (`classicBosses`).
+- **Volta mais forte a cada vez (infinito):** além de vida (+30% por volta) e velocidade (+6%), cada volta encurta a pausa entre ataques (−6%, até 65%), soma meteoros (+1 por volta, até +4), e a partir da 3ª vez o Golem já pula desde a fase 2.
+- **Modificador da variante do arco** (ícone na barra do chefe e dica na 1ª vez):
+  - 🌙 **Noite:** o corpo afunda no escuro; só o que brilha (rachaduras, olhos, núcleo) e as marcas no chão mostram onde ele está.
+  - ☁️ **Névoa:** a cada 4–7 s caem golpes da neblina (meteoros marcados em cima dos jogadores).
+  - 🟣 **Corrompido:** aura violeta, uma fase a mais aos 15% e **motas violetas** que nascem longe dos jogadores e os perseguem (uma explosão desfaz; somem quando ele cai).
+- **Medalhas:** três desafios por luta — ninguém cair, dentro do tempo (95 s Golem / 105 s Guardião, +20 s por volta) e todos de pé no fim. Bronze por vencer, prata com 2, ouro com os 3. A faixa mostra a medalha e o que faltou.
+  - No jogo: 1 power-up, +1 raro por medalha acima do bronze.
+  - Na conta: XP por medalha (50 / 110 / 200), bestiário e conquistas.
+- **Bestiário no Perfil:** Golem e Guardião (vitórias, nível mais forte vencido e melhor medalha), Baús Miméticos e elites vencidos.
+- **Conquistas novas:** Forjado na Lava (ouro no Golem), Coração da Floresta (ouro no Guardião), Domador de Mímicos (5), Caça-Coroas (20 elites) e Implacável (vencer um chefe que já voltou duas vezes). Cada uma dá um título novo.
+- **Golpe final:** a imagem congela por um instante (só o desenho para; a simulação segue).
+- **Fica para depois:** os "pilares que caem" da Ponte de Obsidiana e um cosmético visual (chapéu) exclusivo por chefe; por enquanto o ouro dá títulos.
 
 
 Pontos de atenção:
