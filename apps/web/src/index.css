@@ -25,8 +25,15 @@ body {
   user-select: none;
   touch-action: manipulation;
 }
+/*
+ * The app is pinned to the visible screen. `height: 100dvh` comes out short on iOS Safari when
+ * the page is opened already in landscape (a dark strip at the bottom); a fixed, inset-0 box
+ * always matches what the browser really shows.
+ */
 #root {
-  height: 100dvh;
+  position: fixed;
+  inset: 0;
+  height: auto;
 }
 input,
 textarea {

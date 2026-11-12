@@ -38,6 +38,10 @@ export function enterFullscreen() {
 }
 
 export function startPwa() {
+  // iOS Safari can leave the page scrolled after a rotation, showing a strip of background.
+  const settle = () => window.setTimeout(() => window.scrollTo(0, 0), 250);
+  window.addEventListener('orientationchange', settle);
+  window.visualViewport?.addEventListener('resize', settle);
   if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     window.addEventListener('load', () => void navigator.serviceWorker.register('/sw.js').catch(() => {}));
   }

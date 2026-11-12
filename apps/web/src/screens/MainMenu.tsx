@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { CHARACTERS, SLOT_COLORS } from '@4walls/shared';
-import { isTouchDevice } from '../input/InputManager';
 import { sfx } from '../audio/Sfx';
 import { online, useOnline } from '../online/session';
 import { ProfilePreview } from '../scene/ProfilePreview';
@@ -44,12 +43,26 @@ export function MainMenu() {
   const ch = CHARACTERS[profile.characterId];
   const color = SLOT_COLORS[profile.colorIndex];
 
+  const iconBtn = 'menu-btn !min-w-0 !flex-row items-center gap-1.5 !px-3 !py-1.5 !text-base [@media(max-height:500px)]:!px-2.5 [@media(max-height:500px)]:!py-1 [@media(max-height:500px)]:!text-lg';
+  const LINKS = [
+    { path: '/loja', icon: '🛒', label: 'Loja' },
+    { path: '/ranking', icon: '🏆', label: 'Ranking' },
+    { path: '/perfil', icon: '📊', label: 'Perfil' },
+    { path: '/config', icon: '⚙️', label: 'Configurações' },
+  ];
+
   return (
     <div ref={root} className="menu-bg relative flex h-full w-full flex-col items-center overflow-y-auto screen-safe font-body text-white">
       <div className="menu-embers" aria-hidden />
-      <button data-nav className="menu-btn corner-tr !min-w-0 !px-3 !py-1.5 !text-xl [@media(max-height:500px)]:!py-1" onClick={() => go('/config')} aria-label="Configurações" title="Configurações">
-        ⚙️
-      </button>
+      {/* Secondary pages live in the corner; the middle is just you and "play". */}
+      <nav className="corner-tr flex gap-2 [@media(max-height:500px)]:gap-1.5" aria-label="Menu">
+        {LINKS.map((l) => (
+          <button key={l.path} data-nav className={iconBtn} onClick={() => go(l.path)} aria-label={l.label} title={l.label}>
+            <span aria-hidden>{l.icon}</span>
+            {l.path !== '/config' && <span className="hidden lg:inline">{l.label}</span>}
+          </button>
+        ))}
+      </nav>
       {install && (
         <button
           data-nav
@@ -57,7 +70,7 @@ export function MainMenu() {
           onClick={() => (sfx.ui(), install === 'prompt' ? void promptInstall() : setIosTip((v) => !v))}
           data-testid="install-app"
         >
-          📲 Instalar app
+          📲 Instalar
         </button>
       )}
       {iosTip && (
@@ -65,17 +78,17 @@ export function MainMenu() {
           No Safari, toque em <b>Compartilhar</b> (□↑) e depois em <b>Adicionar à Tela de Início</b>. O 4Walls abre em tela cheia, sem a barra do navegador.
         </div>
       )}
-      <div className="relative z-10 my-auto flex w-full max-w-4xl flex-col items-center">
+      <div className="relative z-10 my-auto flex w-full max-w-4xl flex-col items-center pt-10 [@media(max-height:500px)]:pt-0">
         <Logo />
         <p className="mt-1 text-center text-base text-amber-100/80 [@media(max-height:500px)]:hidden">Quatro paredes. Muitas bombas. Um sobrevivente.</p>
 
-        <div className="mt-4 grid w-full items-center gap-6 md:grid-cols-[1fr_1fr] [@media(max-height:500px)]:mt-1 [@media(max-height:500px)]:grid-cols-[1fr_1fr] [@media(max-height:500px)]:gap-3">
+        <div className="mt-8 grid w-full items-center gap-10 md:grid-cols-[1fr_1fr] [@media(max-height:500px)]:mt-4 [@media(max-height:500px)]:grid-cols-[1fr_1fr] [@media(max-height:500px)]:gap-8">
           {/* The player's character, with editing right below it. */}
           <section className="flex flex-col items-center" data-testid="profile">
-            <div className="h-64 w-full max-w-xs [@media(max-height:500px)]:h-40">
+            <div className="h-60 w-full max-w-xs [@media(max-height:500px)]:h-32">
               <ProfilePreview characterId={profile.characterId} colorIndex={profile.colorIndex} hat={account?.loadout.hat} />
             </div>
-            <div className="font-display text-3xl leading-none" style={{ color: color.primary }} data-testid="profile-name">
+            <div className="font-display text-3xl leading-none [@media(max-height:500px)]:text-2xl" style={{ color: color.primary }} data-testid="profile-name">
               {profile.name}
             </div>
             <TitleTag id={account?.loadout.title} />
@@ -83,7 +96,7 @@ export function MainMenu() {
               {ch.name} · {ch.abilityName}
             </div>
             {account ? (
-              <div className="mt-1 flex w-full max-w-xs items-center gap-2" data-testid="progress">
+              <div className="mt-2 flex w-full max-w-xs items-center gap-2 [@media(max-height:500px)]:mt-1" data-testid="progress">
                 <LevelBadge xp={account.xp} />
                 <XpBar xp={account.xp} className="flex-1" />
                 <Coins value={account.coins} className="text-lg" />
@@ -91,24 +104,13 @@ export function MainMenu() {
             ) : (
               <div className="mt-1 text-[11px] text-amber-100/50">{accountStatus === 'offline' ? 'Sem servidor: o progresso não está sendo salvo.' : 'Carregando conta…'}</div>
             )}
-            <div className="mt-2 grid w-full max-w-md grid-cols-4 gap-1.5 [@media(max-height:500px)]:mt-1">
-              <button data-nav className="menu-btn !min-w-0 !flex-row gap-1 whitespace-nowrap !px-1 !py-2 !text-base [@media(max-height:500px)]:!py-1 [@media(max-height:500px)]:!text-sm" onClick={() => go('/atelie')}>
-                ✏️ Editar
-              </button>
-              <button data-nav className="menu-btn !min-w-0 !flex-row gap-1 whitespace-nowrap !px-1 !py-2 !text-base [@media(max-height:500px)]:!py-1 [@media(max-height:500px)]:!text-sm" onClick={() => go('/loja')}>
-                🛒 Loja
-              </button>
-              <button data-nav className="menu-btn !min-w-0 !flex-row gap-1 whitespace-nowrap !px-1 !py-2 !text-base [@media(max-height:500px)]:!py-1 [@media(max-height:500px)]:!text-sm" onClick={() => go('/ranking')}>
-                🏆 Ranking
-              </button>
-              <button data-nav className="menu-btn !min-w-0 !flex-row gap-1 whitespace-nowrap !px-1 !py-2 !text-base [@media(max-height:500px)]:!py-1 [@media(max-height:500px)]:!text-sm" onClick={() => go('/perfil')}>
-                📊 Perfil
-              </button>
-            </div>
+            <button data-nav className="menu-btn mt-3 !min-w-0 !flex-row gap-1.5 !px-5 !py-1.5 !text-base [@media(max-height:500px)]:mt-2 [@media(max-height:500px)]:!py-1 [@media(max-height:500px)]:!text-sm" onClick={() => go('/atelie')}>
+              ✏️ Editar personagem
+            </button>
           </section>
 
           {/* One way to play: an online room; locals join it with their own devices. */}
-          <section className="flex flex-col gap-3 [@media(max-height:500px)]:gap-2">
+          <section className="flex flex-col gap-4 [@media(max-height:500px)]:gap-2.5">
             <button data-nav data-nav-default className="menu-btn menu-btn-primary" disabled={busy !== null} onClick={() => void play('create')}>
               {busy === 'create' ? 'Criando sala…' : 'Jogar'}
               <span className="menu-btn-sub">Cria sua sala · escolha o modo · amigos entram pelo código</span>
@@ -129,24 +131,6 @@ export function MainMenu() {
                 </button>
               </div>
             )}
-            <div className="flex gap-2">
-              {isTouchDevice() && (
-                <button
-                  data-nav
-                  className="menu-btn flex-1 !min-w-0 !py-2 !text-lg"
-                  onClick={() => {
-                    // Full screen + landscape lock (Android); iOS ignores both gracefully.
-                    const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
-                    const req = el.requestFullscreen?.bind(el) ?? el.webkitRequestFullscreen?.bind(el);
-                    Promise.resolve(req?.())
-                      .then(() => (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> })?.lock?.('landscape'))
-                      .catch(() => {});
-                  }}
-                >
-                  ⛶ Tela cheia
-                </button>
-              )}
-            </div>
           </section>
         </div>
       </div>
