@@ -28,10 +28,11 @@ export function OnlineHub() {
   }, [invite]);
 
   return (
-    // Phones: content sits at the top so the on-screen keyboard never covers the code boxes.
-    <div className="menu-bg relative flex h-full w-full flex-col items-center justify-center overflow-y-auto screen-safe font-body text-white [@media(max-height:500px)]:justify-start">
+    // Centered with my-auto (not justify-center): if the on-screen keyboard shrinks the screen,
+    // the content scrolls instead of being pushed off the top.
+    <div className="menu-bg relative flex h-full w-full flex-col items-center overflow-y-auto screen-safe font-body text-white">
       <div className="menu-embers" aria-hidden />
-      <div className="relative z-10 flex w-full max-w-md flex-col items-center gap-3 [@media(max-height:500px)]:gap-1.5">
+      <div className="relative z-10 my-auto flex w-full max-w-md flex-col items-center gap-3 [@media(max-height:500px)]:gap-2">
         <h1 className="logo font-display text-5xl sm:text-6xl [@media(max-height:500px)]:text-3xl">Entrar numa sala</h1>
         <p className="text-center text-sm text-amber-100/70 [@media(max-height:500px)]:hidden">Peça o código de 6 letras para quem criou a sala (ou abra o link do convite).</p>
         {isValidCode(invite) && busy ? (
