@@ -113,3 +113,12 @@ describe('cosmetics catalog', () => {
     expect(currentSeason(Date.parse('2027-03-01')).id).toBe('s2-congelante');
   });
 });
+
+describe('adventure atlas', () => {
+  it('keeps every landscape ever seen, once, and old saves without an atlas still work', () => {
+    let s = applyMatchToStats({ ...EMPTY_STATS, atlas: undefined as unknown as string[] }, perf({ mode: 'adventure', outcome: 'draw', depth: 6, atlas: ['volcanic:normal', 'transition:normal'] }));
+    s = applyMatchToStats(s, perf({ mode: 'adventure', outcome: 'draw', depth: 12, atlas: ['volcanic:normal', 'forest:night'] }));
+    expect(s.atlas).toEqual(['forest:night', 'transition:normal', 'volcanic:normal']);
+    expect(s.bestDepth).toBe(12);
+  });
+});

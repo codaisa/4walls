@@ -434,6 +434,7 @@ export class ArenaRoom extends Room {
           bossRushClear: g.mode === 'bossrush' && result.outcome === 'victory',
           seconds,
           depth: g.adventure?.depth ?? 0,
+          atlas: [...new Set((g.adventure?.journey ?? []).map((j) => `${j.biome}:${j.variant}`))],
         },
         s.slot,
       );

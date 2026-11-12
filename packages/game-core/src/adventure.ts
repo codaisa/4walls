@@ -1,7 +1,7 @@
 import { ADVENTURE, Cell, CHARACTER_IDS, CHARACTERS, DIR_VEC, DIRS, POWERUPS, RULES, secToTicks, type BiomeId, type CharacterId, type PowerupType } from '@4walls/shared';
 import { cellIndex, createGrid, getCell, inBounds, setCell } from './grid';
 import { nextRandom, pickWeighted, randInt } from './rng';
-import type { AdventureState, CageState, EnemyState, GameState, GateState, Grid, PlayerState, PropState, RegionDir, RegionObjectiveKind, RegionState } from './types';
+import type { AdventureState, CageState, EnemyState, GameState, GateState, Grid, PlayerState, PropState, RegionDir, RegionObjectiveKind, RegionState, RegionVariant } from './types';
 import { bombAt, flamesAt, isPit, mineAt, newId, powerupAt } from './world';
 
 /**
@@ -51,15 +51,15 @@ const SCRIPTED: { name: string; chapter: string; biome: BiomeId; objective: Regi
 const NAME_PARTS: Record<BiomeId, { head: string[]; tail: string[] }> = {
   volcanic: {
     head: ['Vale', 'Cratera', 'Encosta', 'Planície', 'Fornalha', 'Garganta', 'Campos', 'Caldeirão', 'Escarpa', 'Bacia'],
-    tail: ['das Brasas', 'de Cinza', 'do Enxofre', 'das Faíscas', 'de Basalto', 'da Lava Fria', 'do Fole', 'Rubra', 'Fumegante', 'do Carvão'],
+    tail: ['das Brasas', 'de Cinza', 'do Enxofre', 'das Faíscas', 'de Basalto', 'da Lava Fria', 'do Fole', 'dos Rubis', 'das Fumaças', 'do Carvão'],
   },
   transition: {
     head: ['Ponte', 'Passagem', 'Fenda', 'Limiar', 'Desfiladeiro', 'Travessia', 'Garganta'],
-    tail: ['de Obsidiana', 'do Vapor', 'das Raízes', 'Partida', 'Cinzenta', 'dos Ecos', 'Velada'],
+    tail: ['de Obsidiana', 'do Vapor', 'das Raízes', 'da Ruptura', 'das Cinzas', 'dos Ecos', 'dos Véus'],
   },
   forest: {
     head: ['Bosque', 'Clareira', 'Mata', 'Trilha', 'Vereda', 'Grota', 'Brenha', 'Capoeira'],
-    tail: ['Sussurrante', 'dos Ipês', 'das Sombras', 'Chamuscada', 'do Cipó', 'das Corujas', 'Encantada', 'dos Vagalumes'],
+    tail: ['Sussurrante', 'dos Ipês', 'das Sombras', 'do Fogo Antigo', 'do Cipó', 'das Corujas', 'dos Encantos', 'dos Vagalumes'],
   },
 };
 const CHAPTERS: Record<RegionObjectiveKind, string[]> = {
@@ -69,24 +69,81 @@ const CHAPTERS: Record<RegionObjectiveKind, string[]> = {
   seals: ['O guardião', 'Os selos', 'A passagem selada', 'O abismo'],
   purify: ['A corrupção', 'Raízes podres', 'O bosque doente', 'A cura'],
 };
-/** Biome rhythm of every arc (5 regions for now; varied arcs come with the next milestones). */
-const ARC_BIOMES: BiomeId[] = ['volcanic', 'volcanic', 'volcanic', 'transition', 'forest'];
+// ───────────────────────────── arcs ─────────────────────────────
+
+/**
+ * The journey is a chain of arcs. Each arc has a dominant biome (volcanic and forest take turns)
+ * and 4–6 regions; its last region is a transition (obsidian, mist) toward the next biome, where
+ * the arc's guardian will wait. Every full lap of the biome cycle (two arcs) comes back with a new
+ * mood — night, mist or corruption — so region 40 never looks like region 4.
+ */
+export interface ArcInfo {
+  index: number;
+  /** First region of the arc and its number of regions. */
+  start: number;
+  length: number;
+  biome: Exclude<BiomeId, 'transition'>;
+  variant: RegionVariant;
+  name: string;
+}
+const ARC_DOMINANT: ArcInfo['biome'][] = ['volcanic', 'forest'];
+const VARIANTS: RegionVariant[] = ['night', 'mist', 'corrupted'];
+const ARC_NAMES: Record<ArcInfo['biome'], string[]> = {
+  volcanic: ['Terras de Brasa', 'As Fornalhas', 'O Coração de Magma', 'Os Campos Rubros', 'A Forja Antiga'],
+  forest: ['A Mata Antiga', 'O Bosque Profundo', 'A Floresta dos Ecos', 'A Selva Sussurrante', 'A Mata dos Ipês'],
+};
+const VARIANT_SUFFIX: Record<RegionVariant, string> = { normal: '', night: 'à Noite', mist: 'na Névoa', corrupted: 'sob a Corrupção' };
+/** Arc start indices per seed (grown on demand; deterministic). */
+const arcStarts = new Map<number, number[]>();
+
+export function arcInfo(seed: number, index: number): ArcInfo {
+  const starts = arcStarts.get(seed) ?? [0];
+  arcStarts.set(seed, starts);
+  // The first arc is the scripted introduction: 3 volcanic regions and the Obsidian Bridge.
+  const lengthOf = (k: number) => (k === 0 ? 4 : 4 + randInt(subRng(seed, k, 11), 3));
+  while (starts.length <= index + 1) starts.push(starts[starts.length - 1] + lengthOf(starts.length - 1));
+  const biome = ARC_DOMINANT[index % 2];
+  const lap = Math.floor(index / 2);
+  // Lap 0 is the plain world; then the moods rotate so two arcs in a row never share one and
+  // every biome meets every mood within three laps.
+  const variant: RegionVariant = lap === 0 ? 'normal' : VARIANTS[(index - 2 + randInt(subRng(seed, 0, 13), 3)) % 3];
+  const names = ARC_NAMES[biome];
+  const base = names[(lap + randInt(subRng(seed, index, 14), names.length)) % names.length];
+  return { index, start: starts[index], length: starts[index + 1] - starts[index], biome, variant, name: variant === 'normal' ? base : `${base} ${VARIANT_SUFFIX[variant]}` };
+}
+
+/** The arc region `id` belongs to and its position inside it. */
+export function arcOfRegion(seed: number, id: number) {
+  let k = 0;
+  // Arcs are 4–6 long: start from a guess just under the answer and walk forward.
+  for (k = Math.max(0, Math.floor(id / 6) - 1); ; k++) {
+    const a = arcInfo(seed, k);
+    if (id < a.start) {
+      k = Math.max(0, k - 2);
+      continue;
+    }
+    if (id < a.start + a.length) return { arc: a, pos: id - a.start, last: id === a.start + a.length - 1 };
+  }
+}
 
 /** Name, chapter, biome and objective of region `id`: cheap, needs no world generation. */
 export function regionInfo(seed: number, id: number) {
-  if (id < SCRIPTED.length) return SCRIPTED[id];
+  const { arc, last, pos } = arcOfRegion(seed, id);
+  const variant = arc.variant;
+  if (id < SCRIPTED.length) return { ...SCRIPTED[id], variant, arc: arc.index, arcEnd: last, arcPos: pos };
   const r = subRng(seed, id, 3);
-  const biome = ARC_BIOMES[id % ARC_BIOMES.length];
+  const biome: BiomeId = last ? 'transition' : arc.biome;
   // A lava river cuts some regions in two (never in the forest): cross it and pull the lever.
   const roll = nextRandom(r);
-  const special = nextRandom(r) < 0.4;
+  // Corrupted laps lean on the roots; the arc's last region is usually sealed.
+  const special = nextRandom(r) < (last ? 0.6 : variant === 'corrupted' ? 0.6 : 0.4);
   // Transition regions may be an obsidian causeway with seals; forests may be corrupted.
   const objective: RegionObjectiveKind =
     biome === 'transition' && special ? 'seals' : biome === 'forest' && special ? 'purify' : biome !== 'forest' && roll < 0.22 ? 'lever' : roll < 0.55 ? 'key' : 'clear';
   const parts = NAME_PARTS[biome];
   const name = `${parts.head[randInt(r, parts.head.length)]} ${parts.tail[randInt(r, parts.tail.length)]}`;
   const chapter = CHAPTERS[objective][randInt(r, CHAPTERS[objective].length)];
-  return { name, chapter, biome, objective };
+  return { name, chapter, biome, objective, variant, arc: arc.index, arcEnd: last, arcPos: pos };
 }
 
 /**
@@ -105,9 +162,29 @@ export function difficulty(depth: number) {
   };
 }
 
+/**
+ * Difficulty of one region: the depth curve plus the arc's rhythm. The first region of an arc is
+ * a breather (one Magmito fewer), the arc's last one is tense (one more), and a corrupted lap adds
+ * one more on top.
+ */
+export function regionDifficulty(seed: number, id: number) {
+  const d = difficulty(id);
+  if (id < SCRIPTED.length) return d;
+  const info = regionInfo(seed, id);
+  const delta = (info.arcPos === 0 ? -1 : 0) + (info.arcEnd ? 1 : 0) + (info.variant === 'corrupted' ? 1 : 0);
+  return { ...d, enemies: Math.max(2, Math.min(ADVENTURE.enemiesCap, d.enemies + delta)) };
+}
+
+export type RegionShape = 'island' | 'plaza' | 'river' | 'causeway' | 'ring' | 'twin' | 'longbridge';
+
 /** Map mechanics of a region: shape, Fagulhas, ash vents, the braziers side mission. */
 export interface RegionMods {
-  shape: 'island' | 'plaza' | 'river' | 'causeway';
+  /**
+   * island: the noisy ellipse; plaza: flower beds around a crossroads; river: lava band + lever;
+   * causeway: walkway over a chasm; ring: a pit in the middle, the fight goes around it; twin: two
+   * islands joined by one narrow bridge; longbridge: two banks over a wide pit, two long bridges.
+   */
+  shape: RegionShape;
   sparks: number;
   vents: number;
   braziers: boolean;
@@ -116,7 +193,7 @@ export interface RegionMods {
 }
 
 export function regionMods(seed: number, id: number): RegionMods {
-  const enemies = difficulty(id).enemies;
+  const enemies = regionDifficulty(seed, id).enemies;
   const scripted: (Omit<RegionMods, 'grass'> | undefined)[] = [
     { shape: 'island', sparks: 0, vents: 0, braziers: false }, // O despertar: just the basics
     { shape: 'plaza', sparks: 2, vents: 2, braziers: true }, // A infestação: everything new at once
@@ -132,12 +209,16 @@ export function regionMods(seed: number, id: number): RegionMods {
   const r = subRng(seed, id, 5);
   const biome = regionInfo(seed, id).biome;
   const shapeRoll = nextRandom(r);
+  // New shapes join gradually; the long bridges only once players know about pits.
+  const shape: RegionShape =
+    shapeFor ??
+    (shapeRoll < 0.24 ? 'plaza' : shapeRoll < 0.4 ? 'ring' : shapeRoll < 0.56 ? 'twin' : shapeRoll < 0.68 && id >= 8 ? 'longbridge' : 'island');
   return {
-    shape: shapeFor ?? (shapeRoll < 0.35 ? 'plaza' : 'island'),
+    shape,
     // Fagulhas take a growing share of the Magmitos as the journey goes on.
     sparks: Math.min(enemies - 1, Math.floor(enemies * Math.min(0.5, 0.15 + 0.03 * (id - 5)))),
     vents: biome === 'forest' ? 0 : nextRandom(r) < 0.55 ? 1 + randInt(r, 2) : 0,
-    braziers: !shapeFor && info.objective !== 'purify' && nextRandom(r) < 0.4,
+    braziers: !shapeFor && shape !== 'longbridge' && info.objective !== 'purify' && nextRandom(r) < 0.4,
     grass,
   };
 }
@@ -195,7 +276,7 @@ interface Blueprint {
 /** Builds region `id` deterministically from the seed (chain must reach id + 1). */
 function regionBlueprint(seed: number, adv: AdventureState, id: number): Blueprint {
   const info = regionInfo(seed, id);
-  const diff = difficulty(id);
+  const diff = regionDifficulty(seed, id);
   const r = subRng(seed, id, 2);
   const { cx, cy } = chunkOf(adv, id);
   const ox = cx * CW;
@@ -350,6 +431,41 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
         set(x, y, Cell.Chasm);
       }
     for (const q of pockets) corridor.add(at(q.x, q.y));
+  }
+
+  // 2d. Extra shapes, cut with the biome's pit: lava in volcanic lands, a chasm elsewhere.
+  const pitCell = info.biome === 'volcanic' ? Cell.Lava : Cell.Chasm;
+  const pit = (x: number, y: number) => {
+    if (!island[at(x, y)]) return;
+    set(x, y, pitCell);
+    corridor.delete(at(x, y));
+  };
+  const bridge = (x: number, y: number) => {
+    set(x, y, Cell.Floor);
+    corridor.add(at(x, y));
+  };
+  if (mods.shape === 'ring') {
+    // A pit in the middle: the corridors stop at its rim and the fight circles around it.
+    for (let y = oy; y < oy + CH; y++)
+      for (let x = ox; x < ox + CW; x++) {
+        const dx = (x - (ox + 7)) / 2.3;
+        const dy = (y - (oy + 7)) / 1.6;
+        if (dx * dx + dy * dy <= 1) pit(x, y);
+      }
+  } else if (mods.shape === 'twin') {
+    // Two islands: a two-cell gap (too wide to jump) crossed by the middle row only.
+    for (let y = oy; y < oy + CH; y++) for (const x of [ox + 9, ox + 10]) if (y !== oy + 7) pit(x, y);
+    for (const x of [ox + 9, ox + 10]) bridge(x, oy + 7);
+  } else if (mods.shape === 'longbridge') {
+    // Two banks over a six-cell pit: the middle row and one more row are long, narrow bridges.
+    const band = [5, 6, 7, 8, 9, 10].map((k) => ox + k);
+    const rows = [oy + 3, oy + 11, oy + 5, oy + 9].filter((y) => island[at(ox + 4, y)] && island[at(ox + 11, y)]);
+    const second = rows.length ? rows[randInt(r, Math.min(2, rows.length))] : null;
+    for (let y = oy; y < oy + CH; y++) for (const x of band) if (!corridor.has(at(x, y))) pit(x, y);
+    for (const x of band) {
+      bridge(x, oy + 7);
+      if (second !== null) bridge(x, second);
+    }
   }
 
   // 3. The first region has a safe spawn pocket in the middle.
@@ -631,6 +747,9 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
     name: info.name,
     chapter: info.chapter,
     biome: info.biome,
+    arc: info.arc,
+    variant: info.variant,
+    arcEnd: info.arcEnd,
     cx,
     cy,
     objective: {
@@ -794,7 +913,7 @@ export function createAdventure(seed: number): { grid: Grid; adventure: Adventur
   const bp = attachRegion(s, 0, false)!;
   attachRegion(s, 1, false);
   const first = regionInfo(seed, 0);
-  adventure.journey.push({ id: 0, name: first.name, biome: first.biome });
+  adventure.journey.push({ id: 0, name: first.name, biome: first.biome, variant: first.variant, arc: first.arc });
   return { grid: s.grid, adventure, spawns: bp.spawns };
 }
 
@@ -840,7 +959,7 @@ function updateObjectives(s: GameState) {
     if (progress < o.goal) continue;
     o.done = true;
     r.cleared = true;
-    s.events.push({ type: 'regionCleared', region: r.id });
+    s.events.push({ type: 'regionCleared', region: r.id, arcEnd: r.arcEnd });
     if (!adv.regions.some((x) => x.id === r.id + 1)) attachRegion(s, r.id + 1);
     const g = adv.gates.find((x) => x.kind !== 'back' && x.from === r.id);
     if (g && !g.open) {
@@ -864,7 +983,7 @@ function updateProgress(s: GameState) {
     if (rid <= adv.depth) continue;
     adv.depth = rid;
     const info = regionInfo(s.config.seed, rid);
-    adv.journey.push({ id: rid, name: info.name, biome: info.biome });
+    adv.journey.push({ id: rid, name: info.name, biome: info.biome, variant: info.variant, arc: info.arc });
     s.events.push({ type: 'regionEntered', region: rid });
     attachRegion(s, rid + 1); // the next island shows up behind the new (closed) gate
     adv.closing = { region: rid, atTick: s.tick + secToTicks(GATE_CLOSE_SEC) };

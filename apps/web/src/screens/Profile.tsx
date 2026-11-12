@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { ACHIEVEMENTS, SLOT_COLORS, currentSeason, type ModeId } from '@4walls/shared';
 import { sfx } from '../audio/Sfx';
@@ -85,6 +85,8 @@ export function Profile() {
                 <Stat label="Tempo de jogo" value={fmtTime(s!.playSeconds)} />
               </div>
 
+              <Atlas found={s!.atlas ?? []} best={s!.bestDepth ?? 0} />
+
               <div className="hud-panel px-3 py-2">
                 <h2 className="mb-1 text-xs font-bold uppercase tracking-widest text-amber-100/60">Por modo</h2>
                 {(Object.keys(MODE_NAME) as ModeId[]).map((m) => {
@@ -160,3 +162,51 @@ function Stat({ label, value }: { label: string; value: number | string }) {
   );
 }
 
+
+const ATLAS_BIOMES = [
+  { id: 'volcanic', icon: '🌋', name: 'Vulcânico' },
+  { id: 'transition', icon: '🗿', name: 'Obsidiana' },
+  { id: 'forest', icon: '🌳', name: 'Floresta' },
+] as const;
+const ATLAS_VARIANTS = [
+  { id: 'normal', icon: '☀️', name: 'Dia' },
+  { id: 'night', icon: '🌙', name: 'Noite' },
+  { id: 'mist', icon: '☁️', name: 'Névoa' },
+  { id: 'corrupted', icon: '🟣', name: 'Corrompida' },
+] as const;
+
+/** Adventure atlas: every biome × mood seen on a journey (the deeper laps bring new moods). */
+function Atlas({ found, best }: { found: string[]; best: number }) {
+  const have = new Set(found);
+  return (
+    <div className="hud-panel px-3 py-2" data-testid="atlas">
+      <h2 className="mb-1 flex items-baseline justify-between gap-2 text-xs font-bold uppercase tracking-widest text-amber-100/60">
+        <span>Atlas · {have.size}/12</span>
+        <span className="normal-case tracking-normal text-white/50">Recorde: região {best + 1}</span>
+      </h2>
+      <div className="grid grid-cols-[auto_repeat(4,minmax(0,1fr))] items-center gap-1 text-center text-[10px]">
+        <span />
+        {ATLAS_VARIANTS.map((v) => (
+          <span key={v.id} className="truncate text-white/55">
+            {v.icon} {v.name}
+          </span>
+        ))}
+        {ATLAS_BIOMES.map((b) => (
+          <Fragment key={b.id}>
+            <span className="pr-1 text-left text-white/70">
+              {b.icon} {b.name}
+            </span>
+            {ATLAS_VARIANTS.map((v) => {
+              const ok = have.has(`${b.id}:${v.id}`);
+              return (
+                <span key={v.id} className={`rounded-md py-1 text-base ${ok ? 'bg-amber-300/20 ring-1 ring-amber-300/50' : 'bg-black/30 text-white/25'}`} title={ok ? `${b.name} · ${v.name}` : '???'}>
+                  {ok ? b.icon : '?'}
+                </span>
+              );
+            })}
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}

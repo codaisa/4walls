@@ -5,7 +5,7 @@ antes da próxima:
 
 | # | Tarefa | Depende de | Status |
 |---|---|---|---|
-| 1 | **Mapa**: regiões viram fases, objetivos, mecânicas de ambiente, segredos, navegação, arcos | — | **M1–M4 concluídos**; M5 a seguir |
+| 1 | **Mapa**: regiões viram fases, objetivos, mecânicas de ambiente, segredos, navegação, arcos | — | **Concluída** (M1–M5) |
 | 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | Esboço (seção 5) |
 | 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Esboço (seção 6) |
 
@@ -256,6 +256,13 @@ Cada marco tem testes, prévia dos assets, conferência no celular, deploy e pla
 | **M3 — Região 3, Rio de Magma** | Tiles `Lava` e `Bridge`, **ponte frágil**, **plataformas móveis**, **gêiseres**, **alavanca e ponte levadiça**, ilhota secreta | O marco mais pesado: física de plataforma e previsão online |
 | **M4 — Regiões 4 e 5** | `Chasm`, **Selos de Obsidiana**, **Raízes Corrompidas**, **espinheiros**, **capim seco**, câmara do guardião reservada, final com gancho | Assets: selo, raiz, espinheiro e capim |
 | **M5 — Arcos e variantes** | Arcos de 4 a 6 regiões com bioma dominante e região de transição, variantes visuais por volta do ciclo ("corrompido", noite, névoa), formatos de região extras (ilha dupla, anel, ponte longa), registro de biomas descobertos e ajuste fino da curva de dificuldade com os dados dos playtests | Biomas inéditos (gelo, deserto…) entram depois, com a arte deles |
+
+**Como ficou o M5:**
+- **Arcos:** o 1º arco é a introdução (3 regiões vulcânicas + Ponte de Obsidiana). Depois, cada arco tem 4–6 regiões de um bioma dominante (vulcânico e floresta se alternam) e termina numa região de transição, onde o guardião do arco vai morar (Tarefa 2). O cartão mostra "ARCO N · nome" na primeira região e "FIM DO ARCO" na última.
+- **Variantes:** a cada volta do ciclo de biomas (2 arcos) o mundo volta com outro clima: 🌙 noite (luz baixa, lanterna sobre o grupo, vagalumes), ☁️ névoa (neblina proporcional ao zoom, bancos de névoa rasteira) ou 🟣 corrompido (chão arroxeado, motas violetas, +1 Magmito e mais raízes). Dois arcos seguidos nunca repetem o clima e, em 3 voltas, cada bioma passa por todos.
+- **Formatos novos:** anel (poço de lava/abismo no meio), ilha dupla (vão de 2 casas e uma ponte só) e ponte longa (vão de 6 casas com duas pontes estreitas, a partir da região 9).
+- **Ritmo de dificuldade:** a curva por profundidade continua; a 1ª região de cada arco tem 1 Magmito a menos (respiro) e a última 1 a mais.
+- **Atlas:** cada paisagem (bioma × clima, 12 no total) vista numa jornada online fica salva na conta; o Perfil mostra o atlas e o recorde. Conquistas novas: Desbravador (região 10) e Cartógrafo (6 paisagens).
 
 Pontos de atenção:
 - **M3 é o maior risco técnico:** plataforma em grade, sincronização e previsão.

@@ -1,6 +1,6 @@
 import { ADVENTURE, Cell, DIR_VEC, DIRS } from '@4walls/shared';
 import { describe, expect, it } from 'vitest';
-import { cellIndex, createGame, difficulty, geyserPhase, spawnBomb, getCell, inBounds, platformPos, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
+import { arcInfo, arcOfRegion, cellIndex, createGame, difficulty, geyserPhase, regionDifficulty, spawnBomb, getCell, inBounds, platformPos, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
 
 const make = (seed = 11, players = 1) => {
   const s = createGame({
@@ -169,7 +169,7 @@ describe('endless adventure: the journey', () => {
   it('every generated region is solvable: exit, key, cage and chests are reachable from the arrival point', () => {
     for (let seed = 1; seed <= 60; seed++) {
       const s = make(seed, 1);
-      for (let id = 0; id < 8; id++) {
+      for (let id = 0; id < (seed <= 25 ? 22 : 8); id++) {
         const r = region(s, id);
         const start = r.entry ?? { x: Math.round(s.players[0].x), y: Math.round(s.players[0].y) };
         const seen = reach(s, start);
@@ -598,5 +598,91 @@ describe('endless adventure: M4 obsidian and forest', () => {
     p.y = p.py = pit!.y; // dropped in (e.g. pushed)
     step(s, {});
     expect(p.alive).toBe(false);
+  });
+});
+
+describe('endless adventure: M5 arcs, variants and shapes', () => {
+  it('arcs of 4–6 regions: a dominant biome, then a transition; biomes take turns', () => {
+    for (const seed of [1, 7, 99]) {
+      expect(arcInfo(seed, 0)).toMatchObject({ start: 0, length: 4, biome: 'volcanic', variant: 'normal' });
+      for (let k = 0; k < 30; k++) {
+        const a = arcInfo(seed, k);
+        expect(a.length).toBeGreaterThanOrEqual(4);
+        expect(a.length).toBeLessThanOrEqual(6);
+        expect(arcInfo(seed, k + 1).start).toBe(a.start + a.length);
+        expect(a.biome).toBe(k % 2 ? 'forest' : 'volcanic');
+        for (let i = a.start; i < a.start + a.length; i++) {
+          const info = regionInfo(seed, i);
+          expect(arcOfRegion(seed, i).arc.index).toBe(k);
+          expect(info.arc).toBe(k);
+          expect(info.arcEnd).toBe(i === a.start + a.length - 1);
+          if (i >= 5) expect(info.biome).toBe(info.arcEnd ? 'transition' : a.biome);
+          expect(info.variant).toBe(a.variant);
+        }
+      }
+    }
+  });
+
+  it('each lap of the biome cycle comes back with a new mood; the two arcs of a lap differ', () => {
+    const seen = new Set<string>();
+    for (let k = 0; k < 40; k++) {
+      const a = arcInfo(5, k);
+      if (k < 2) expect(a.variant).toBe('normal');
+      else {
+        expect(a.variant).not.toBe('normal');
+        expect(a.variant).not.toBe(arcInfo(5, k - 1).variant);
+        expect(a.name.length).toBeGreaterThan(a.name.split(' ')[0].length);
+      }
+      seen.add(a.variant);
+    }
+    expect(seen).toEqual(new Set(['normal', 'night', 'mist', 'corrupted']));
+    // Within three laps every biome meets every mood.
+    const combos = new Set(Array.from({ length: 6 }, (_, i) => `${arcInfo(5, i + 2).biome}:${arcInfo(5, i + 2).variant}`));
+    expect(combos.size).toBe(6);
+  });
+
+  it('arc rhythm: a breather at the start of an arc, one more Magmito at its end', () => {
+    const a = arcInfo(3, 4);
+    expect(regionDifficulty(3, a.start).enemies).toBeLessThanOrEqual(difficulty(a.start).enemies);
+    const last = a.start + a.length - 1;
+    expect(regionDifficulty(3, last).enemies).toBeGreaterThanOrEqual(difficulty(last).enemies);
+    for (let d = 0; d < 300; d++) expect(regionDifficulty(3, d).enemies).toBeLessThanOrEqual(ADVENTURE.enemiesCap);
+  });
+
+  it('new shapes show up: ring, twin islands and long bridges, each cut by the biome pit', () => {
+    const shapes = new Map<string, number>();
+    for (let seed = 1; seed <= 30; seed++) for (let id = 5; id < 30; id++) shapes.set(regionMods(seed, id).shape, (shapes.get(regionMods(seed, id).shape) ?? 0) + 1);
+    for (const k of ['island', 'plaza', 'ring', 'twin', 'longbridge', 'river', 'causeway']) expect(shapes.get(k) ?? 0, k).toBeGreaterThan(5);
+    // Walk one seed deep and check the pits of each new shape.
+    const found = new Set<string>();
+    for (let seed = 1; seed <= 12 && found.size < 3; seed++) {
+      const s = make(seed, 1);
+      for (let id = 0; id < 20; id++) {
+        const shape = regionMods(seed, id).shape;
+        if (shape === 'ring' || shape === 'twin' || shape === 'longbridge') {
+          const r = region(s, id);
+          const pitKind = r.biome === 'volcanic' ? Cell.Lava : Cell.Chasm;
+          let pits = 0;
+          for (let y = r.cy * 14; y < r.cy * 14 + 14; y++) for (let x = r.cx * 16; x < r.cx * 16 + 16; x++) if (getCell(s.grid, x, y) === pitKind) pits++;
+          expect(pits, `seed ${seed} region ${id} ${shape}`).toBeGreaterThan(shape === 'ring' ? 8 : 12);
+          found.add(shape);
+        }
+        complete(s, id);
+        walkThrough(s, id);
+      }
+    }
+    expect(found).toEqual(new Set(['ring', 'twin', 'longbridge']));
+  });
+
+  it('regions carry their arc and variant; the journey remembers them', () => {
+    const s = make(21, 1);
+    for (let id = 0; id < 14; id++) {
+      complete(s, id);
+      walkThrough(s, id);
+    }
+    const r = region(s, 14);
+    const info = regionInfo(21, 14);
+    expect(r).toMatchObject({ arc: info.arc, variant: info.variant, arcEnd: info.arcEnd });
+    expect(s.adventure!.journey.map((j) => j.arc)).toEqual(Array.from({ length: 15 }, (_, i) => regionInfo(21, i).arc));
   });
 });

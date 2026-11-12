@@ -163,6 +163,8 @@ export interface PlayerStats {
   byMode: Partial<Record<ModeId, { matches: number; wins: number }>>;
   /** Furthest Adventure region reached (regions crossed). */
   bestDepth: number;
+  /** Adventure atlas: landscapes discovered, as "biome:variant" (e.g. "forest:night"). */
+  atlas: string[];
 }
 
 export const EMPTY_STATS: PlayerStats = {
@@ -183,9 +185,10 @@ export const EMPTY_STATS: PlayerStats = {
   playSeconds: 0,
   byMode: {},
   bestDepth: 0,
+  atlas: [],
 };
 
-export type AchievementId = 'first_win' | 'demolisher' | 'hunter' | 'veteran' | 'golem_slayer' | 'guardian_slayer' | 'boss_rush' | 'champion' | 'streak' | 'collector';
+export type AchievementId = 'first_win' | 'demolisher' | 'hunter' | 'veteran' | 'golem_slayer' | 'guardian_slayer' | 'boss_rush' | 'champion' | 'streak' | 'collector' | 'explorer' | 'cartographer';
 
 export interface AchievementDef {
   id: AchievementId;
@@ -208,6 +211,8 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'guardian_slayer', name: 'Lenhador', desc: 'Derrote o Guardião Ancião.', icon: '🌳', coins: 250, progress: (s) => [s.bossKills.guardian ?? 0, 1] },
   { id: 'boss_rush', name: 'Caçador de Chefes', desc: 'Vença o Boss Rush inteiro.', icon: '👑', coins: 400, progress: (s) => [s.bossRushClears, 1] },
   { id: 'champion', name: 'Campeão', desc: 'Vença 25 partidas.', icon: '⭐', coins: 500, progress: (s) => [s.wins, 25] },
+  { id: 'explorer', name: 'Desbravador', desc: 'Chegue à região 10 da Aventura.', icon: '🧭', coins: 200, progress: (s) => [s.bestDepth ?? 0, 9] },
+  { id: 'cartographer', name: 'Cartógrafo', desc: 'Descubra 6 paisagens do atlas.', icon: '🗺️', coins: 300, progress: (s) => [s.atlas?.length ?? 0, 6] },
 ];
 
 export const achievementDone = (a: AchievementDef, s: PlayerStats) => {
@@ -235,6 +240,8 @@ export interface MatchPerformance {
   seconds: number;
   /** Endless Adventure: regions crossed in this journey (0 elsewhere). */
   depth?: number;
+  /** Endless Adventure: landscapes ("biome:variant") seen in this journey. */
+  atlas?: string[];
 }
 
 export interface MatchReward {
@@ -285,6 +292,7 @@ export function applyMatchToStats(s: PlayerStats, p: MatchPerformance): PlayerSt
   n.bossRushClears += p.bossRushClear ? 1 : 0;
   n.playSeconds += Math.round(p.seconds);
   n.bestDepth = Math.max(s.bestDepth ?? 0, p.depth ?? 0);
+  n.atlas = [...new Set([...(s.atlas ?? []), ...(p.atlas ?? [])])].sort();
   const m = n.byMode[p.mode] ?? { matches: 0, wins: 0 };
   n.byMode[p.mode] = { matches: m.matches + 1, wins: m.wins + (p.outcome === 'win' ? 1 : 0) };
   return n;

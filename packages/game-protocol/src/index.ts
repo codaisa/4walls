@@ -333,7 +333,7 @@ export function applySnapshot(s: GameState, snap: Snapshot) {
       // Journey names come from the seed: no need to send them.
       adv.journey = Array.from({ length: a.d + 1 }, (_, i) => {
         const info = regionInfo(s.config.seed, i);
-        return { id: i, name: info.name, biome: info.biome };
+        return { id: i, name: info.name, biome: info.biome, variant: info.variant, arc: info.arc };
       });
     }
   }

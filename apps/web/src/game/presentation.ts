@@ -92,8 +92,8 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
       break;
     case 'regionCleared':
       sfx.victory();
-      // The end of the first arc: a hint of what waits deeper (the first big boss, later).
-      if (e.region === 4) hud.set({ banner: { text: 'ALGO DESPERTA NAS PROFUNDEZAS…', key: tick + 11 } });
+      // The end of an arc: a hint of what waits deeper (the arc's guardian, later).
+      if (e.arcEnd) hud.set({ banner: { text: 'FIM DO ARCO! ALGO DESPERTA NAS PROFUNDEZAS…', key: tick + 11 } });
       break;
     case 'gateOpened':
       sfx.go();

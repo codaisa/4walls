@@ -11,6 +11,7 @@ import { Arena } from './Arena';
 import { Bombs } from './Bombs';
 import { CameraRig } from './CameraRig';
 import { PlayerAvatar, preloadHeroes } from './CharacterGLB';
+import { AdventureAtmosphere } from './AdventureAtmosphere';
 import { AdventureWorld } from './AdventureWorld';
 import { EdgeProbe } from '../ui/EdgeArrows';
 import { Enemies } from './Enemies';
@@ -123,6 +124,7 @@ export function GameScene({ controller }: { controller: MatchView }) {
           half={controller.state.adventure ? undefined : [controller.state.grid.w / 2 + 0.35, controller.state.grid.h / 2 + 0.35]}
         />
         {controller.state.adventure ? <AdventureWorld theme={theme} /> : <Arena key={`arena-${arenaTheme}`} theme={theme} />}
+        {controller.state.adventure && <AdventureAtmosphere theme={theme} />}
         <Hazards />
         {controller.state.mode === 'bossrush' && <Boss />}
         {controller.state.mode === 'bossrush' && <RootSpikes />}

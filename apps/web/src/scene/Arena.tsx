@@ -103,10 +103,17 @@ export function Arena({ theme }: { theme: ArenaTheme }) {
       transition: { floor: ['#6f7254', '#62664a'], wall: '#4d4f44', pillar: '#58594c', base: '#2a2620' },
       forest: { floor: ['#6a9a45', '#5c8a3c'], wall: '#55604c', pillar: '#5d6b52', base: '#3a2d22' },
     };
+    // Corrupted laps: the same lands bruised violet.
+    const bruise = new THREE.Color('#4a1f62');
+    const tint = (c: string, k: number) => '#' + new THREE.Color(c).lerp(bruise, k).getHexString();
+    const corrupted = Object.fromEntries(
+      Object.entries(byBiome).map(([b, v]) => [b, { floor: [tint(v.floor[0], 0.38), tint(v.floor[1], 0.38)] as [string, string], wall: tint(v.wall, 0.45), pillar: tint(v.pillar, 0.45), base: tint(v.base, 0.3) }]),
+    ) as typeof byBiome;
     return (x: number, y: number) => {
       if (!adventure) return { ...byBiome.volcanic, floor: theme.floor, wall: theme.border, pillar: theme.pillarColor, base: tree ? '#3a2d22' : '#1d171f' };
       const r = inBounds(grid, x, y) ? adventure.regionOf[cellIndex(grid, x, y)] : -1;
-      return byBiome[adventure.regions.find((q) => q.id === r)?.biome ?? 'volcanic'];
+      const region = adventure.regions.find((q) => q.id === r);
+      return (region?.variant === 'corrupted' ? corrupted : byBiome)[region?.biome ?? 'volcanic'];
     };
   }, [adventure, theme, tree, grid]);
 
@@ -511,7 +518,25 @@ function Fireflies() {
   return <FloatingParticles count={140} color={[2.2, 3, 0.6]} size={0.11} rise={[-0.15, 0.15]} wander={0.9} blink />;
 }
 
-function FloatingParticles({ count, color, size, rise, wander, blink = false }: { count: number; color: [number, number, number]; size: number; rise: [number, number]; wander: number; blink?: boolean }) {
+export function FloatingParticles({
+  count,
+  color,
+  size,
+  rise,
+  wander,
+  blink = false,
+  low = false,
+}: {
+  count: number;
+  color: [number, number, number];
+  size: number;
+  rise: [number, number];
+  wander: number;
+  blink?: boolean;
+  /** Hug the ground (mist wisps). */
+  low?: boolean;
+}) {
+  const top = low ? 1.2 : blink ? 4 : 12;
   const ref = useRef<THREE.Points>(null!);
   const matRef = useRef<THREE.PointsMaterial>(null!);
   const { positions, speeds } = useMemo(() => {
@@ -519,12 +544,12 @@ function FloatingParticles({ count, color, size, rise, wander, blink = false }: 
     const speeds = new Float32Array(count);
     for (let i = 0; i < count; i++) {
       positions[i * 3] = (Math.random() - 0.5) * 44;
-      positions[i * 3 + 1] = Math.random() * (blink ? 4 : 12) - 0.3;
+      positions[i * 3 + 1] = Math.random() * top - 0.3;
       positions[i * 3 + 2] = (Math.random() - 0.5) * 36;
       speeds[i] = rise[0] + Math.random() * (rise[1] - rise[0]);
     }
     return { positions, speeds };
-  }, [count, rise, blink]);
+  }, [count, rise, top]);
   useFrame(({ clock, camera }, dt) => {
     // Embers / fireflies hover around wherever the camera is looking (the Adventure travels far).
     ref.current.position.x = camera.position.x;
@@ -536,8 +561,8 @@ function FloatingParticles({ count, color, size, rise, wander, blink = false }: 
       a[i * 3 + 1] += speeds[i] * dt;
       a[i * 3] += Math.sin(t * 0.7 + i) * dt * wander;
       a[i * 3 + 2] += Math.cos(t * 0.5 + i * 1.3) * dt * wander * 0.6;
-      if (a[i * 3 + 1] > (blink ? 4 : 12)) a[i * 3 + 1] = -0.3;
-      if (a[i * 3 + 1] < -0.3) a[i * 3 + 1] = blink ? 4 : 12;
+      if (a[i * 3 + 1] > top) a[i * 3 + 1] = -0.3;
+      if (a[i * 3 + 1] < -0.3) a[i * 3 + 1] = top;
     }
     p.needsUpdate = true;
     if (blink) matRef.current.opacity = 0.55 + 0.45 * Math.sin(t * 2.3);

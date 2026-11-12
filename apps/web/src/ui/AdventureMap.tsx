@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Cell, SLOT_COLORS, type BiomeId } from '@4walls/shared';
-import { cellIndex, getCell, type GameState } from '@4walls/core';
+import { cellIndex, getCell, type GameState, type RegionVariant } from '@4walls/core';
 import { sfx } from '../audio/Sfx';
 import type { MatchView } from '../game/presentation';
 import { isTouchDevice } from '../input/InputManager';
 
 const FLOOR: Record<BiomeId, string> = { volcanic: '#8a5e4c', transition: '#7a7c5c', forest: '#5f9142' };
 const BLOCK: Record<BiomeId, string> = { volcanic: '#5c3b30', transition: '#545640', forest: '#3f6530' };
-const BIOME_ICON: Record<BiomeId, string> = { volcanic: '🌋', transition: '🌫️', forest: '🌳' };
+const BIOME_ICON: Record<BiomeId, string> = { volcanic: '🌋', transition: '🗿', forest: '🌳' };
+const VARIANT_ICON: Record<RegionVariant, string> = { normal: '', night: '🌙', mist: '☁️', corrupted: '🟣' };
 
 /**
  * Draws the live Adventure window: explored cells by biome, locked regions as silhouettes, gates,
@@ -164,7 +165,8 @@ export function AdventureMap({ controller }: { controller: MatchView }) {
               <ol className="mt-1 flex flex-wrap gap-1 overflow-y-auto text-xs [@media(max-height:500px)]:flex-col [@media(max-height:500px)]:flex-nowrap">
                 {journey.map((j, i) => (
                   <li key={j.id} className={`rounded-full px-2 py-0.5 font-bold ${i === journey.length - 1 ? 'bg-amber-300 text-amber-950' : 'bg-white/10 text-white/80'}`}>
-                    {BIOME_ICON[j.biome]} {j.id + 1}. {j.name}
+                    {BIOME_ICON[j.biome]}
+                    {VARIANT_ICON[j.variant ?? 'normal']} {j.id + 1}. {j.name}
                   </li>
                 ))}
               </ol>

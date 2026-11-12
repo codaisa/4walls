@@ -180,6 +180,9 @@ export interface RegionObjective {
 /** Direction from one region to the next on the endless world lattice (never back west). */
 export type RegionDir = 'E' | 'N' | 'S';
 
+/** Look of a region on later laps of the biome cycle (same rules, new mood). */
+export type RegionVariant = 'normal' | 'night' | 'mist' | 'corrupted';
+
 export interface RegionState {
   /** Depth index (0 = first region). Unique for the whole journey. */
   id: number;
@@ -187,6 +190,11 @@ export interface RegionState {
   /** Chapter subtitle ("O despertar", "A chave perdida"...). */
   chapter: string;
   biome: BiomeId;
+  /** Arc (0-based) this region belongs to, and its visual variant. */
+  arc: number;
+  variant: RegionVariant;
+  /** Last region of its arc (the transition toward the next biome). */
+  arcEnd: boolean;
   /** Chunk position on the world lattice. */
   cx: number;
   cy: number;
@@ -261,7 +269,7 @@ export interface AdventureState {
   /** The gate behind the group closes at this tick unless everyone is already through. */
   closing: { region: number; atTick: number } | null;
   /** Every region entered so far (for the journey map and the results). */
-  journey: { id: number; name: string; biome: BiomeId }[];
+  journey: { id: number; name: string; biome: BiomeId; variant: RegionVariant; arc: number }[];
   /** Lattice chain: dirs[i] goes from region i to region i + 1 (grown on demand). */
   dirs: RegionDir[];
   /** Changes whenever regions attach or detach (renderers rebuild on it). */
@@ -342,7 +350,7 @@ export type GameEvent =
   | { type: 'eventStart'; event: GameEventId }
   | { type: 'eventEnd'; event: GameEventId }
   | { type: 'meteorImpact'; x: number; y: number }
-  | { type: 'regionCleared'; region: number }
+  | { type: 'regionCleared'; region: number; arcEnd?: boolean }
   | { type: 'gateOpened'; gateId: number; x: number; y: number; region: number }
   /** Adventure: a fallen ally comes back when a gate opens. */
   | { type: 'playerRevived'; playerId: string; x: number; y: number }

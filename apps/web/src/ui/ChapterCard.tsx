@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { regionById } from '@4walls/core';
+import { arcInfo, regionById, type RegionVariant } from '@4walls/core';
 import type { MatchView } from '../game/presentation';
 
 interface Card {
@@ -8,7 +8,13 @@ interface Card {
   name: string;
   chapter: string;
   objective: string;
+  /** Set on the first region of an arc: the arc's title. */
+  arc: { n: number; name: string; variant: RegionVariant } | null;
+  variant: RegionVariant;
+  arcEnd: boolean;
 }
+
+export const VARIANT_BADGE: Record<RegionVariant, string> = { normal: '', night: '🌙 Noite', mist: '☁️ Névoa', corrupted: '🟣 Corrompida' };
 
 const objectiveText = (kind: 'clear' | 'key' | 'lever' | 'seals' | 'purify') =>
   kind === 'key'
@@ -32,7 +38,17 @@ export function ChapterCard({ controller }: { controller: MatchView }) {
     const show = (id: number) => {
       const r = regionById(controller.state, id);
       if (!r) return;
-      setCard({ key: seq++, index: id + 1, name: r.name, chapter: r.chapter, objective: objectiveText(r.objective.kind) });
+      const a = arcInfo(controller.state.config.seed, r.arc);
+      setCard({
+        key: seq++,
+        index: id + 1,
+        name: r.name,
+        chapter: r.chapter,
+        objective: objectiveText(r.objective.kind),
+        arc: a.start === id ? { n: r.arc + 1, name: a.name, variant: a.variant } : null,
+        variant: r.variant,
+        arcEnd: r.arcEnd,
+      });
     };
     // The first card waits for the countdown to finish (it would cover the big 3-2-1).
     const s = controller.state;
@@ -48,14 +64,23 @@ export function ChapterCard({ controller }: { controller: MatchView }) {
   }, [controller]);
   useEffect(() => {
     if (!card) return;
-    const t = window.setTimeout(() => setCard(null), 3600);
+    const t = window.setTimeout(() => setCard(null), card.arc ? 4600 : 3600);
     return () => window.clearTimeout(t);
   }, [card]);
   if (!card) return null;
   return (
     <div key={card.key} className="chapter-card pointer-events-none absolute inset-x-0 top-[16%] z-40 flex justify-center px-4" data-testid="chapter-card">
       <div className="chapter-inner flex flex-col items-center">
-        <div className="chapter-index font-display">REGIÃO {card.index}</div>
+        {card.arc && (
+          <div className={`chapter-arc font-display variant-${card.arc.variant}`} data-testid="arc-title">
+            ARCO {card.arc.n} · {card.arc.name}
+          </div>
+        )}
+        <div className="chapter-index font-display">
+          REGIÃO {card.index}
+          {card.arcEnd && <span className="chapter-tag">FIM DO ARCO</span>}
+          {card.variant !== 'normal' && <span className={`chapter-tag variant-${card.variant}`}>{VARIANT_BADGE[card.variant]}</span>}
+        </div>
         <div className="chapter-name font-display">{card.name}</div>
         <div className="chapter-sub">— {card.chapter} —</div>
         <div className="chapter-goal">{card.objective}</div>
