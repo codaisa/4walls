@@ -2,7 +2,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { Bloom, EffectComposer, ToneMapping, Vignette } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ArenaId } from '@4walls/shared';
+import { STARTER_CHARACTERS, type ArenaId, type CharacterId } from '@4walls/shared';
 import { RootSpikes } from './RootSpikes';
 import { music } from '../audio/Music';
 import * as THREE from 'three';
@@ -10,7 +10,8 @@ import type { MatchView } from '../game/presentation';
 import { Arena } from './Arena';
 import { Bombs } from './Bombs';
 import { CameraRig } from './CameraRig';
-import { PlayerAvatar } from './CharacterGLB';
+import { PlayerAvatar, preloadHeroes } from './CharacterGLB';
+import { Cages } from './Cages';
 import { Enemies } from './Enemies';
 import { Flames } from './Flames';
 import { Fx } from './Fx';
@@ -50,6 +51,11 @@ export function GameScene({ controller }: { controller: MatchView }) {
   const showFps = useSettings((s) => s.showFps);
   const gfx = graphicsPreset(quality);
   const fpsRef = useRef<HTMLDivElement>(null);
+  // Adventure has caged heroes: fetch their models while the players explore, and any hero
+  // somebody already plays as.
+  useEffect(() => {
+    if (controller.state.adventure || controller.state.players.some((p) => !STARTER_CHARACTERS.includes(p.characterId as CharacterId))) preloadHeroes();
+  }, [controller]);
   const ctx = useMemo<SceneCtx>(() => {
     const { w, h } = controller.state.grid;
     return { controller, fx: { shake: 0 }, ox: -(w - 1) / 2, oz: -(h - 1) / 2 };
@@ -117,6 +123,7 @@ export function GameScene({ controller }: { controller: MatchView }) {
         <Arena key={`arena-${arenaTheme}`} theme={theme} />
         <Hazards />
         {controller.state.adventure && <Gates />}
+        {controller.state.adventure && <Cages />}
         {controller.state.mode === 'bossrush' && <Boss />}
         {controller.state.mode === 'bossrush' && <RootSpikes />}
         {controller.state.players.map((p) => (

@@ -168,6 +168,47 @@ class SfxEngine {
   ui() {
     this.tone(700, 0.06, { type: 'triangle', gain: 0.1, bus: 'ui' });
   }
+
+  // ── Rescued heroes ──
+  /** "Joins the fight!": a whoosh, a brass stab and (new hero) a fanfare. */
+  heroReveal(isNew: boolean) {
+    this.burst(0.4, 6000, 500, 0.35, 1.2);
+    [196, 247, 294, 392].forEach((f) => this.tone(f, 0.5, { type: 'sawtooth', gain: 0.07, delay: 0.32, bus: 'ui' }));
+    this.tone(98, 0.6, { type: 'square', gain: 0.1, delay: 0.32, bus: 'ui' });
+    if (isNew) [523, 659, 784, 1046, 1318].forEach((f, i) => this.tone(f, 0.35, { type: 'triangle', gain: 0.16, delay: 0.75 + i * 0.1, bus: 'ui' }));
+  }
+  cageOpen() {
+    this.tone(1900, 0.25, { to: 1400, type: 'square', gain: 0.06 });
+    this.tone(2600, 0.3, { to: 2100, type: 'triangle', gain: 0.06, delay: 0.04 });
+    this.burst(0.15, 4000, 1200, 0.2, 3);
+  }
+  /** Luiz Bombzaga: an accordion chord with bellows tremolo. */
+  forro() {
+    [262, 330, 392].forEach((f) => {
+      for (let k = 0; k < 4; k++) this.tone(f * (k % 2 ? 1.004 : 1), 0.11, { type: 'sawtooth', gain: 0.05, delay: k * 0.1 });
+    });
+    this.burst(0.4, 600, 120, 0.25, 0.8);
+  }
+  /** Tiringão: "ha-ha-ha". */
+  laugh() {
+    [520, 470, 430, 380].forEach((f, i) => this.tone(f, 0.12, { to: f * 0.8, type: 'triangle', gain: 0.16, delay: i * 0.13 }));
+  }
+  /** Bombião: the blunderbuss boom. */
+  blunderbuss() {
+    this.burst(0.35, 3000, 200, 0.6, 1);
+    this.tone(180, 0.3, { to: 50, type: 'square', gain: 0.25 });
+  }
+  /** Ayrton Senha: an engine revving up. */
+  turbo() {
+    this.tone(90, 0.9, { to: 520, type: 'sawtooth', gain: 0.12 });
+    this.tone(180, 0.9, { to: 1040, type: 'square', gain: 0.04 });
+  }
+  /** Silvio Bombos: "ma-oe!" glide and a prize chime. */
+  prize() {
+    this.tone(600, 0.18, { to: 900, type: 'triangle', gain: 0.14 });
+    this.tone(900, 0.3, { to: 520, type: 'triangle', gain: 0.14, delay: 0.18 });
+    [1046, 1318, 1568].forEach((f, i) => this.tone(f, 0.2, { type: 'sine', gain: 0.1, delay: 0.45 + i * 0.07 }));
+  }
 }
 
 function loadMuted(): Record<Bus, boolean> {

@@ -1,7 +1,7 @@
-import { ADVENTURE, Cell, DIR_VEC, DIRS, RULES, secToTicks, type BiomeId } from '@4walls/shared';
+import { ADVENTURE, Cell, CHARACTER_IDS, CHARACTERS, DIR_VEC, DIRS, RULES, secToTicks, type BiomeId, type CharacterId } from '@4walls/shared';
 import { cellIndex, createGrid, getCell, setCell } from './grid';
 import { nextRandom, randInt } from './rng';
-import type { AdventureState, EnemyState, GameState, GateState, Grid, RegionState } from './types';
+import type { AdventureState, CageState, EnemyState, GameState, GateState, Grid, PlayerState, RegionState } from './types';
 import { bombAt, flamesAt, mineAt, newId } from './world';
 
 /**
@@ -139,7 +139,25 @@ export function buildAdventure(rngHolder: { rng: number }, regionCount: number =
       if (nextRandom(rngHolder) < ADVENTURE.blockFill) grid.cells[i] = Cell.Block;
     }
 
-  const adventure: AdventureState = { chunkW: CW, chunkH: CH, regions, gates, regionOf, explored: new Uint8Array(W * H) };
+  // 5. One caged hero per region, off the corridors, away from gates and the spawn pocket.
+  const cages: CageState[] = [];
+  for (const r of regions) {
+    const options: { x: number; y: number }[] = [];
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const i = cellIndex(grid, x, y);
+        if (regionOf[i] !== r.id || corridor.has(i) || nearGate(x, y)) continue;
+        if (grid.cells[i] !== Cell.Floor && grid.cells[i] !== Cell.Block) continue;
+        if (Math.abs(x - c0.x) + Math.abs(y - c0.y) <= 5) continue;
+        options.push({ x, y });
+      }
+    if (!options.length) continue;
+    const c = options[randInt(rngHolder, options.length)];
+    grid.cells[cellIndex(grid, c.x, c.y)] = Cell.Block; // the cage blocks like a crate until blown open
+    cages.push({ id: cages.length, x: c.x, y: c.y, region: r.id, state: 'locked' });
+  }
+
+  const adventure: AdventureState = { chunkW: CW, chunkH: CH, regions, gates, regionOf, explored: new Uint8Array(W * H), cages };
   return { grid, adventure, spawns };
 }
 
@@ -155,6 +173,7 @@ export function spawnAdventureEnemies(s: GameState) {
         if (adv.regionOf[cellIndex(s.grid, x, y)] !== r.id || getCell(s.grid, x, y) !== Cell.Floor) continue;
         if (r.id === 0 && Math.abs(spawn.x - x) + Math.abs(spawn.y - y) < 6) continue;
         if (adv.gates.some((g) => Math.abs(g.x - x) + Math.abs(g.y - y) <= 1)) continue;
+        if (adv.cages.some((c) => Math.abs(c.x - x) + Math.abs(c.y - y) <= 1)) continue;
         free.push({ x, y });
       }
     for (let k = 0; k < count && free.length; k++) {
@@ -191,6 +210,7 @@ export function updateAdventure(s: GameState) {
   const adv = s.adventure;
   if (!adv) return;
   if (s.tick % 3 === 0) revealAround(s);
+  updateCages(s);
   for (const r of adv.regions) {
     if (r.cleared || !r.unlocked) continue;
     if (s.enemies.some((e) => e.alive && e.regionId === r.id)) continue;
@@ -206,6 +226,72 @@ export function updateAdventure(s: GameState) {
       reviveAllies(s, g);
     }
   }
+}
+
+// ───────────────────────────── caged heroes ─────────────────────────────
+
+/** Blasts free prisoners; touching a free prisoner rescues them. */
+function updateCages(s: GameState) {
+  const adv = s.adventure!;
+  for (const c of adv.cages) {
+    if (c.state === 'locked') {
+      if (getCell(s.grid, c.x, c.y) === Cell.Block) continue;
+      c.state = 'free';
+      s.events.push({ type: 'cageOpened', cageId: c.id, x: c.x, y: c.y });
+      continue;
+    }
+    if (c.state !== 'free') continue;
+    const rescuer = s.players.find((p) => p.alive && Math.round(p.x) === c.x && Math.round(p.y) === c.y);
+    if (rescuer) rescueHero(s, c, rescuer);
+  }
+}
+
+/**
+ * The rescue rule:
+ * - a fallen ally (not one who left the match) comes back at the cage as the drawn hero;
+ * - otherwise the rescuer turns into the drawn hero.
+ * The draw covers every hero (owned or not, the game doesn't know accounts) except the one the
+ * receiving player already is.
+ */
+export function rescueHero(s: GameState, c: CageState, rescuer: PlayerState) {
+  c.state = 'rescued';
+  const fallen = s.players.find((p) => !p.alive && !p.left);
+  const target = fallen ?? rescuer;
+  const pool = CHARACTER_IDS.filter((id) => id !== target.characterId);
+  const hero = pool[randInt(s, pool.length)];
+  const previousId = target.characterId;
+  if (fallen) {
+    const spot = safeCellsNear(s, c.x, c.y, 1)[0] ?? { x: c.x, y: c.y };
+    Object.assign(fallen, {
+      alive: true,
+      x: spot.x,
+      y: spot.y,
+      px: spot.x,
+      py: spot.y,
+      moving: false,
+      slideDir: null,
+      maneuver: null,
+      frozenUntil: 0,
+      passBombs: [],
+      diedTick: -1,
+    });
+  }
+  becomeHero(s, target, hero);
+  target.invulnUntil = s.tick + secToTicks(Math.max(REVIVE_INVULN_SEC, RULES.invulnSec));
+  s.events.push({ type: 'heroJoined', playerId: target.id, byId: rescuer.id, characterId: hero, previousId, revived: !!fallen, x: target.x, y: target.y });
+}
+
+/** Swaps a player's class, keeping the power-ups they earned (speed and bomb perks re-based). */
+export function becomeHero(s: GameState, p: PlayerState, id: CharacterId) {
+  const from = CHARACTERS[p.characterId as CharacterId] ?? CHARACTERS.bombito;
+  const to = CHARACTERS[id];
+  p.characterId = id;
+  p.speed = Math.min(RULES.maxSpeed, Math.max(1.5, p.speed - from.speedBonus + to.speedBonus));
+  p.range = Math.min(RULES.maxRange, Math.max(RULES.baseRange, p.range - from.rangeBonus + to.rangeBonus));
+  p.maxBombs = Math.min(to.maxBombs, Math.max(RULES.baseBombs, p.maxBombs - from.bombBonus + to.bombBonus));
+  if (to.startsWithKick) p.canKick = true;
+  p.abilityReadyTick = s.tick; // the new ability is ready right away
+  p.turboUntil = 0;
 }
 
 /** Seconds of spawn protection after coming back. */

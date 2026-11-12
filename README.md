@@ -87,6 +87,13 @@ Limites desta versão:
   - **Bombito**, equilibrado. Habilidade *Bomba Extra*: mini-bomba que não conta no limite.
   - **Ninja**, mais rápido, até 5 bombas. Habilidade *Investida*: avança 3 casas num instante.
   - **Engenheiro**, mais lento. Habilidade *Mina*: até 2 minas que explodem ao serem pisadas.
+- **Heróis resgatáveis** (homenagens bem-humoradas a lendas brasileiras; só se ganham resgatando na Aventura):
+  - **Luiz Bombzaga** (chapéu de couro, sanfona). *Forró Sísmico*: empurra para longe as bombas a até 2 casas e atordoa Magmitos.
+  - **Tiringão** (chapéu de palha, sorriso banguela). *Gargalhada*: congela de rir quem estiver a até 3 casas (Magmitos e, no Versus, rivais).
+  - **Bombião** (chapéu de cangaceiro, óculos redondos, cartucheiras). *Bacamarte*: explosão até 3 casas à frente, que estoura bombas no caminho. Começa com +1 de alcance.
+  - **Rei Pelota** (coroa, camisa 10, bola). *Bicicleta*: põe uma bomba já chutada para a frente. Rápido e já começa chutando bombas.
+  - **Ayrton Senha** (capacete amarelo com faixas verde e azul). *Turbo*: dobra a velocidade por 2,5 s.
+  - **Silvio Bombos** (smoking, microfone no peito). *Quem quer bomba?*: faz aparecer um power-up ao lado dele.
 - **Arenas:** **Caldeira** (vulcão, 15×13) e **Floresta Encantada** (bosque, 17×13).
 - **Movimentos:**
   - **Rolar:** esquiva de 2 casas, com um instante de invulnerabilidade e recarga de 0,9 s.
@@ -107,7 +114,12 @@ Limites desta versão:
   - A câmera segue os jogadores.
   - Exploda os Magmitos de uma região para abrir o **portão** selado da próxima.
   - Cada portão aberto **traz de volta os aliados caídos**: eles reaparecem junto ao portão, piscando com alguns segundos de proteção, e mantêm os power-ups. Quem saiu da sala online não volta.
-  - Vitória ao libertar todas as regiões. Sem limite de tempo e sem eventos aleatórios. Não disponível no online.
+  - **Prisioneiros em celas:** cada região tem uma cela trancada.
+    - Exploda a cela e encoste no prisioneiro. O herói é sorteado entre todos os 9, menos o que quem recebe já está usando.
+    - Se houver um aliado caído, ele renasce como o herói. Senão, quem resgatou se transforma nele, mantendo os power-ups e com a habilidade nova já pronta.
+    - Aparece a tela **"ENTRA NA BRIGA!"**. Se o herói for novo para a sua conta, aparece também **NOVO PERSONAGEM!** e ele fica liberado no Ateliê e na sala.
+    - Desbloqueios valem nas partidas online, porque a conta fica no servidor.
+  - Vitória ao libertar todas as regiões. Sem limite de tempo e sem eventos aleatórios. Funciona local e online.
 
 - **Chefões (Boss Rush)** (menu principal → *Chefões*, ou *Chefões* nas opções do lobby local, 1–4 jogadores co-op):
   - Dois chefes em sequência. Todos os ataques são avisados no chão e os chefes enfurecem abaixo de metade da vida.
@@ -226,6 +238,10 @@ e exportados em GLB para `apps/web/public/models/`. Para regerar depois de edita
 ```bash
 "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe" -b --factory-startup --python tools/blender/build_characters.py -- apps/web/public/models tools/blender/previews
 ```
+
+Só alguns personagens: `ONLY=senha,silvio` antes do comando. Retratos transparentes da tela
+"Entra na briga": `PORTRAITS=apps/web/public/heroes` (renderiza todos). Os acessórios dos 6 heróis
+ficam em `tools/blender/hero_gear.py`.
 
 Detalhes em [docs/ASSET_CATALOG.md](docs/ASSET_CATALOG.md).
 

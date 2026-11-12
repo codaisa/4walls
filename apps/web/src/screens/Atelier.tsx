@@ -3,7 +3,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { Suspense, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import * as THREE from 'three';
-import { CHARACTER_IDS, CHARACTERS, COSMETICS, RULES, SLOT_COLORS, SLOT_LABEL, unlockHint, type CharacterId, type CosmeticSlot } from '@4walls/shared';
+import { CHARACTER_IDS, CHARACTERS, COSMETICS, STARTER_CHARACTERS, RULES, SLOT_COLORS, SLOT_LABEL, unlockHint, type CharacterId, type CosmeticSlot } from '@4walls/shared';
 import { sfx } from '../audio/Sfx';
 import { ShowcaseAvatar, type ShowcaseClip } from '../scene/ShowcaseAvatar';
 import { equip, useAccount } from '../store/useAccount';
@@ -52,6 +52,9 @@ export function Atelier() {
   const [tryHat, setTryHat] = useState<string | null>(null);
   const hat = tryHat ?? account?.loadout.hat ?? null;
   const [clip, setClip] = useState<ShowcaseClip>('Idle');
+  /** Heroes this device can play (starters + rescued); the rest show as locked silhouettes. */
+  const owned = [...STARTER_CHARACTERS, ...((account?.characters ?? []) as CharacterId[])];
+  const [lockedTip, setLockedTip] = useState<CharacterId | null>(null);
   const back = () => {
     sfx.ui();
     navigate('/');
@@ -112,6 +115,29 @@ export function Atelier() {
               {CHARACTER_IDS.map((id) => {
                 const ch = CHARACTERS[id];
                 const on = profile.characterId === id;
+                const locked = !owned.includes(id);
+                if (locked)
+                  return (
+                    <button
+                      key={id}
+                      data-nav
+                      onClick={pick(() => setLockedTip(id))}
+                      className="hud-panel relative flex min-w-0 flex-col items-stretch overflow-hidden px-2 pb-2 pt-1 text-left opacity-90"
+                      style={{ background: `linear-gradient(160deg, ${ch.theme.main}33, rgba(10,4,8,0.85) 60%)` }}
+                      data-testid={`card-${id}`}
+                      aria-label={`${ch.name}: bloqueado`}
+                    >
+                      <div className="relative flex h-32 w-full items-end justify-center [@media(max-height:500px)]:h-24">
+                        <img src={`/heroes/${id}.png`} alt="" className="h-full object-contain" style={{ filter: `brightness(0) drop-shadow(0 0 6px ${ch.theme.accent})` }} draggable={false} />
+                        <span className="absolute right-1 top-1 rounded-full bg-black/60 px-1.5 py-0.5 text-sm">🔒</span>
+                      </div>
+                      <span className="font-display text-xl leading-tight text-white/85">{ch.name}</span>
+                      <div className="mt-1 rounded-md bg-black/40 px-1.5 py-1 text-[11px] font-bold leading-tight text-amber-200">
+                        {lockedTip === id ? '🗝️ Exploda uma cela na Aventura e encoste no prisioneiro!' : '⛓️ Resgate na Aventura'}
+                      </div>
+                      <div className="mt-1 text-[10px] font-bold text-amber-100/70">⚡ {ch.abilityName}</div>
+                    </button>
+                  );
                 return (
                   <button
                     key={id}

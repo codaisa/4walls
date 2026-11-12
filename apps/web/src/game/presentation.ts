@@ -47,7 +47,16 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
     case 'abilityUsed':
       if (e.ability === 'dash') sfx.dash();
       else if (e.ability === 'mine') sfx.mine();
+      else if (e.ability === 'forro') sfx.forro();
+      else if (e.ability === 'laugh') sfx.laugh();
+      else if (e.ability === 'blunderbuss') sfx.blunderbuss();
+      else if (e.ability === 'turbo') sfx.turbo();
+      else if (e.ability === 'prize') sfx.prize();
       else sfx.bombPlaced();
+      break;
+    case 'cageOpened':
+      sfx.cageOpen();
+      hud.set({ banner: { text: 'PRISIONEIRO LIVRE!', key: tick + 2 } });
       break;
     case 'bombKicked':
       sfx.kick();

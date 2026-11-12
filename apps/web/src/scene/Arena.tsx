@@ -39,6 +39,8 @@ export function Arena({ theme }: { theme: ArenaTheme }) {
    */
   const layout = useMemo(() => {
     const gateSet = new Set(adventure?.gates.map((g) => g.y * w + g.x) ?? []);
+    // Cage cells are crates in the rules but drawn by <Cages />.
+    const cageSet = new Set(adventure?.cages.map((c) => c.y * w + c.x) ?? []);
     const solid = (x: number, y: number) => x < 0 || y < 0 || x >= w || y >= h || (getCell(grid, x, y) === Cell.Wall && !gateSet.has(y * w + x));
     const walkable = (x: number, y: number) => !solid(x, y);
     const near8 = (x: number, y: number, pred: (x: number, y: number) => boolean) => {
@@ -56,7 +58,7 @@ export function Arena({ theme }: { theme: ArenaTheme }) {
         if (walkable(x, y)) {
           floor.push({ x, y });
           base.push({ x, y });
-          if (getCell(grid, x, y) === Cell.Block) blocks.push({ x, y });
+          if (getCell(grid, x, y) === Cell.Block && !cageSet.has(y * w + x)) blocks.push({ x, y });
           continue;
         }
         if (isVoid(x, y)) continue;

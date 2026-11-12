@@ -1,7 +1,7 @@
 // 4Walls service worker: makes the game installable (home-screen app, fullscreen, landscape)
 // and loads it fast on repeat visits. The game itself always needs the server (online play),
 // so the page shell is network-first; hashed build assets and models are cache-first.
-const VERSION = '4walls-v1';
+const VERSION = '4walls-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/favicon.svg', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {

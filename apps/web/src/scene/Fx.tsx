@@ -242,6 +242,27 @@ export function Fx() {
               });
             break;
           }
+          case 'cageOpened': {
+            for (let i = 0; i < 26; i++)
+              solids.spawn({
+                x: e.x + ox, y: 0.6, z: e.y + oz,
+                vx: rnd(-3.5, 3.5), vy: rnd(2.5, 6), vz: rnd(-3.5, 3.5),
+                life: rnd(0.8, 1.4), size: rnd(0.04, 0.09), color: i % 3 ? '#3b3a44' : '#f2b622',
+                gravity: 12, drag: 0.5, bounce: true,
+              });
+            break;
+          }
+          case 'heroJoined': {
+            // A column of green-and-gold light where the hero appears.
+            for (let i = 0; i < 48; i++)
+              sparks.spawn({
+                x: e.x + ox + rnd(-0.4, 0.4), y: rnd(0.05, 0.4), z: e.y + oz + rnd(-0.4, 0.4),
+                vx: rnd(-0.5, 0.5), vy: rnd(3, 7), vz: rnd(-0.5, 0.5),
+                life: rnd(0.6, 1.1), size: rnd(0.06, 0.12), color: i % 2 ? '#ffdf00' : '#19c25c', intensity: 3, drag: 1,
+              });
+            fx.shake = Math.min(1, fx.shake + 0.3);
+            break;
+          }
           case 'playerRevived': {
             // Back through the gate: a column of sparks in the player's colors.
             const p = s.players.find((pp) => pp.id === e.playerId);
@@ -277,7 +298,54 @@ export function Fx() {
               });
             break;
           case 'abilityUsed': {
-            const color = e.ability === 'dash' ? '#d9c7ff' : e.ability === 'mine' ? '#ffc21a' : '#ffb347';
+            // Rescued heroes: a signature burst each.
+            const ring = (n: number, speed: number, color: string, y = 0.5, life = 0.6) => {
+              for (let i = 0; i < n; i++) {
+                const a = (i / n) * Math.PI * 2;
+                sparks.spawn({
+                  x: e.x + ox, y, z: e.y + oz,
+                  vx: Math.cos(a) * speed, vy: rnd(0.2, 0.8), vz: Math.sin(a) * speed,
+                  life, size: rnd(0.07, 0.12), color, intensity: 2.8, drag: 1.2,
+                });
+              }
+            };
+            if (e.ability === 'forro') {
+              ring(28, 5.5, '#ffcc4d', 0.45);
+              ring(18, 3.2, '#ff5a3c', 0.7);
+              fx.shake = Math.min(1, fx.shake + 0.25);
+              break;
+            }
+            if (e.ability === 'laugh') {
+              ring(36, 6.5, '#fff06a', 0.6, 0.5);
+              ring(24, 4, '#ffb020', 1.0, 0.7);
+              break;
+            }
+            if (e.ability === 'blunderbuss') {
+              for (let i = 0; i < 14; i++)
+                smoke.spawn({
+                  x: e.x + ox + rnd(-0.2, 0.2), y: rnd(0.4, 0.8), z: e.y + oz + rnd(-0.2, 0.2),
+                  vx: rnd(-1, 1), vy: rnd(0.4, 1.2), vz: rnd(-1, 1),
+                  life: rnd(0.6, 1.1), size: rnd(0.3, 0.5), grow: 2.2, color: '#6b5a50', alpha: 0.55, drag: 2.5,
+                });
+              fx.shake = Math.min(1, fx.shake + 0.35);
+              break;
+            }
+            if (e.ability === 'turbo') {
+              ring(24, 3, '#ffd400', 0.3, 0.45);
+              ring(16, 2, '#0a9b45', 0.6, 0.55);
+              break;
+            }
+            if (e.ability === 'prize') {
+              for (let i = 0; i < 30; i++)
+                solids.spawn({
+                  x: e.x + ox, y: 1.0, z: e.y + oz,
+                  vx: rnd(-2.5, 2.5), vy: rnd(3, 6), vz: rnd(-2.5, 2.5),
+                  life: rnd(0.9, 1.5), size: rnd(0.04, 0.08), color: ['#ffd23f', '#2f6bff', '#0a9b45', '#ffffff'][i % 4],
+                  gravity: 10, drag: 0.8, bounce: true,
+                });
+              break;
+            }
+            const color = e.ability === 'dash' ? '#d9c7ff' : e.ability === 'mine' ? '#ffc21a' : e.ability === 'bicycle' ? '#e8e0d0' : '#ffb347';
             const steps = e.ability === 'dash' ? 14 : 10;
             for (let i = 0; i < steps; i++) {
               const k = i / steps;

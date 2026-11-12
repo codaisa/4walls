@@ -82,7 +82,7 @@ export function createGame(config: GameConfig): GameState {
       abilityReadyTick: 0,
       frozenUntil: 0,
       ghostUntil: 0,
-      canKick: false,
+      canKick: !!ch.startsWithKick,
       hasBoots: false,
       hasRemote: false,
       special: null,
@@ -90,6 +90,7 @@ export function createGame(config: GameConfig): GameState {
       canThrow: false,
       maneuver: null,
       maneuverReadyTick: 0,
+      turboUntil: 0,
     };
     return p;
   });

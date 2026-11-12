@@ -1,16 +1,22 @@
 import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { Component, Suspense, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { Component, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { CHARACTER_IDS, SLOT_COLORS, type Dir } from '@4walls/shared';
+import { CHARACTER_IDS, SLOT_COLORS, STARTER_CHARACTERS, type Dir } from '@4walls/shared';
 import { Character } from './Character';
 import { HeadHat, headAnchor } from './Cosmetics';
 import { damp, lerp, useGame } from './context';
 
 /** Rigged models built by tools/blender/build_characters.py. */
 export const modelUrl = (id: string) => `/models/${(CHARACTER_IDS as string[]).includes(id) ? id : 'bombito'}.glb`;
-for (const id of CHARACTER_IDS) useGLTF.preload(modelUrl(id));
+// Starters load with the game; rescued heroes (bigger, rarer) load when a scene needs them.
+for (const id of STARTER_CHARACTERS) useGLTF.preload(modelUrl(id));
+export const preloadHeroes = () => {
+  for (const id of CHARACTER_IDS) if (!STARTER_CHARACTERS.includes(id)) useGLTF.preload(modelUrl(id));
+};
+/** Heroes whose costume already covers the head: cosmetic hats would clash with it. */
+const BUILT_IN_HEADGEAR = new Set(['bombzaga', 'tiringao', 'bombiao', 'reipelota', 'senha']);
 
 const FACING_ANGLE: Record<Dir, number> = { down: 0, right: Math.PI / 2, up: Math.PI, left: -Math.PI / 2 };
 const shortestAngle = (from: number, to: number) => {
@@ -27,6 +33,18 @@ const MODEL_SCALE = 1.12;
  * (while loading) or if the file is missing/broken. Gameplay never waits on art.
  */
 export function PlayerAvatar({ playerId }: { playerId: string }) {
+  // A rescued hero can change a player's class mid-match: remount with the new model.
+  const { controller } = useGame();
+  const characterOf = () => controller.state.players.find((p) => p.id === playerId)?.characterId ?? 'bombito';
+  const [characterId, setCharacterId] = useState(characterOf);
+  useFrame(() => {
+    const c = characterOf();
+    if (c !== characterId) setCharacterId(c);
+  });
+  return <AvatarModel key={characterId} playerId={playerId} />;
+}
+
+function AvatarModel({ playerId }: { playerId: string }) {
   return (
     <ModelErrorBoundary fallback={<Character playerId={playerId} />}>
       <Suspense fallback={<Character playerId={playerId} />}>
@@ -67,7 +85,8 @@ function CharacterGLB({ playerId }: { playerId: string }) {
   const colors = SLOT_COLORS[player.colorIndex % SLOT_COLORS.length];
 
   // Each player gets its own skeleton and materials (tinted with the player's colors).
-  const hat = controller.state.config.players.find((p) => p.id === playerId)?.loadout?.hat;
+  const ownHat = controller.state.config.players.find((p) => p.id === playerId)?.loadout?.hat;
+  const hat = BUILT_IN_HEADGEAR.has(player.characterId) ? null : ownHat;
   const { scene, mixer, actions, tinted, eyes, anchor } = useMemo(() => {
     const scene = cloneSkinned(gltf.scene) as THREE.Group;
     const tinted: THREE.MeshStandardMaterial[] = [];

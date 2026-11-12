@@ -108,7 +108,8 @@ export function stepPlayerMovement(s: GameState, p: PlayerState, input: PlayerIn
     p.facing = dir;
     const bx = p.x;
     const by = p.y;
-    movePlayer(s, p, dir, p.speed * TICK_DT * (icy ? ICE_SPEED_BONUS : 1));
+    const turbo = s.tick < (p.turboUntil ?? 0) ? RULES.turboMult : 1;
+    movePlayer(s, p, dir, p.speed * TICK_DT * (icy ? ICE_SPEED_BONUS : 1) * turbo);
     p.moving = p.x !== bx || p.y !== by;
     if (!p.moving) {
       if (p.canKick) tryKick(s, p, dir);

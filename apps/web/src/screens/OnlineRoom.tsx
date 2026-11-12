@@ -4,6 +4,7 @@ import { ARENAS } from '@4walls/shared';
 import { MAX_ROOM_SLOTS, type LobbyInfo, type OnlineMode, type StartInfo } from '@4walls/protocol';
 import { sfx } from '../audio/Sfx';
 import { Hud } from '../hud/Hud';
+import { HeroReveal } from '../ui/HeroReveal';
 import { deviceLabel, devicesOfLocal, type DeviceId, type UiEvent } from '../input/InputManager';
 import { ME, useProfile } from '../store/useProfile';
 import { ONLINE_MODES } from '@4walls/protocol';
@@ -70,6 +71,7 @@ function OnlineMatch({ start, locals, mode, onLeave, reconnecting }: { start: St
     <div className="relative h-full w-full overflow-hidden bg-[#1a0d10]">
       <GameScene controller={controller} />
       <Hud mode={mode} onResume={() => controller.toggleMenu(false)} onExit={onLeave} exitLabel="Sair da sala" resultNote="Voltando à sala…" />
+      <HeroReveal controller={controller} />
       <MatchTouchControls />
       {reconnecting && <ReconnectBanner />}
     </div>

@@ -100,6 +100,14 @@ export const RULES = {
   mineLifeSec: 25,
   maxMines: 2,
   dashCells: 3,
+  // Rescued characters' abilities
+  forroRadius: 2,
+  forroStunSec: 1,
+  laughRadius: 3,
+  laughSec: 1.5,
+  blunderbussCells: 3,
+  turboSec: 2.5,
+  turboMult: 2,
   eventFirstSec: 30,
   eventIntervalSec: 45,
   eventWarnSec: 3,
@@ -224,7 +232,7 @@ export const ADVENTURE = {
 
 export type BiomeId = 'volcanic' | 'transition' | 'forest';
 
-export type AbilityId = 'miniBomb' | 'dash' | 'mine';
+export type AbilityId = 'miniBomb' | 'dash' | 'mine' | 'forro' | 'laugh' | 'blunderbuss' | 'bicycle' | 'turbo' | 'prize';
 
 export interface CharacterDef {
   id: CharacterId;
@@ -239,9 +247,17 @@ export interface CharacterDef {
   abilityName: string;
   abilityDesc: string;
   cooldownSec: number;
+  /** Everyone has it from the start; the others are rescued from cages in Adventure. */
+  starter: boolean;
+  /** Starts with the kick power. */
+  startsWithKick?: boolean;
+  /** Shown big on the "joins the fight" screen. */
+  quote: string;
+  /** Signature colors for the reveal screen and the locked card. */
+  theme: { main: string; accent: string };
 }
 
-export type CharacterId = 'bombito' | 'ninja' | 'engenheiro';
+export type CharacterId = 'bombito' | 'ninja' | 'engenheiro' | 'bombzaga' | 'tiringao' | 'bombiao' | 'reipelota' | 'senha' | 'silvio';
 
 /** Balanced by trade-offs: every perk costs something. Cosmetics never change these numbers. */
 export const CHARACTERS: Record<CharacterId, CharacterDef> = {
@@ -257,6 +273,9 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     abilityName: 'Bomba Extra',
     abilityDesc: 'Solta uma mini-bomba mesmo no limite',
     cooldownSec: 9,
+    starter: true,
+    quote: 'Pavio curto, coração grande!',
+    theme: { main: '#ffd21a', accent: '#ff7a3c' },
   },
   ninja: {
     id: 'ninja',
@@ -270,6 +289,9 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     abilityName: 'Investida',
     abilityDesc: 'Avança 3 casas num instante',
     cooldownSec: 5,
+    starter: true,
+    quote: 'Você nem me viu passar.',
+    theme: { main: '#3a3150', accent: '#ff4d6d' },
   },
   engenheiro: {
     id: 'engenheiro',
@@ -283,9 +305,111 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     abilityName: 'Mina',
     abilityDesc: 'Planta uma mina que explode ao ser pisada (máx. 2)',
     cooldownSec: 8,
+    starter: true,
+    quote: 'Pisou? Já era.',
+    theme: { main: '#ffc21a', accent: '#5a4632' },
+  },
+  // ── Rescued in Adventure: Brazilian legends, lightly renamed (affectionate parodies). ──
+  bombzaga: {
+    id: 'bombzaga',
+    name: 'Luiz Bombzaga',
+    tagline: 'O Rei do Baião-bum. Empurra o perigo para longe.',
+    speedBonus: 0,
+    bombBonus: 0,
+    rangeBonus: 0,
+    maxBombs: 6,
+    ability: 'forro',
+    abilityName: 'Forró Sísmico',
+    abilityDesc: 'Um fole de sanfona empurra as bombas a até 2 casas e atordoa os Magmitos perto',
+    cooldownSec: 8,
+    starter: false,
+    quote: 'Arrasta o pé que lá vem bomba!',
+    theme: { main: '#8a5a33', accent: '#ffcc4d' },
+  },
+  tiringao: {
+    id: 'tiringao',
+    name: 'Tiringão',
+    tagline: 'Piada pronta e explosão garantida. Um pouco lento.',
+    speedBonus: -0.15,
+    bombBonus: 0,
+    rangeBonus: 0,
+    maxBombs: 7,
+    ability: 'laugh',
+    abilityName: 'Gargalhada',
+    abilityDesc: 'Quem estiver a até 3 casas (Magmitos e rivais) congela de tanto rir',
+    cooldownSec: 10,
+    starter: false,
+    quote: 'Rapaz... deu ruim pra tu!',
+    theme: { main: '#e8c26a', accent: '#d9481f' },
+  },
+  bombiao: {
+    id: 'bombiao',
+    name: 'Bombião',
+    tagline: 'Cangaceiro de pontaria certeira. Lento, alcance maior.',
+    speedBonus: -0.2,
+    bombBonus: 0,
+    rangeBonus: 1,
+    maxBombs: 7,
+    ability: 'blunderbuss',
+    abilityName: 'Bacamarte',
+    abilityDesc: 'Dispara uma explosão até 3 casas à frente (estoura bombas no caminho)',
+    cooldownSec: 7,
+    starter: false,
+    quote: 'O sertão vai virar fumaça!',
+    theme: { main: '#7a4a24', accent: '#f2b622' },
+  },
+  reipelota: {
+    id: 'reipelota',
+    name: 'Rei Pelota',
+    tagline: 'Camisa 10 das explosões. Já sai chutando bombas.',
+    speedBonus: 0.3,
+    bombBonus: 0,
+    rangeBonus: 0,
+    maxBombs: 6,
+    ability: 'bicycle',
+    abilityName: 'Bicicleta',
+    abilityDesc: 'Põe uma bomba e já chuta ela deslizando para a frente',
+    cooldownSec: 6,
+    starter: false,
+    startsWithKick: true,
+    quote: 'Bomba no ângulo!',
+    theme: { main: '#ffdf00', accent: '#009c3b' },
+  },
+  senha: {
+    id: 'senha',
+    name: 'Ayrton Senha',
+    tagline: 'Rápido como um domingo de manhã. Poucas bombas.',
+    speedBonus: 0.4,
+    bombBonus: 0,
+    rangeBonus: 0,
+    maxBombs: 5,
+    ability: 'turbo',
+    abilityName: 'Turbo',
+    abilityDesc: 'Dobra a velocidade por 2,5 segundos',
+    cooldownSec: 10,
+    starter: false,
+    quote: 'Primeira curva, primeira explosão!',
+    theme: { main: '#ffd400', accent: '#0a7a3c' },
+  },
+  silvio: {
+    id: 'silvio',
+    name: 'Silvio Bombos',
+    tagline: 'O apresentador mais explosivo da TV. Um pouco lento.',
+    speedBonus: -0.1,
+    bombBonus: 0,
+    rangeBonus: 0,
+    maxBombs: 6,
+    ability: 'prize',
+    abilityName: 'Quem quer bomba?',
+    abilityDesc: 'Faz aparecer um power-up aleatório ao lado dele',
+    cooldownSec: 14,
+    starter: false,
+    quote: 'Quem quer bomba? Ma oeee!',
+    theme: { main: '#1f5fd1', accent: '#ffd23f' },
   },
 };
 export const CHARACTER_IDS = Object.keys(CHARACTERS) as CharacterId[];
+export const STARTER_CHARACTERS = CHARACTER_IDS.filter((id) => CHARACTERS[id].starter);
 
 export type ArenaId = 'caldeira' | 'floresta';
 export interface ArenaDef {

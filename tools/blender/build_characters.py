@@ -25,6 +25,7 @@ from mathutils import Euler, Vector
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mixamo_retarget import apply_mixamo  # noqa: E402
 from chibi_actions import build_chibi_actions  # noqa: E402
+import hero_gear  # noqa: E402
 
 ARGS = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
 MIXAMO_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "game-assets", "mixamo"))
@@ -637,6 +638,9 @@ def build_character(char_id):
         ninja_gear(mats, parts)
     elif char_id == "engenheiro":
         engineer_gear(mats, parts)
+    elif char_id in hero_gear.GEAR:
+        hero_gear.setup(sys.modules[__name__])
+        hero_gear.GEAR[char_id](mats, parts)
     rig = build_rig(char_id)
     mesh = skin_to_rig(rig, body, parts)
     mesh.name = char_id
@@ -670,7 +674,7 @@ def export(char_id, rig, mesh):
     print(f"[4walls] exported {path} ({os.path.getsize(path) // 1024} KB)")
 
 
-def preview(char_id, rig, action_name, frame, suffix, eyes="Eye"):
+def preview(char_id, rig, action_name, frame, suffix, eyes="Eye", view="front"):
     if not PREVIEW_DIR:
         return
     os.makedirs(PREVIEW_DIR, exist_ok=True)
@@ -682,6 +686,18 @@ def preview(char_id, rig, action_name, frame, suffix, eyes="Eye"):
             m.surface_render_method = "BLENDED"
             m.node_tree.nodes["Principled BSDF"].inputs["Alpha"].default_value = 1.0 if name == eyes else 0.0
     scene.frame_set(frame)
+    if scene.camera and view != scene.get("view", "front"):
+        cam = scene.camera
+        if view == "back":
+            cam.location = (-1.0, 2.7, 1.3)
+            cam.rotation_euler = Euler((math.radians(78), 0, math.radians(200)))
+        elif view == "close":
+            cam.location = (0.55, -1.5, 1.0)
+            cam.rotation_euler = Euler((math.radians(80), 0, math.radians(20)))
+        else:
+            cam.location = (1.0, -2.7, 1.25)
+            cam.rotation_euler = Euler((math.radians(78), 0, math.radians(20)))
+        scene["view"] = view
     if not scene.camera:
         cam = bpy.data.objects.new("Cam", bpy.data.cameras.new("Cam"))
         scene.collection.objects.link(cam)
@@ -707,8 +723,69 @@ def preview(char_id, rig, action_name, frame, suffix, eyes="Eye"):
     bpy.ops.render.render(write_still=True)
 
 
+HEROES = ("bombzaga", "tiringao", "bombiao", "reipelota", "senha", "silvio")
+
+
+def portrait(char_id, rig, out_dir):
+    """Transparent victory-pose portrait for the "joins the fight" screen (apps/web/public/heroes)."""
+    os.makedirs(out_dir, exist_ok=True)
+    scene = bpy.context.scene
+    rig.animation_data.action = bpy.data.actions["Victory"]
+    for name in ("Eye", "EyeHappy", "EyeX"):
+        m = bpy.data.materials.get(name)
+        if m:
+            m.surface_render_method = "BLENDED"
+            m.node_tree.nodes["Principled BSDF"].inputs["Alpha"].default_value = 1.0 if name == "EyeHappy" else 0.0
+    scene.frame_set(9)
+    cam = bpy.data.objects.new("PortraitCam", bpy.data.cameras.new("PortraitCam"))
+    scene.collection.objects.link(cam)
+    cam.location = (0.85, -2.85, 1.02)
+    cam.rotation_euler = Euler((math.radians(88), 0, math.radians(17)))
+    cam.data.lens = 50
+    scene.camera = cam
+    key = bpy.data.objects.new("Key", bpy.data.lights.new("Key", "SUN"))
+    key.data.energy = 4.5
+    key.rotation_euler = Euler((math.radians(45), math.radians(-10), math.radians(25)))
+    scene.collection.objects.link(key)
+    rim = bpy.data.objects.new("Rim", bpy.data.lights.new("Rim", "SUN"))
+    rim.data.energy = 3.0
+    rim.data.color = (1.0, 0.75, 0.45)
+    rim.rotation_euler = Euler((math.radians(60), 0, math.radians(200)))
+    scene.collection.objects.link(rim)
+    world = bpy.data.worlds.new("PW")
+    world.use_nodes = True
+    world.node_tree.nodes["Background"].inputs[0].default_value = (0.5, 0.45, 0.45, 1)
+    world.node_tree.nodes["Background"].inputs[1].default_value = 0.9
+    scene.world = world
+    engines = [e.identifier for e in bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items]
+    scene.render.engine = "BLENDER_EEVEE_NEXT" if "BLENDER_EEVEE_NEXT" in engines else ("BLENDER_EEVEE" if "BLENDER_EEVEE" in engines else "BLENDER_WORKBENCH")
+    scene.render.resolution_x = 560
+    scene.render.resolution_y = 640
+    scene.render.film_transparent = True
+    scene.render.image_settings.file_format = "PNG"
+    scene.render.image_settings.color_mode = "RGBA"
+    scene.render.filepath = os.path.join(out_dir, f"{char_id}.png")
+    bpy.ops.render.render(write_still=True)
+    print(f"[4walls] portrait {scene.render.filepath}")
+
+
 def main():
-    for char_id in ("bombito", "ninja", "engenheiro"):
+    only = [c for c in os.environ.get("ONLY", "").split(",") if c]
+    portraits = os.environ.get("PORTRAITS")
+    if portraits:
+        for char_id in only or ("bombito", "ninja", "engenheiro", *HEROES):
+            rig, mesh, _ = build_character(char_id)
+            portrait(char_id, rig, portraits)
+        return
+    for char_id in only or ("bombito", "ninja", "engenheiro", *HEROES):
+        if char_id in HEROES:
+            rig, mesh, _ = build_character(char_id)
+            export(char_id, rig, mesh)
+            preview(char_id, rig, "Idle", 1, "idle")
+            preview(char_id, rig, "Idle", 1, "back", view="back")
+            preview(char_id, rig, "Victory", 8, "victory", eyes="EyeHappy")
+            preview(char_id, rig, "Idle", 1, "face", view="close")
+            continue
         rig, mesh, _ = build_character(char_id)
         export(char_id, rig, mesh)
         preview(char_id, rig, "Idle", 1, "idle")

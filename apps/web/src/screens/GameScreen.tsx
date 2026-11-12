@@ -4,6 +4,7 @@ import { ARENAS, ARENA_IDS, type ArenaId, type GameConfig } from '@4walls/shared
 import { sfx } from '../audio/Sfx';
 import { GameController, type LocalPlayerBinding } from '../game/GameController';
 import { Hud } from '../hud/Hud';
+import { HeroReveal } from '../ui/HeroReveal';
 import { inputManager } from '../input/instance';
 import { GameScene } from '../scene/GameScene';
 import { useMatchSetup, type LocalMode } from '../store/useMatchSetup';
@@ -120,6 +121,7 @@ export function GameScreen() {
     <div className="relative h-full w-full overflow-hidden bg-[#1a0d10]">
       <GameScene key={controller.state.config.seed} controller={controller} />
       <Hud mode={plan.mode} onResume={() => controller.setPaused(false)} onRestart={restart} onExit={exit} exitLabel={fromLobbyFlow ? 'Voltar ao lobby' : 'Menu principal'} />
+      <HeroReveal key={`reveal-${controller.state.config.seed}`} controller={controller} />
       <MatchTouchControls />
     </div>
   );

@@ -1,8 +1,8 @@
 import { Client, type Room } from '@colyseus/sdk';
 import { create } from 'zustand';
 import { DEFAULT_PORT, ROOM_NAME, type LobbyInfo, type Messages, type Snapshot, type StartInfo } from '@4walls/protocol';
-import type { RewardReport } from '@4walls/shared';
-import { receiveReward } from '../store/useAccount';
+import type { AccountView, RewardReport } from '@4walls/shared';
+import { receiveAccount, receiveReward } from '../store/useAccount';
 
 export type OnlineStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error';
 
@@ -117,6 +117,7 @@ class OnlineSession {
     });
     room.onMessage('start', (start: StartInfo) => useOnline.setState({ start }));
     room.onMessage('rewards', (r: RewardReport) => receiveReward(r));
+    room.onMessage('account', (a: AccountView) => receiveAccount(a));
     room.onMessage('snap', (snap: Snapshot) => {
       for (const l of this.snapListeners) l(snap);
     });

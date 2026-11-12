@@ -54,6 +54,8 @@ export interface PlayerState {
   /** Roll / jump in progress (position is scripted from → to while it lasts). */
   maneuver: Maneuver | null;
   maneuverReadyTick: number;
+  /** Turbo ability (Ayrton Senha): double speed until this tick. */
+  turboUntil: number;
 }
 
 export interface Maneuver {
@@ -190,6 +192,21 @@ export interface AdventureState {
   regionOf: Int16Array;
   /** 1 once any player has seen the cell. */
   explored: Uint8Array;
+  /** Caged heroes waiting to be rescued (one per region). */
+  cages: CageState[];
+}
+
+/**
+ * A caged hero. Locked: the cell is a destructible block drawn as a cage. A blast frees the
+ * prisoner (state "free"); touching them rescues them: a fallen ally comes back as a random hero,
+ * or the rescuer turns into one.
+ */
+export interface CageState {
+  id: number;
+  x: number;
+  y: number;
+  region: number;
+  state: 'locked' | 'free' | 'rescued';
 }
 
 export type BossAction = 'walk' | 'windup' | 'recover' | 'charge' | 'stunned' | 'burrowed' | 'dead';
@@ -257,6 +274,9 @@ export type GameEvent =
   | { type: 'gateOpened'; gateId: number; x: number; y: number; region: number }
   /** Adventure: a fallen ally comes back when a gate opens. */
   | { type: 'playerRevived'; playerId: string; x: number; y: number }
+  | { type: 'cageOpened'; cageId: number; x: number; y: number }
+  /** A rescued hero joins: `revived` = a fallen ally came back as them, otherwise the rescuer turned into them. */
+  | { type: 'heroJoined'; playerId: string; byId: string; characterId: string; previousId: string; revived: boolean; x: number; y: number }
   | { type: 'bossSpawned'; boss: BossId; index: number; total: number }
   | { type: 'bossWindup'; attack: BossAttack }
   | { type: 'bossSlam'; x: number; y: number }

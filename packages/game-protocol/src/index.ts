@@ -157,8 +157,8 @@ export interface StartInfo {
   grid: string;
 }
 
-/** Dynamic per-player fields (static ones — name, slot, color, character — travel in StartInfo). */
-type SnapPlayer = Omit<PlayerState, 'px' | 'py' | 'name' | 'slot' | 'characterId' | 'colorIndex'>;
+/** Dynamic per-player fields (static ones — name, slot, color — travel in StartInfo; the character can change mid-match). */
+type SnapPlayer = Omit<PlayerState, 'px' | 'py' | 'name' | 'slot' | 'colorIndex'>;
 type SnapEnemy = Omit<EnemyState, 'px' | 'py'>;
 
 /** Authoritative snapshot (~30×/s, msgpack-encoded by Colyseus). Floats rounded to 3 decimals. */
@@ -178,8 +178,8 @@ export interface Snapshot {
   ev0: ArenaEventState | null;
   ne: number;
   r: GameResult | null;
-  /** Adventure: region flags (bit 0 unlocked, bit 1 cleared) and gate open ticks (-1 = sealed). */
-  adv?: { r: number[]; g: number[] };
+  /** Adventure: region flags (bit 0 unlocked, bit 1 cleared), gate open ticks (-1 = sealed), cage states (0 locked, 1 free, 2 rescued). */
+  adv?: { r: number[]; g: number[]; c?: number[] };
   /** Boss Rush: the boss in the arena, the queue, how many fell, when the next one enters. */
   bs?: Omit<BossState, 'px' | 'py'> | null;
   bq?: BossId[];
@@ -202,7 +202,7 @@ export function encodeSnapshot(s: GameState, ack: Record<number, number>, ev: Ga
     pst: s.phaseStartTick,
     tl: s.timeLeftTicks,
     g: encodeGrid(s),
-    p: s.players.map(({ px: _px, py: _py, name: _n, slot: _s, characterId: _c, colorIndex: _ci, ...rest }) => ({
+    p: s.players.map(({ px: _px, py: _py, name: _n, slot: _s, colorIndex: _ci, ...rest }) => ({
       ...rest,
       x: r3(rest.x),
       y: r3(rest.y),
@@ -222,6 +222,7 @@ export function encodeSnapshot(s: GameState, ack: Record<number, number>, ev: Ga
           adv: {
             r: s.adventure.regions.map((r) => (r.unlocked ? 1 : 0) | (r.cleared ? 2 : 0)),
             g: s.adventure.gates.map((g) => (g.open ? g.openedTick : -1)),
+            c: s.adventure.cages.map((c) => (c.state === 'locked' ? 0 : c.state === 'free' ? 1 : 2)),
           },
         }
       : {}),
@@ -273,6 +274,10 @@ export function applySnapshot(s: GameState, snap: Snapshot) {
         r.unlocked = (f & 1) !== 0;
         r.cleared = (f & 2) !== 0;
       }
+    });
+    snap.adv.c?.forEach((st, i) => {
+      const c = s.adventure!.cages[i];
+      if (c) c.state = st === 0 ? 'locked' : st === 1 ? 'free' : 'rescued';
     });
     snap.adv.g.forEach((t, i) => {
       const g = s.adventure!.gates[i];

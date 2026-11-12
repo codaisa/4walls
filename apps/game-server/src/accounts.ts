@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 import {
   ACHIEVEMENTS,
   CHARACTER_IDS,
+  STARTER_CHARACTERS,
   COSMETICS,
   EMPTY_LOADOUT,
   EMPTY_STATS,
@@ -74,6 +75,7 @@ export class AccountStore {
       xp: 0,
       coins: 300, // a welcome gift: enough for a first cheap cosmetic
       owned: [],
+      characters: [],
       loadout: { ...EMPTY_LOADOUT },
       stats: { ...EMPTY_STATS },
       achievements: [],
@@ -119,6 +121,19 @@ export class AccountStore {
     acc.owned.push(item.id);
     this.touch(acc);
     return { ok: true, account: this.view(acc) };
+  }
+
+  /** Starters, plus the heroes this account rescued. */
+  canPlay(acc: StoredAccount | null, characterId: string) {
+    return (STARTER_CHARACTERS as string[]).includes(characterId) || (!!acc && acc.characters.includes(characterId));
+  }
+
+  /** A hero rescued in Adventure joins the collection. Returns true the first time. */
+  unlockCharacter(acc: StoredAccount, characterId: string) {
+    if (!(CHARACTER_IDS as string[]).includes(characterId) || this.canPlay(acc, characterId)) return false;
+    acc.characters.push(characterId);
+    this.touch(acc);
+    return true;
   }
 
   /** Books one finished match: stats, XP, coins, level-ups, achievements, unlocks, history. */
@@ -187,7 +202,7 @@ export class AccountStore {
 
   private applyProfile(acc: StoredAccount, p: { name?: unknown; characterId?: unknown; colorIndex?: unknown }) {
     if (p.name !== undefined) acc.name = sanitizeName(p.name, acc.name);
-    if (typeof p.characterId === 'string' && (CHARACTER_IDS as string[]).includes(p.characterId)) acc.characterId = p.characterId;
+    if (typeof p.characterId === 'string' && this.canPlay(acc, p.characterId)) acc.characterId = p.characterId;
     if (Number.isInteger(p.colorIndex) && (p.colorIndex as number) >= 0 && (p.colorIndex as number) < SLOT_COLORS.length) acc.colorIndex = p.colorIndex as number;
   }
 
@@ -202,6 +217,8 @@ export class AccountStore {
     a.achievements = a.achievements ?? [];
     a.history = a.history ?? [];
     a.seasonXp = a.seasonXp ?? {};
+    a.characters = (a.characters ?? []).filter((id) => (CHARACTER_IDS as string[]).includes(id) && !(STARTER_CHARACTERS as string[]).includes(id));
+    if (!this.canPlay(a, a.characterId)) a.characterId = 'bombito';
     this.grantEarned(a);
     a.loadout = sanitizeLoadout(a.loadout ?? EMPTY_LOADOUT, a.owned);
     return a;

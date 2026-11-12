@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { Room, type Client } from 'colyseus';
 import { createGame, step, type GameEvent, type GameState, type InputMap } from '@4walls/core';
-import { ARENAS, CHARACTER_IDS, EMPTY_INPUT, SLOT_COLORS, levelInfo, type ArenaId, type BossId, type Dir, type MatchPerformance } from '@4walls/shared';
+import { ARENAS, CHARACTER_IDS, EMPTY_INPUT, SLOT_COLORS, STARTER_CHARACTERS, levelInfo, type CharacterId, type ArenaId, type BossId, type Dir, type MatchPerformance } from '@4walls/shared';
 import type { AccountStore } from './accounts';
 import {
   AUTO_START_MS,
@@ -108,9 +108,11 @@ export class ArenaRoom extends Room {
     this.on('character', (client, msg: { slot?: unknown; step?: unknown }) => {
       const s = this.ownedSlot(client, msg?.slot);
       if (!s || this.phase !== 'lobby' || s.ready) return;
-      const i = CHARACTER_IDS.indexOf(s.characterId);
-      const n = CHARACTER_IDS.length;
-      s.characterId = CHARACTER_IDS[(((i + (msg.step === -1 ? -1 : 1)) % n) + n) % n];
+      // Cycle through the heroes this player may use (starters + the ones their account rescued).
+      const pool = this.playableFor(s.slot);
+      const i = Math.max(0, pool.indexOf(s.characterId));
+      const n = pool.length;
+      s.characterId = pool[(((i + (msg.step === -1 ? -1 : 1)) % n) + n) % n];
       this.lobbyChanged();
     });
     this.on('arena', (client, msg: { arena?: unknown }) => {
@@ -194,7 +196,6 @@ export class ArenaRoom extends Room {
     // falls back to the next free one if somebody already wears it.
     const wanted = Number.isInteger(msg?.colorIndex) && (msg.colorIndex as number) >= 0 && (msg.colorIndex as number) < SLOT_COLORS.length ? (msg.colorIndex as number) : slot;
     const colorIndex = this.slots.some((s) => s.colorIndex === wanted) ? this.nextColor(wanted, 1, slot) : wanted;
-    const characterId = isCharacterId(msg?.characterId) ? msg.characterId : 'bombito';
     const name = sanitizeName(msg?.name, `P${slot + 1}`);
     // A logged-in player brings their level and cosmetics; one account drives one slot at most.
     const acc = ArenaRoom.accounts?.auth(msg?.auth) ?? null;
@@ -202,9 +203,36 @@ export class ArenaRoom extends Room {
     if (acc && !taken) this.slotAccount.set(slot, acc.id);
     else this.slotAccount.delete(slot);
     const extra = acc && !taken ? { level: levelInfo(acc.xp).level, loadout: acc.loadout } : {};
+    // Rescued heroes need an account that owns them; guests play the starters.
+    const wantedHero = isCharacterId(msg?.characterId) ? msg.characterId : 'bombito';
+    const allowed = ArenaRoom.accounts ? ArenaRoom.accounts.canPlay(acc && !taken ? acc : null, wantedHero) : STARTER_CHARACTERS.includes(wantedHero);
+    const characterId = allowed ? wantedHero : 'bombito';
     this.slots.push({ slot, owner: client.sessionId, localId, name, colorIndex, characterId, ready: false, connected: true, ...extra });
     this.slots.sort((a, b) => a.slot - b.slot);
     this.lobbyChanged();
+  }
+
+  /** Heroes a slot may pick in the lobby. */
+  private playableFor(slot: number): CharacterId[] {
+    const accId = this.slotAccount.get(slot);
+    const acc = accId ? (ArenaRoom.accounts?.get(accId) ?? null) : null;
+    return CHARACTER_IDS.filter((id) => STARTER_CHARACTERS.includes(id) || !!acc?.characters.includes(id));
+  }
+
+  /**
+   * A hero rescued in Adventure joins the collection of the account behind that player (the
+   * player's own slot, or the logged-in player on the same device for local guests).
+   */
+  private unlockHero(playerId: string, characterId: string) {
+    const store = ArenaRoom.accounts;
+    const p = this.game?.players.find((pp) => pp.id === playerId);
+    const slot = p && this.slots.find((s) => s.slot === p.slot);
+    if (!store || !slot) return;
+    const own = this.slotAccount.get(slot.slot);
+    const accId = own ?? this.slots.map((s) => (s.owner === slot.owner ? this.slotAccount.get(s.slot) : undefined)).find(Boolean);
+    const acc = accId ? store.get(accId) : null;
+    if (!acc || !store.unlockCharacter(acc, characterId)) return;
+    this.clients.find((c) => c.sessionId === slot.owner)?.send('account', store.view(acc));
   }
 
   private ownedSlot(client: Client, slot: unknown) {
@@ -366,6 +394,7 @@ export class ArenaRoom extends Room {
       else if (e.type === 'enemyDied') this.tallyOf(e.byId).enemies++;
       else if (e.type === 'powerupCollected') this.tallyOf(e.playerId).powerups++;
       else if (e.type === 'bossDefeated') this.bossesDown.push(e.boss);
+      else if (e.type === 'heroJoined') this.unlockHero(e.playerId, e.characterId);
     }
   }
 

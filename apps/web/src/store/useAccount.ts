@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { EMPTY_LOADOUT, type AccountView, type CosmeticSlot, type Loadout, type RankingBoard, type RankingEntry, type RewardReport } from '@4walls/shared';
+import { EMPTY_LOADOUT, STARTER_CHARACTERS, type AccountView, type CosmeticSlot, type Loadout, type RankingBoard, type RankingEntry, type RewardReport } from '@4walls/shared';
 import { serverUrl } from '../online/session';
 import { useProfile } from './useProfile';
 
@@ -146,4 +146,29 @@ export async function restoreAccount(code: string): Promise<boolean> {
   // The local profile follows the account it now belongs to.
   useProfile.getState().set({ name: account.name, characterId: account.characterId as never, colorIndex: account.colorIndex });
   return true;
+}
+
+/** Server push (e.g. a hero unlocked mid-match). */
+export function receiveAccount(account: AccountView) {
+  useAccount.setState({ account });
+}
+
+/** Heroes this device can pick: starters + the ones its account rescued. */
+export function ownedHeroes(): string[] {
+  const acc = useAccount.getState().account;
+  return [...STARTER_CHARACTERS, ...(acc?.characters ?? [])];
+}
+
+const claimedThisSession = new Set<string>();
+/**
+ * A local player just got `characterId` from a cage: true when it is new for this device's
+ * collection. Adds it right away so the menus show it (the server confirms with an "account" push).
+ */
+export function claimHero(characterId: string) {
+  if ((STARTER_CHARACTERS as string[]).includes(characterId)) return false;
+  const acc = useAccount.getState().account;
+  const owned = !!acc?.characters?.includes(characterId) || claimedThisSession.has(characterId);
+  claimedThisSession.add(characterId);
+  if (!owned && acc) useAccount.setState({ account: { ...acc, characters: [...(acc.characters ?? []), characterId] } });
+  return !owned;
 }

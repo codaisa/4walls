@@ -305,6 +305,8 @@ export interface AccountView {
   xp: number;
   coins: number;
   owned: string[];
+  /** Heroes rescued in Adventure (the starters are always available). */
+  characters: string[];
   loadout: Loadout;
   stats: PlayerStats;
   achievements: AchievementId[];

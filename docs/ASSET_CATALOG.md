@@ -19,6 +19,8 @@ individualmente. Prioridade: CC0 / domínio público / licença comercial compat
 | Nunito | Fonte | Google Fonts via @fontsource | https://fonts.google.com/specimen/Nunito | Vernon Adams et al. | SIL OFL 1.1 | Não obrigatória | Sim | Sim, com a OFL | `node_modules/@fontsource/nunito` |
 
 | Bombito, Ninja, Engenheiro (GLB rigados + 5 animações) | Modelo 3D gerado por script no Blender | Próprio (`tools/blender/build_characters.py`) | — | Equipe 4Walls | Proprietário | Não | Sim | — | `apps/web/public/models/*.glb` |
+| Heróis resgatáveis: Luiz Bombzaga, Tiringão, Bombião, Rei Pelota, Ayrton Senha, Silvio Bombos (GLB rigados + retratos PNG) | Modelo 3D gerado por script no Blender (paródias originais: só figurino icônico, sem rostos nem marcas) | Próprio (`tools/blender/hero_gear.py`) | — | Equipe 4Walls | Proprietário | Não | Sim | — | `apps/web/public/models/*.glb`, `apps/web/public/heroes/*.png` |
+| Cela e prisioneiro | Modelo procedural | Próprio (código) | — | Equipe 4Walls | Proprietário | Não | Sim | — | `apps/web/src/scene/Cages.tsx` |
 
 ## Fase 1 de arte (estúdio): `game-assets/`
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ARENAS, CHARACTER_IDS, CHARACTERS, SLOT_COLORS, type CharacterId } from '@4walls/shared';
+import { ownedHeroes } from '../store/useAccount';
 import { sfx } from '../audio/Sfx';
 import { deviceLabel, type DeviceId, type UiEvent } from '../input/InputManager';
 import { inputManager } from '../input/instance';
@@ -26,9 +27,11 @@ function nextFreeColor(players: LobbyPlayer[], from: number, step: 1 | -1, self?
   return from;
 }
 
+/** Next hero this device owns (starters + the ones its account rescued in Adventure). */
 export function cycleCharacter(id: CharacterId, step: 1 | -1): CharacterId {
-  const n = CHARACTER_IDS.length;
-  return CHARACTER_IDS[(((CHARACTER_IDS.indexOf(id) + step) % n) + n) % n];
+  const pool = CHARACTER_IDS.filter((c) => ownedHeroes().includes(c));
+  const n = pool.length;
+  return pool[(((Math.max(0, pool.indexOf(id)) + step) % n) + n) % n];
 }
 
 /**

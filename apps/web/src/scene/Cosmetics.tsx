@@ -8,7 +8,7 @@ import * as THREE from 'three';
  */
 
 /** Top of the block head in model space (the engineer's hard hat sits higher). */
-const HEAD_TOP: Record<string, number> = { bombito: 1.08, ninja: 1.08, engenheiro: 1.15 };
+const HEAD_TOP: Record<string, number> = { bombito: 1.08, ninja: 1.08, engenheiro: 1.15, silvio: 1.14 };
 
 export interface HeadAnchor {
   bone: THREE.Object3D;

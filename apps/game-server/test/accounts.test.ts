@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from '@colyseus/sdk';
+import { matchMaker } from 'colyseus';
 import { ROOM_NAME, type LobbyInfo } from '@4walls/protocol';
 import { COSMETICS, levelInfo, matchReward, type MatchPerformance, type RewardReport } from '@4walls/shared';
 import { AccountStore } from '../src/accounts';
@@ -33,6 +34,20 @@ describe('account store', () => {
     expect(store.auth(`${account.id}.wrong`)).toBeNull();
     expect(store.auth('nope')).toBeNull();
     expect(store.auth(42)).toBeNull();
+  });
+
+  it('rescued heroes join the collection once; only owned heroes can be picked', () => {
+    const store = new AccountStore(null);
+    const { credential, account } = store.create({ characterId: 'senha' });
+    expect(account.characterId).toBe('bombito'); // not rescued yet
+    expect(account.characters).toEqual([]);
+    const acc = store.auth(credential)!;
+    expect(store.unlockCharacter(acc, 'senha')).toBe(true);
+    expect(store.unlockCharacter(acc, 'senha')).toBe(false);
+    expect(store.unlockCharacter(acc, 'ninja')).toBe(false); // starters are always there
+    expect(store.unlockCharacter(acc, 'nobody')).toBe(false);
+    expect(store.updateProfile(acc, { characterId: 'senha' }).characterId).toBe('senha');
+    expect(store.view(acc).characters).toEqual(['senha']);
   });
 
   it('a match grants XP, coins, stats and history; level-ups and achievements pay extra', () => {
@@ -141,6 +156,43 @@ describe('account API + match rewards', () => {
     const ranking = await api('/api/ranking?board=wins', { auth });
     expect(ranking.status).toBe(200);
     expect(Array.isArray(ranking.body.entries)).toBe(true);
+  });
+
+  it('rescuing a caged hero online unlocks it on the account and pushes the account to that device', async () => {
+    const { body } = await api('/api/account', { method: 'POST', body: JSON.stringify({ name: 'Resgate' }) });
+    const auth = body.credential as string;
+    const client = new Client(`ws://localhost:${PORT}`);
+    const a = await client.create(ROOM_NAME, {});
+    let lobby: LobbyInfo | null = null;
+    let pushed: { characters: string[] } | null = null;
+    a.onMessage('lobby', (m: LobbyInfo) => (lobby = m));
+    a.onMessage('account', (m: { characters: string[] }) => (pushed = m));
+    for (const t of ['start', 'snap', 'rewards']) a.onMessage(t, () => {});
+    a.send('join_slot', { localId: 'kb1', auth, characterId: 'senha' });
+    await waitFor(() => (lobby as LobbyInfo | null)?.slots.length === 1);
+    expect(lobby!.slots[0].characterId).toBe('bombito'); // not rescued yet: no Senha
+    a.send('mode', { mode: 'adventure' });
+    await waitFor(() => (lobby as LobbyInfo | null)?.mode === 'adventure');
+    a.send('start', {});
+    // Reach into the authoritative room: blow the first cage open and stand on it.
+    const room = matchMaker.getLocalRoomById(a.roomId) as unknown as { game: import('@4walls/core').GameState | null };
+    const g = await waitFor(() => room.game?.phase === 'playing' && room.game);
+    const p = g.players[0];
+    // Rescue cage after cage until the draw gives a non-starter hero (the draw is random).
+    let hero = 'bombito';
+    for (const cage of g.adventure!.cages) {
+      g.grid.cells[cage.y * g.grid.w + cage.x] = 0;
+      await sleep(80);
+      p.x = p.px = cage.x;
+      p.y = p.py = cage.y;
+      hero = await waitFor(() => (cage.state === 'rescued' ? p.characterId : null));
+      if (!['bombito', 'ninja', 'engenheiro'].includes(hero)) break;
+    }
+    expect(['bombito', 'ninja', 'engenheiro']).not.toContain(hero);
+    const acc = await waitFor(() => (pushed as { characters: string[] } | null)?.characters.includes(hero) && pushed);
+    expect(acc).toBeTruthy();
+    expect((await api('/api/me', { auth })).body.account.characters).toContain(hero);
+    await a.leave(true);
   });
 
   it('the winner of an online match gets XP and the reward report; guests get nothing', async () => {

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { CHARACTER_IDS, SLOT_COLORS, type CharacterId } from '@4walls/shared';
+// Circular with useAccount on purpose: only used at call time, never during module init.
+import { ownedHeroes } from './useAccount';
 
 /** The player's own character: it belongs to the player (not to a room) and follows them everywhere. */
 export interface Profile {
@@ -49,8 +51,10 @@ export const useProfile = create<ProfileState>((set, get) => ({
     save({ name, characterId, colorIndex });
   },
   cycleCharacter: (step) => {
-    const i = CHARACTER_IDS.indexOf(get().characterId);
-    get().set({ characterId: CHARACTER_IDS[wrap(i + step, CHARACTER_IDS.length)] });
+    // Only heroes this device owns (starters + rescued ones).
+    const pool = CHARACTER_IDS.filter((id) => ownedHeroes().includes(id));
+    const i = Math.max(0, pool.indexOf(get().characterId));
+    get().set({ characterId: pool[wrap(i + step, pool.length)] });
   },
   cycleColor: (step) => get().set({ colorIndex: wrap(get().colorIndex + step, SLOT_COLORS.length) }),
 }));
