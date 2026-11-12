@@ -39,7 +39,7 @@ export function Profile() {
 
   return (
     <div ref={root} className="menu-bg relative flex h-full w-full flex-col overflow-hidden font-body text-white">
-      <div className="relative z-10 mx-auto flex h-full w-full max-w-5xl flex-col gap-3 px-4 py-4 [@media(max-height:500px)]:gap-2 [@media(max-height:500px)]:px-3 [@media(max-height:500px)]:py-2">
+      <div className="relative z-10 mx-auto flex h-full w-full max-w-5xl flex-col gap-3 screen-safe [@media(max-height:500px)]:gap-2">
         <header className="flex items-center justify-between gap-3">
           <button data-nav data-nav-default className="menu-btn !min-w-0 !px-4 !py-2 !text-lg [@media(max-height:500px)]:!py-1 [@media(max-height:500px)]:!text-base" onClick={back}>
             ← Voltar
@@ -51,7 +51,7 @@ export function Profile() {
         {!account ? (
           <div className="hud-panel px-4 py-6 text-center">{status === 'offline' ? 'Sem conexão com o servidor: o perfil fica guardado nele.' : 'Carregando…'}</div>
         ) : (
-          <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto pr-1 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] [@media(max-height:500px)]:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]" data-testid="profile-page">
+          <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto scroll-area md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] [@media(max-height:500px)]:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]" data-testid="profile-page">
             <section className="flex flex-col gap-3">
               <div className="hud-panel flex flex-col items-center gap-1 px-4 py-3">
                 <div className="flex items-center gap-2">

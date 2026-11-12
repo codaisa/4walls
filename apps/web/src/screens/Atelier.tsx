@@ -65,7 +65,7 @@ export function Atelier() {
 
   return (
     <div ref={root} className="menu-bg relative h-full w-full overflow-hidden font-body text-white">
-      <div className={`relative z-10 mx-auto grid h-full max-w-6xl grid-rows-[auto_1fr] gap-3 px-4 py-4 [@media(max-height:500px)]:gap-2 [@media(max-height:500px)]:px-3 [@media(max-height:500px)]:py-2`}>
+      <div className={`relative z-10 mx-auto grid h-full max-w-6xl grid-rows-[auto_1fr] gap-3 screen-safe [@media(max-height:500px)]:gap-2`}>
         <header className="flex items-center justify-between gap-3">
           <button data-nav className={`menu-btn !min-w-0 !px-4 !py-2 !text-lg [@media(max-height:500px)]:!py-1 [@media(max-height:500px)]:!text-base`} onClick={back}>
             ← Pronto
@@ -91,13 +91,13 @@ export function Atelier() {
               <TitleTag id={account?.loadout.title} />
             )}
             <div className="mb-2 text-xs font-bold uppercase tracking-widest text-amber-100/60 [@media(max-height:500px)]:mb-1">{CHARACTERS[profile.characterId].name}</div>
-            <div className="flex max-w-full flex-wrap justify-center gap-1.5 [@media(max-height:500px)]:flex-nowrap [@media(max-height:500px)]:justify-start [@media(max-height:500px)]:overflow-x-auto [@media(max-height:500px)]:pb-1 no-scrollbar">
+            <div className="flex max-w-full flex-wrap justify-center gap-1.5 [@media(max-height:500px)]:gap-1">
               {CLIPS.map((c) => (
                 <button
                   key={c.id}
                   data-nav
                   onClick={pick(() => setClip(c.id))}
-                  className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold transition ${clip === c.id ? 'border-amber-300 bg-amber-300/25 text-amber-100' : 'border-white/20 bg-black/30 text-white/80 hover:bg-white/10'}`}
+                  className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold transition [@media(max-height:500px)]:px-2 [@media(max-height:500px)]:py-0.5 [@media(max-height:500px)]:text-[11px] ${clip === c.id ? 'border-amber-300 bg-amber-300/25 text-amber-100' : 'border-white/20 bg-black/30 text-white/80 hover:bg-white/10'}`}
                 >
                   {c.label}
                 </button>
@@ -106,7 +106,7 @@ export function Atelier() {
           </section>
 
           {/* Options: cards. */}
-          <section className="min-h-0 overflow-y-auto pr-1" data-testid="atelier-options">
+          <section className="scroll-area min-h-0 overflow-y-auto" data-testid="atelier-options">
             <h2 className={`mb-2 text-xs font-bold uppercase tracking-widest text-amber-100/60`}>Personagem</h2>
             <div className="grid grid-cols-3 gap-2">
               {CHARACTER_IDS.map((id) => {

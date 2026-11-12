@@ -34,6 +34,69 @@ textarea {
   user-select: text;
 }
 
+/*
+ * Safe frame: phones have rounded corners, notches and gesture bars, so content keeps a margin
+ * from every edge (more on phones, plus the device's own safe-area insets).
+ * .screen-safe = menu screens (padding); .hud-safe = in-game overlays (absolute inset).
+ */
+:root {
+  --edge-x: 1rem;
+  --edge-y: 1rem;
+  --hud-edge-x: 0.75rem;
+  --hud-edge-y: 0.75rem;
+}
+@media (max-height: 500px) {
+  :root {
+    --edge-x: 1.75rem;
+    --edge-y: 0.75rem;
+    --hud-edge-x: 1.25rem;
+    --hud-edge-y: 0.5rem;
+  }
+}
+.screen-safe {
+  padding-top: max(var(--edge-y), env(safe-area-inset-top));
+  padding-bottom: max(var(--edge-y), env(safe-area-inset-bottom));
+  padding-left: max(var(--edge-x), calc(env(safe-area-inset-left) + 0.5rem));
+  padding-right: max(var(--edge-x), calc(env(safe-area-inset-right) + 0.5rem));
+}
+/* Lobby with the touch dock at the bottom. */
+.screen-safe.dock-space {
+  padding-bottom: calc(max(var(--edge-y), env(safe-area-inset-bottom)) + 6rem);
+}
+.hud-safe {
+  position: absolute;
+  top: max(var(--hud-edge-y), env(safe-area-inset-top));
+  bottom: max(var(--hud-edge-y), env(safe-area-inset-bottom));
+  left: max(var(--hud-edge-x), env(safe-area-inset-left));
+  right: max(var(--hud-edge-x), env(safe-area-inset-right));
+}
+/* Corner buttons of a screen, inside the safe frame. */
+.corner-tl,
+.corner-tr {
+  position: absolute !important;
+  top: max(var(--edge-y), env(safe-area-inset-top));
+  z-index: 20;
+}
+.corner-tl {
+  left: max(var(--edge-x), calc(env(safe-area-inset-left) + 0.5rem));
+}
+.corner-tr {
+  right: max(var(--edge-x), calc(env(safe-area-inset-right) + 0.5rem));
+}
+/* Scroll areas: room for focus rings and glows (no clipped edges) and a gap after the last row. */
+.scroll-area {
+  margin: -0.5rem -0.5rem 0;
+  padding: 0.5rem 0.75rem 1.5rem 0.5rem;
+  scroll-padding: 0.75rem;
+  /* Soft fade at the bottom edge: reads as "more below", never as a cut-off card. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.25rem), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 1.25rem), transparent);
+}
+.scroll-x-area {
+  margin: -0.5rem;
+  padding: 0.5rem;
+}
+
 /* Short landscape screens (phones): tighter menus. */
 @media (max-height: 500px) {
   .menu-btn {

@@ -83,7 +83,7 @@ export function TouchControls({ showPause = true }: { showPause?: boolean }) {
     });
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 select-none" data-testid="touch-controls" style={{ touchAction: 'none' }}>
+    <div className="hud-safe pointer-events-none z-20 select-none" data-testid="touch-controls" style={{ touchAction: 'none' }}>
       {/* Stick zone: the whole left half; the stick spawns where the thumb lands. */}
       <div
         className="pointer-events-auto absolute bottom-0 left-0 top-1/4 w-1/2"
@@ -122,14 +122,14 @@ export function TouchControls({ showPause = true }: { showPause?: boolean }) {
             />
           </div>
         ) : (
-          <div className="absolute bottom-10 left-10 flex h-28 w-28 items-center justify-center rounded-full border-2 border-dashed border-white/25 text-[10px] font-bold uppercase tracking-wider text-white/45">
+          <div className="absolute bottom-2 left-4 flex h-28 w-28 items-center justify-center rounded-full border-2 border-dashed border-white/25 text-[10px] font-bold uppercase tracking-wider text-white/45">
             Mover
           </div>
         )}
       </div>
 
       {/* Face buttons. */}
-      <div className="pointer-events-auto absolute bottom-6 right-5 h-44 w-44" style={{ touchAction: 'none' }}>
+      <div className="pointer-events-auto absolute bottom-0 right-0 h-44 w-44" style={{ touchAction: 'none' }}>
         {FACE.map((b) => (
           <button
             key={b.id}
@@ -152,7 +152,7 @@ export function TouchControls({ showPause = true }: { showPause?: boolean }) {
           aria-label="Pausa"
           onPointerDown={press('pause')}
           onPointerUp={release('pause')}
-          className="pointer-events-auto absolute right-3 top-3 z-30 flex h-11 w-11 items-center justify-center rounded-full border-2 border-white/60 bg-black/45 text-lg text-white"
+          className="pointer-events-auto absolute right-0 top-0 z-30 flex h-11 w-11 items-center justify-center rounded-full border-2 border-white/60 bg-black/45 text-lg text-white"
           style={{ touchAction: 'none' }}
         >
           ❚❚
@@ -182,7 +182,7 @@ export function TouchDock() {
   };
   const pad = 'flex h-12 w-12 items-center justify-center rounded-xl border-2 border-white/40 bg-black/45 text-xl text-white active:scale-90 active:bg-white/25 [@media(max-height:500px)]:h-9 [@media(max-height:500px)]:w-10 [@media(max-height:500px)]:text-base';
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-3 border-t border-white/15 bg-black/60 px-3 py-2 backdrop-blur [@media(max-height:500px)]:py-1" data-testid="touch-dock" style={{ touchAction: 'manipulation' }}>
+    <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-3 border-t border-white/15 bg-black/60 py-2 backdrop-blur [@media(max-height:500px)]:py-1" data-testid="touch-dock" style={{ touchAction: 'manipulation', paddingLeft: 'max(var(--edge-x), env(safe-area-inset-left))', paddingRight: 'max(var(--edge-x), env(safe-area-inset-right))', paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))' }}>
       <div className="grid grid-cols-3 grid-rows-2 gap-1 [@media(max-height:500px)]:gap-0.5">
         <span />
         <button className={pad} aria-label="Cima" onPointerDown={tapDir('up')}>▲</button>

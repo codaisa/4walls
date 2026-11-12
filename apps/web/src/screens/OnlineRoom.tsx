@@ -160,7 +160,7 @@ function RoomLobby({ lobby, me, onLeave, reconnecting }: { lobby: LobbyInfo; me:
   );
 
   return (
-    <div className="menu-bg relative flex h-full w-full flex-col overflow-y-auto overflow-x-hidden px-4 py-4 font-body text-white [@media(max-height:500px)]:px-3 [@media(max-height:500px)]:py-2">
+    <div className="menu-bg relative flex h-full w-full flex-col overflow-y-auto overflow-x-hidden screen-safe font-body text-white">
       <div className="menu-embers" aria-hidden />
       <header className="relative z-10 mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3">
         <button className="menu-btn !min-w-0 !px-4 !py-2 !text-lg [@media(max-height:500px)]:!py-1 [@media(max-height:500px)]:!text-base" onClick={onLeave}>

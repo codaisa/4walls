@@ -47,7 +47,7 @@ export function Shop() {
 
   return (
     <div ref={root} className="menu-bg relative flex h-full w-full flex-col overflow-hidden font-body text-white">
-      <div className="relative z-10 mx-auto flex h-full w-full max-w-5xl flex-col gap-3 px-4 py-4 [@media(max-height:500px)]:gap-2 [@media(max-height:500px)]:px-3 [@media(max-height:500px)]:py-2">
+      <div className="relative z-10 mx-auto flex h-full w-full max-w-5xl flex-col gap-3 screen-safe [@media(max-height:500px)]:gap-2">
         <header className="flex items-center justify-between gap-3">
           <button data-nav className="menu-btn !min-w-0 !px-4 !py-2 !text-lg [@media(max-height:500px)]:!py-1 [@media(max-height:500px)]:!text-base" onClick={back}>
             ← Voltar
@@ -56,7 +56,7 @@ export function Shop() {
           <div className="hud-panel px-3 py-1">{account ? <Coins value={account.coins} className="text-2xl [@media(max-height:500px)]:text-lg" /> : <span className="text-sm opacity-60">—</span>}</div>
         </header>
 
-        <nav className="flex gap-2 overflow-x-auto no-scrollbar" aria-label="Categorias">
+        <nav className="scroll-x-area flex gap-2 overflow-x-auto no-scrollbar" aria-label="Categorias">
           {SLOTS.map((s) => (
             <button
               key={s}
@@ -77,7 +77,7 @@ export function Shop() {
         {status === 'offline' && <div className="hud-panel border-red-400/70 px-4 py-2 text-center text-sm text-red-200">Sem conexão com o servidor: a loja precisa dele para guardar suas compras.</div>}
         {shopError && <div className="text-center text-sm font-bold text-red-300" role="alert">{shopError}</div>}
 
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1" data-testid="shop-items">
+        <div className="min-h-0 flex-1 overflow-y-auto scroll-area" data-testid="shop-items">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 [@media(max-height:500px)]:grid-cols-4">
             {forSale.map((c) => {
               const owned = !!account?.owned.includes(c.id);

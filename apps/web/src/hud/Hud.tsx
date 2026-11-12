@@ -26,9 +26,9 @@ export function Hud({ onResume, onRestart, onExit, exitLabel, mode, resultNote }
   const urgent = phase === 'playing' && timeLeft <= 30;
 
   return (
-    <div className="pointer-events-none absolute inset-0 select-none font-body text-white">
+    <div className="hud-safe pointer-events-none select-none font-body text-white">
       {/* Top bar */}
-      <div className={`flex items-start justify-between gap-3 p-3 sm:p-4 [@media(max-height:500px)]:gap-2 [@media(max-height:500px)]:p-2 ${TOUCH ? 'pr-16' : ''}`}>
+      <div className={`flex items-start justify-between gap-3 [@media(max-height:500px)]:gap-2 ${TOUCH ? 'pr-14' : ''}`}>
         <div className="flex flex-wrap gap-2">
           {players.map((p) => (
             <PlayerCard key={p.id} p={p} />

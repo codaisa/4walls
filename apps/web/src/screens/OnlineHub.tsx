@@ -29,7 +29,7 @@ export function OnlineHub() {
 
   return (
     // Phones: content sits at the top so the on-screen keyboard never covers the code boxes.
-    <div className="menu-bg relative flex h-full w-full flex-col items-center justify-center overflow-y-auto px-4 py-4 font-body text-white [@media(max-height:500px)]:justify-start [@media(max-height:500px)]:py-2">
+    <div className="menu-bg relative flex h-full w-full flex-col items-center justify-center overflow-y-auto screen-safe font-body text-white [@media(max-height:500px)]:justify-start">
       <div className="menu-embers" aria-hidden />
       <div className="relative z-10 flex w-full max-w-md flex-col items-center gap-3 [@media(max-height:500px)]:gap-1.5">
         <h1 className="logo font-display text-5xl sm:text-6xl [@media(max-height:500px)]:text-3xl">Entrar numa sala</h1>

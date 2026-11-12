@@ -17,7 +17,8 @@ function FitCamera() {
   useFrame(() => {
     const cam = camera as THREE.OrthographicCamera;
     const worldWidth = MAX_LOCAL_PLAYERS * 1.6;
-    cam.zoom = size.width / worldWidth;
+    // Wide, short strips (phones): fit the height too, so heads are never cut.
+    cam.zoom = Math.min(size.width / worldWidth, size.height / 2.3);
     cam.position.set(0, 1.6, 6);
     cam.lookAt(0, 0.55, 0);
     cam.updateProjectionMatrix();

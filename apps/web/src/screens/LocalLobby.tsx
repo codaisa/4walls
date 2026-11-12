@@ -164,7 +164,7 @@ export function LocalLobby() {
   };
 
   return (
-    <div className={`menu-bg relative flex h-full w-full flex-col overflow-y-auto overflow-x-hidden px-4 py-4 font-body text-white [@media(max-height:500px)]:px-3 [@media(max-height:500px)]:py-2 ${TOUCH ? 'pb-28 [@media(max-height:500px)]:pb-24' : ''}`}>
+    <div className={`menu-bg relative flex h-full w-full flex-col overflow-y-auto overflow-x-hidden screen-safe font-body text-white ${TOUCH ? 'dock-space' : ''}`}>
       <TouchDock />
       <div className="menu-embers" aria-hidden />
       <header className="relative z-10 mx-auto flex w-full max-w-5xl items-center justify-between">
@@ -302,8 +302,8 @@ export function PlayerSlotCard({ slot, characterId, colorIndex, ready, subtitle,
       <div className="text-[11px] leading-tight opacity-80 [@media(max-height:500px)]:hidden">
         {ch.abilityName}: {ch.abilityDesc}
       </div>
-      <div className="flex items-center gap-1 text-xs opacity-70">
-        <span className="truncate">{subtitle}</span>
+      <div className="flex min-w-0 max-w-full items-center gap-1 text-xs opacity-70">
+        <span className="min-w-0 truncate">{subtitle}</span>
         {onColor && local && !ready ? (
           <button className="flex shrink-0 items-center gap-1 rounded-md px-1 hover:bg-white/15" onClick={onColor} aria-label="Trocar cor">
             <span className="inline-block h-3 w-3 rounded-full border border-white/70" style={{ background: c.primary }} />

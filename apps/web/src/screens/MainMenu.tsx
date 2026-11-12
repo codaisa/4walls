@@ -45,15 +45,15 @@ export function MainMenu() {
   const color = SLOT_COLORS[profile.colorIndex];
 
   return (
-    <div ref={root} className="menu-bg relative flex h-full w-full flex-col items-center overflow-y-auto px-4 py-4 font-body text-white">
+    <div ref={root} className="menu-bg relative flex h-full w-full flex-col items-center overflow-y-auto screen-safe font-body text-white">
       <div className="menu-embers" aria-hidden />
-      <button data-nav className="menu-btn !absolute right-3 top-3 z-20 !min-w-0 !px-3 !py-1.5 !text-xl [@media(max-height:500px)]:!py-1" onClick={() => go('/config')} aria-label="Configurações" title="Configurações">
+      <button data-nav className="menu-btn corner-tr !min-w-0 !px-3 !py-1.5 !text-xl [@media(max-height:500px)]:!py-1" onClick={() => go('/config')} aria-label="Configurações" title="Configurações">
         ⚙️
       </button>
       {install && (
         <button
           data-nav
-          className="menu-btn !absolute left-3 top-3 z-20 !min-w-0 !px-3 !py-1.5 !text-base [@media(max-height:500px)]:!py-1 [@media(max-height:500px)]:!text-sm"
+          className="menu-btn corner-tl !min-w-0 !px-3 !py-1.5 !text-base [@media(max-height:500px)]:!py-1 [@media(max-height:500px)]:!text-sm"
           onClick={() => (sfx.ui(), install === 'prompt' ? void promptInstall() : setIosTip((v) => !v))}
           data-testid="install-app"
         >
@@ -61,7 +61,7 @@ export function MainMenu() {
         </button>
       )}
       {iosTip && (
-        <div className="hud-panel absolute left-3 top-14 z-30 max-w-xs px-3 py-2 text-sm [@media(max-height:500px)]:top-11" role="note" onClick={() => setIosTip(false)}>
+        <div className="hud-panel corner-tl !z-30 mt-12 max-w-xs px-3 py-2 text-sm [@media(max-height:500px)]:mt-10" role="note" onClick={() => setIosTip(false)}>
           No Safari, toque em <b>Compartilhar</b> (□↑) e depois em <b>Adicionar à Tela de Início</b>. O 4Walls abre em tela cheia, sem a barra do navegador.
         </div>
       )}
