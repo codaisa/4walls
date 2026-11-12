@@ -796,6 +796,20 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
 }
 
 /** Pillars of the chamber, relative to the chunk (symmetric around the hall's middle). */
+/** Where the Guardian's support roots may grow (chunk-relative), well away from its bed. */
+const CHAMBER_ROOTS: Pt[] = [
+  { x: 7, y: 2 },
+  { x: 2, y: 6 },
+  { x: 13, y: 6 },
+  { x: 7, y: 11 },
+  { x: 3, y: 2 },
+  { x: 12, y: 2 },
+  { x: 3, y: 11 },
+  { x: 12, y: 11 },
+  { x: 2, y: 9 },
+  { x: 13, y: 9 },
+];
+
 const CHAMBER_PILLARS: Pt[] = [
   { x: 4, y: 4 },
   { x: 11, y: 4 },
@@ -847,6 +861,24 @@ function chamberBlueprint(seed: number, adv: AdventureState, id: number, info: R
     }
   let propSeq = 0;
   const props: Omit<PropState, 'tick'>[] = totems.map((t) => ({ id: id * 64 + propSeq++, kind: 'totem' as const, region: id, x: t.x, y: t.y, state: 'idle' as const }));
+  // The Guardian's hall: three support roots spread around it, and brambles that regrow while they live.
+  if (arcBoss(seed, info.arc).kind === 'guardian') {
+    const spots = CHAMBER_ROOTS.map((p) => ({ x: ox + p.x, y: oy + p.y })).filter(
+      (p) => !near(entry, p.x, p.y, 3) && !near(exit, p.x, p.y, 3) && !totems.some((t) => near(t, p.x, p.y, 1)),
+    );
+    const roots: Pt[] = [];
+    while (roots.length < 3 && spots.length) {
+      const pick = spots.splice(randInt(r, spots.length), 1)[0];
+      if (roots.every((q) => Math.abs(q.x - pick.x) + Math.abs(q.y - pick.y) >= 6)) roots.push(pick);
+    }
+    for (const c of roots) {
+      set(c.x, c.y, Cell.Wall);
+      props.push({ id: id * 64 + propSeq++, kind: 'root', region: id, x: c.x, y: c.y, state: 'intact', hp: 3 });
+    }
+    for (let y = oy + 1; y < oy + CH - 1; y++)
+      for (let x = ox + 1; x < ox + CW - 1; x++)
+        if (get(x, y) === Cell.Block && nextRandom(r) < 0.6) props.push({ id: id * 64 + propSeq++, kind: 'bramble', region: id, x, y, state: 'grown' });
+  }
   const state: RegionState = {
     id,
     name: info.name,
@@ -1297,7 +1329,8 @@ function updateObsidianAndForest(s: GameState) {
       pr.state = 'broken';
       setCell(s.grid, pr.x, pr.y, Cell.Floor);
       const left = adv.props.filter((q) => q.kind === 'root' && q.region === pr.region && q.state === 'intact').length;
-      s.events.push({ type: 'rootPurified', propId: pr.id, x: pr.x, y: pr.y, left });
+      const chamber = adv.regions.find((r) => r.id === pr.region)?.objective.kind === 'boss';
+      s.events.push({ type: 'rootPurified', propId: pr.id, x: pr.x, y: pr.y, left, ...(chamber ? { chamber } : {}) });
     } else if (pr.kind === 'bramble') {
       const cell = getCell(s.grid, pr.x, pr.y);
       if (pr.state === 'grown') {

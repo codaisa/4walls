@@ -345,6 +345,10 @@ export interface BossState {
   lavaAt?: number;
   /** Floor it turned into lava (it cools back down when the boss falls). */
   lava?: { x: number; y: number }[];
+  /** Adventure Guardian: held in place by the chamber's support roots (and healing) while true. */
+  rooted?: boolean;
+  /** Next tick it may heal while rooted. */
+  regenAt?: number;
 }
 
 export type GameEvent =
@@ -403,7 +407,7 @@ export type GameEvent =
   | { type: 'sealResisted'; propId: number; x: number; y: number }
   | { type: 'sealBroken'; propId: number; x: number; y: number; left: number }
   | { type: 'rootHit'; propId: number; x: number; y: number; hp: number }
-  | { type: 'rootPurified'; propId: number; x: number; y: number; left: number }
+  | { type: 'rootPurified'; propId: number; x: number; y: number; left: number; chamber?: boolean }
   | { type: 'brambleRegrow'; propId: number; x: number; y: number }
   | { type: 'grassIgnited'; propId: number; x: number; y: number }
   /** A rescued hero joins: `revived` = a fallen ally came back as them, otherwise the rescuer turned into them. */
@@ -415,7 +419,11 @@ export type GameEvent =
   | { type: 'bossCharge'; dir: Dir }
   | { type: 'bossHit'; hp: number; maxHp: number; byId: string; x: number; y: number; core?: boolean }
   | { type: 'bossEnraged' }
-  | { type: 'bossPhase'; phase: number }
+  | { type: 'bossPhase'; phase: number; last?: boolean }
+  /** Adventure Guardian: healed while a support root lives; torn loose once they all fall. */
+  | { type: 'bossRegen'; hp: number; maxHp: number; x: number; y: number }
+  | { type: 'bossUprooted'; x: number; y: number }
+  | { type: 'bramblesWithered'; cells: { x: number; y: number }[] }
   | { type: 'bossBlocked'; x: number; y: number }
   /** A plate broke off; `side` is the body side (0 front, 1 right, 2 back, 3 left), `dir` the world side. */
   | { type: 'bossPlate'; side: number; dir: Dir; plates: number; x: number; y: number }

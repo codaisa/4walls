@@ -6,7 +6,7 @@ antes da próxima:
 | # | Tarefa | Depende de | Status |
 |---|---|---|---|
 | 1 | **Mapa**: regiões viram fases, objetivos, mecânicas de ambiente, segredos, navegação, arcos | — | **Concluída** (M1–M5) |
-| 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | Em andamento: B1 e B2 concluídos (seção 5) |
+| 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | Em andamento: B1, B2 e B3 concluídos (seção 5) |
 | 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Esboço (seção 6) |
 
 Ponto de partida (como está hoje):
@@ -367,6 +367,15 @@ O `boss.ts` de hoje é uma máquina de estados (andar → preparar → atacar �
   - **Fase 3:** o **pulo**. Ele se agacha, salta (intocável no ar) e cai num 3×3 em cima ou ao lado do jogador. O pouso racha o chão num anel e em quatro fendas. Tudo é marcado no chão antes.
 - **A lava esfria no fim:** quando ele cai, a lava das bordas vira chão de novo, com vapor (é a "mudança no mundo" do Golem).
 - **Boss Rush:** continua com o Golem clássico, sem placas nem lava. O novo entra lá no B5.
+
+
+**Como ficou o B3 (o Guardião da Aventura):**
+- **Raízes de sustentação:** a câmara da floresta nasce com 3 raízes (a arte de raiz do M4, 3 explosões cada) espalhadas longe da cama do chefe, e as caixas viram espinheiros que voltam a crescer enquanto uma raiz viver.
+- **Enraizado:** enquanto uma raiz estiver de pé, ele não anda nem mergulha, e se cura 1 a cada 2,5 s quando não leva um golpe há 2 s. Cipós com uma gota de luz verde ligam cada raiz aos pés dele. O HUD mostra 🌿 por raiz e "ENRAIZADO · SE CURA". Dica nova explica o que fazer.
+- **Solto:** quando a última raiz cai, ele se arranca do chão ("ELE SE SOLTOU DO CHÃO!"), cambaleia por 2 s (aberto a golpes), recarrega os totens e entra na fase móvel: enfurecido, anda, mergulha, invoca brotos e cruza raízes por ele mesmo.
+- **Último fôlego aos 35%:** ataques mais frequentes. O evento de fase agora diz qual é a última, então a faixa "ÚLTIMO FÔLEGO!" vale para os dois chefes.
+- **Fim:** os espinheiros (e qualquer raiz que sobrar) murcham de vez, abrindo o salão.
+- **Boss Rush:** continua com o Guardião clássico até o B5.
 
 
 Pontos de atenção:

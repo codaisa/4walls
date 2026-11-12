@@ -8,7 +8,7 @@ import { isTouchDevice } from '../input/InputManager';
  * Contextual Adventure tips. Each one shows once per device, at the moment it matters (first bomb,
  * first Fagulha, first secret wall…), worded for the controls in hand. Never blocks the game.
  */
-type HintId = 'bomb' | 'escape' | 'powerup' | 'cage' | 'cracked' | 'key' | 'spark' | 'brazier' | 'vent' | 'map' | 'river' | 'fragile' | 'geyser' | 'lever' | 'seal' | 'root' | 'grass' | 'chasm' | 'boss' | 'totem' | 'plates' | 'core';
+type HintId = 'bomb' | 'escape' | 'powerup' | 'cage' | 'cracked' | 'key' | 'spark' | 'brazier' | 'vent' | 'map' | 'river' | 'fragile' | 'geyser' | 'lever' | 'seal' | 'root' | 'grass' | 'chasm' | 'boss' | 'totem' | 'plates' | 'core' | 'anchors';
 
 const KEY = '4walls.hints';
 const seenSet = (): Set<string> => {
@@ -69,6 +69,8 @@ function text(id: HintId, touch: boolean): { icon: string; body: string } {
       return { icon: '🕳️', body: 'Abismo! Cair é fatal. Dá para pular 1 casa por cima.' };
     case 'boss':
       return { icon: '☠️', body: 'O guardião do arco! Saia das casas marcadas no chão e acerte o corpo dele com explosões.' };
+    case 'anchors':
+      return { icon: '🌿', body: 'O Guardião está preso por 3 raízes e se cura enquanto uma viver. Exploda ao lado delas para soltá-lo!' };
     case 'plates':
       return { icon: '🛡️', body: 'Placas de pedra protegem o Golem: cada explosão quebra a placa daquele lado. Lado sem placa sofre dano!' };
     case 'core':
@@ -135,6 +137,7 @@ export function TutorialHints({ controller }: { controller: MatchView }) {
       if (s.boss && s.boss.regionId !== undefined && s.boss.action !== 'dead') {
         want('boss');
         if (s.boss.plates !== undefined) want('plates');
+        if (s.boss.rooted) want('anchors');
         if (s.boss.plates !== undefined && s.boss.action === 'stunned') want('core');
         if (s.players.some((p) => !p.alive && !p.left) && adv.props.some((p) => p.kind === 'totem' && p.state === 'idle')) want('totem');
       }

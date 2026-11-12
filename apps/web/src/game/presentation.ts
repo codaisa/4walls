@@ -161,7 +161,9 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
       break;
     case 'rootPurified':
       sfx.purify();
-      hud.set({ banner: { text: e.left ? `RAIZ PURIFICADA! FALTAM ${e.left}` : 'O BOSQUE FOI CURADO!', key: tick + 10 } });
+      if (e.chamber) {
+        if (e.left) hud.set({ banner: { text: `RAIZ ARRANCADA! FALTAM ${e.left}`, key: tick + 10 } });
+      } else hud.set({ banner: { text: e.left ? `RAIZ PURIFICADA! FALTAM ${e.left}` : 'O BOSQUE FOI CURADO!', key: tick + 10 } });
       break;
     case 'brambleRegrow':
       sfx.rustle();
@@ -227,8 +229,8 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
       hud.set({ banner: { text: 'ELE ENFURECEU!', key: tick } });
       break;
     case 'bossPhase':
-      // Phase 1 already says "enraged"; deeper encounters have one more.
-      if (e.phase >= 2) {
+      // Phase 1 already says "enraged"; the final phase gets its own warning.
+      if (e.last) {
         sfx.alarm(3);
         hud.set({ banner: { text: 'ÚLTIMO FÔLEGO!', key: tick + 3 } });
       }
@@ -249,6 +251,17 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
       break;
     case 'bossLeap':
       sfx.rumble();
+      break;
+    case 'bossRegen':
+      sfx.rustle();
+      break;
+    case 'bossUprooted':
+      sfx.rumble();
+      sfx.alarm(2);
+      hud.set({ banner: { text: 'ELE SE SOLTOU DO CHÃO!', key: tick + 6 } });
+      break;
+    case 'bramblesWithered':
+      sfx.rustle();
       break;
     case 'lavaRising':
       sfx.alarm(2);
@@ -388,6 +401,7 @@ function bossInfo(s: GameState): HudBoss | null {
     total: s.bossesDefeated + s.bossQueue.length + (dead ? 0 : 1),
     dead,
     ...(b.regionId !== undefined ? { arc: (s.adventure?.regions.find((r) => r.id === b.regionId)?.arc ?? 0) + 1, level: b.level ?? 0 } : {}),
+    ...(b.rooted ? { roots: s.adventure?.props.filter((p) => p.kind === 'root' && p.region === b.regionId && p.state === 'intact').length ?? 0 } : {}),
     ...(b.plates !== undefined ? { plates: [1, 2, 4, 8].filter((m) => b.plates! & m).length, core: b.action === 'stunned' } : {}),
   };
 }

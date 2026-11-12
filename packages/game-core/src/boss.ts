@@ -63,6 +63,11 @@ export interface BossSpawn {
 export const ALL_PLATES = 15;
 /** The reworked Adventure Golem (armor, lava, leap); Boss Rush keeps the classic one. */
 export const reworkedGolem = (b: { kind: BossId; regionId?: number }) => b.kind === 'golem' && b.regionId !== undefined;
+/** The reworked Adventure Guardian (support roots, then a mobile phase). */
+export const reworkedGuardian = (b: { kind: BossId; regionId?: number }) => b.kind === 'guardian' && b.regionId !== undefined;
+/** Support roots of its chamber still standing. */
+export const anchorsLeft = (s: GameState, b: { regionId?: number }) =>
+  s.adventure?.props.filter((p) => p.kind === 'root' && p.region === b.regionId && p.state === 'intact').length ?? 0;
 
 export function spawnBoss(s: GameState, kind: BossId, at?: BossSpawn) {
   const def = BOSSES[kind];
@@ -94,6 +99,7 @@ export function spawnBoss(s: GameState, kind: BossId, at?: BossSpawn) {
     ...(at ? { regionId: at.regionId, level: at.level, speedMul: at.speedMul } : {}),
     ...(at?.arena ? { arena: at.arena } : {}),
     ...(at && kind === 'golem' ? { plates: ALL_PLATES, lava: [] } : {}),
+    ...(at && kind === 'guardian' ? { rooted: true, regenAt: s.tick + secToTicks(REGEN_SEC) } : {}),
   };
   const total = s.bossesDefeated + s.bossQueue.length + 1;
   s.events.push({ type: 'bossSpawned', boss: kind, index: s.bossesDefeated, total });
@@ -122,6 +128,7 @@ export function updateBoss(s: GameState) {
   }
   if (takeDamage(s, b, def)) return; // just died
   updateLava(s, b);
+  if (b.rooted) updateAnchors(s, b);
   if (s.tick < b.frozenUntil) return; // frozen solid: harmless and still
   if (b.action !== 'burrowed' && b.action !== 'leaping') touchPlayers(s, b);
 
@@ -273,6 +280,7 @@ function takeDamage(s: GameState, b: BossState, def: BossDef): boolean {
       if (owner) owner.kills++;
       s.events.push({ type: 'bossDefeated', boss: b.kind, x: b.x, y: b.y });
       coolLava(s, b);
+      if (reworkedGuardian(b)) witherBrambles(s, b);
       // Adventure: the chamber's objective is this boss.
       const reg = b.regionId === undefined ? undefined : s.adventure?.regions.find((r) => r.id === b.regionId);
       if (reg && reg.objective.kind === 'boss') reg.objective.progress = reg.objective.goal;
@@ -303,10 +311,64 @@ function enterPhase(s: GameState, b: BossState, def: BossDef) {
     s.events.push({ type: 'bossEnraged' });
   }
   if (b.regionId === undefined) return;
-  s.events.push({ type: 'bossPhase', phase: want });
+  s.events.push({ type: 'bossPhase', phase: want, last: want === phasesOf(b, def).length });
   b.invulnUntil = Math.max(b.invulnUntil, s.tick + secToTicks(1));
   for (const p of s.adventure?.props ?? []) if (p.kind === 'totem' && p.region === b.regionId && p.state === 'used') p.state = 'idle';
   if (reworkedGolem(b)) golemPhase(s, b, def, want);
+}
+
+// ───────────────────────────── the Adventure Guardian ─────────────────────────────
+
+const REGEN_SEC = 2.5;
+
+/**
+ * Rooted: it can't move or dive, and while a support root stands it heals 1 every few seconds
+ * once it hasn't been hit for a moment. When the last root falls it tears loose: a short stagger
+ * (open to hits), then the mobile phase — faster, wider attacks, the dive back in its arsenal.
+ */
+function updateAnchors(s: GameState, b: BossState) {
+  if (anchorsLeft(s, b) > 0) {
+    if (s.tick < (b.regenAt ?? 0) || s.tick - b.lastHitTick < secToTicks(2)) return;
+    b.regenAt = s.tick + secToTicks(REGEN_SEC);
+    if (b.hp < b.maxHp) {
+      b.hp++;
+      s.events.push({ type: 'bossRegen', hp: b.hp, maxHp: b.maxHp, x: b.x, y: b.y });
+    }
+    return;
+  }
+  b.rooted = false;
+  if (!b.enraged) {
+    b.enraged = true;
+    s.events.push({ type: 'bossEnraged' });
+  }
+  b.attack = null;
+  b.targets = [];
+  b.tx = b.x;
+  b.ty = b.y;
+  setAction(s, b, 'stunned', 2.2);
+  b.nextAttackTick = s.tick + secToTicks(3);
+  for (const p of s.adventure?.props ?? []) if (p.kind === 'totem' && p.region === b.regionId && p.state === 'used') p.state = 'idle';
+  s.events.push({ type: 'bossUprooted', x: b.x, y: b.y });
+}
+
+/** It falls: the chamber's brambles (and any root still standing) wither away. */
+function witherBrambles(s: GameState, b: BossState) {
+  const cells: { x: number; y: number }[] = [];
+  for (const p of s.adventure?.props ?? []) {
+    if (p.region !== b.regionId) continue;
+    if (p.kind === 'bramble' && p.state === 'grown') {
+      if (getCell(s.grid, p.x, p.y) === Cell.Block) setCell(s.grid, p.x, p.y, Cell.Floor);
+      p.state = 'cut';
+      p.tick = s.tick;
+      cells.push({ x: p.x, y: p.y });
+    } else if (p.kind === 'root' && p.state === 'intact') {
+      setCell(s.grid, p.x, p.y, Cell.Floor);
+      p.state = 'broken';
+      p.tick = s.tick;
+      cells.push({ x: p.x, y: p.y });
+    }
+  }
+  if (cells.length) s.events.push({ type: 'bramblesWithered', cells });
 }
 
 // ───────────────────────────── the Adventure Golem ─────────────────────────────
@@ -433,6 +495,7 @@ function land(s: GameState, b: BossState, def: BossDef) {
 }
 
 function walk(s: GameState, b: BossState, def: BossDef) {
+  if (b.rooted) return; // held by its support roots
   let budget = (b.enraged ? def.enragedSpeed : def.speed) * (b.speedMul ?? 1) * TICK_DT;
   while (budget > 1e-6) {
     if (atCell(b)) {
@@ -477,7 +540,7 @@ function chooseAttack(s: GameState, b: BossState, def: BossDef) {
   if (has('charge') && aligned && reach > 2) options.push({ a: 'charge', w: b.enraged ? 4 : 2 });
   if (has('roots')) options.push({ a: 'roots', w: 3 });
   if (has('spores') && s.enemies.filter((e) => e.alive && e.kind === 'sprout').length < (def.maxSprouts ?? 6)) options.push({ a: 'spores', w: 2 });
-  if (has('burrow')) options.push({ a: 'burrow', w: reach > 5 ? 4 : 2 });
+  if (has('burrow') && !b.rooted) options.push({ a: 'burrow', w: reach > 5 ? 4 : 2 });
   if (reworkedGolem(b)) {
     // It wants to ram walls (the charge leaves its core open) and, in its last phase, to leap.
     const charge = options.find((o) => o.a === 'charge');
@@ -642,7 +705,8 @@ function fireCells(s: GameState, b: BossState, cells: { x: number; y: number }[]
 function performAttack(s: GameState, b: BossState, def: BossDef) {
   const attack = b.attack;
   // Phase 2 and beyond (deep encounters) attack more often.
-  const cooldown = secToTicks((b.enraged ? def.enragedAttackEverySec : def.attackEverySec) * ((b.phase ?? 0) >= 2 ? 0.8 : 1));
+  const lastBreath = (b.phase ?? 0) >= 2 || (reworkedGuardian(b) && (b.phase ?? 0) >= 1);
+  const cooldown = secToTicks((b.enraged ? def.enragedAttackEverySec : def.attackEverySec) * (lastBreath ? 0.8 : 1));
   if (attack === 'slam') {
     fireCells(s, b, slamCells(s, b));
     s.events.push({ type: 'bossSlam', x: b.x, y: b.y });

@@ -949,3 +949,126 @@ describe('endless adventure: B2 the reworked Golem', () => {
     expect(lavaRing(s, s.boss!)).toEqual([]);
   });
 });
+
+describe('endless adventure: B3 the reworked Guardian', () => {
+  const SEED = 3;
+  /** The first forest chamber (arc 1's guardian). */
+  const chamberId = (() => {
+    for (let id = 0; id < 40; id++) {
+      const info = regionInfo(SEED, id);
+      if (info.objective === 'boss' && arcBoss(SEED, info.arc).kind === 'guardian') return id;
+    }
+    throw new Error('no guardian chamber');
+  })();
+  const into = () => {
+    const s = make(SEED, 2);
+    for (let id = 0; id < chamberId; id++) {
+      complete(s, id);
+      walkThrough(s, id);
+    }
+    for (const p of s.players) p.invulnUntil = 1e9;
+    return s;
+  };
+  const roots = (s: GameState) => s.adventure!.props.filter((p) => p.region === chamberId && p.kind === 'root');
+  const brambles = (s: GameState) => s.adventure!.props.filter((p) => p.region === chamberId && p.kind === 'bramble');
+  const events = (s: GameState, n: number) => {
+    const out: GameState['events'] = [];
+    for (let i = 0; i < n; i++) {
+      step(s, {});
+      out.push(...s.events);
+    }
+    return out;
+  };
+  const uproot = (s: GameState) => {
+    for (const r of roots(s)) {
+      r.state = 'broken';
+      setCell(s.grid, r.x, r.y, Cell.Floor);
+    }
+  };
+
+  it('its hall has three support roots spread apart and brambles; it wakes rooted', () => {
+    const s = into();
+    const rs = roots(s);
+    expect(rs).toHaveLength(3);
+    for (const r of rs) {
+      expect(getCell(s.grid, r.x, r.y)).toBe(Cell.Wall);
+      expect(r.state).toBe('intact');
+      for (const q of rs) if (q !== r) expect(Math.abs(q.x - r.x) + Math.abs(q.y - r.y)).toBeGreaterThanOrEqual(6);
+    }
+    expect(brambles(s).length).toBeGreaterThan(0);
+    const b = s.boss!;
+    expect(b).toMatchObject({ kind: 'guardian', regionId: chamberId, rooted: true });
+  });
+
+  it('rooted, it never moves or dives, and heals while a root stands', () => {
+    const s = into();
+    const b = s.boss!;
+    const start = { x: b.x, y: b.y };
+    let dove = false;
+    for (let i = 0; i < 60 * 15; i++) {
+      step(s, {});
+      if (b.action === 'burrowed' || b.attack === 'burrow') dove = true;
+      expect({ x: b.x, y: b.y }).toEqual(start);
+    }
+    expect(dove).toBe(false);
+    b.hp = b.maxHp - 3;
+    b.lastHitTick = -999;
+    const ev = events(s, 60 * 6);
+    expect(ev.some((e) => e.type === 'bossRegen')).toBe(true);
+    expect(b.hp).toBeGreaterThan(b.maxHp - 3);
+  });
+
+  it('blasting the roots breaks them; with the last one gone it tears loose and starts to roam', () => {
+    const s = into();
+    const b = s.boss!;
+    const first = roots(s)[0];
+    const side = DIRS.map((d) => ({ x: first.x + DIR_VEC[d].x, y: first.y + DIR_VEC[d].y })).find((c) => getCell(s.grid, c.x, c.y) === Cell.Floor)!;
+    for (let i = 0; i < 3; i++) {
+      spawnBomb(s, { ownerId: 'p1', x: side.x, y: side.y, range: 1 }).detonateTick = s.tick + 1;
+      events(s, 40);
+    }
+    expect(first.state).toBe('broken');
+    expect(b.rooted).toBe(true);
+    uproot(s);
+    const ev = events(s, 1);
+    expect(ev.some((e) => e.type === 'bossUprooted')).toBe(true);
+    expect(b.rooted).toBe(false);
+    expect(b.action).toBe('stunned');
+    expect(b.enraged).toBe(true);
+    const start = { x: b.x, y: b.y };
+    let moved = false;
+    for (let i = 0; i < 60 * 15 && !moved; i++) {
+      step(s, {});
+      if (b.x !== start.x || b.y !== start.y) moved = true;
+    }
+    expect(moved).toBe(true);
+    // Its last breath (35%) is the final phase.
+    b.hp = Math.floor(b.maxHp * 0.35);
+    b.invulnUntil = 0;
+    b.frozenUntil = 0;
+    if (b.action === 'burrowed') b.action = 'walk';
+    s.flames.push({ x: Math.round(b.x), y: Math.round(b.y), part: 'center', dir: null, bombId: 999, ownerId: 'p1', bornTick: s.tick, untilTick: s.tick + 30, kind: 'normal' });
+    const phase = events(s, 1).find((e) => e.type === 'bossPhase');
+    expect(phase).toMatchObject({ phase: 1, last: true });
+  });
+
+  it('when it falls the brambles wither for good', () => {
+    const s = into();
+    const b = s.boss!;
+    uproot(s);
+    events(s, 2);
+    b.hp = 1;
+    b.invulnUntil = 0;
+    b.frozenUntil = 0;
+    b.action = 'walk';
+    s.flames.push({ x: Math.round(b.x), y: Math.round(b.y), part: 'center', dir: null, bombId: 999, ownerId: 'p1', bornTick: s.tick, untilTick: s.tick + 30, kind: 'normal' });
+    const ev = events(s, 2);
+    expect(b.action).toBe('dead');
+    expect(ev.some((e) => e.type === 'bramblesWithered')).toBe(true);
+    events(s, 60 * 20);
+    for (const p of brambles(s)) {
+      expect(p.state).toBe('cut');
+      expect(getCell(s.grid, p.x, p.y)).not.toBe(Cell.Block);
+    }
+  });
+});

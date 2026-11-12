@@ -71,6 +71,8 @@ export interface HudBoss {
   /** Adventure Golem: stone plates left (0–4) and whether its core is open right now. */
   plates?: number;
   core?: boolean;
+  /** Adventure Guardian: support roots still standing while it is rooted. */
+  roots?: number;
 }
 
 export interface HudState {

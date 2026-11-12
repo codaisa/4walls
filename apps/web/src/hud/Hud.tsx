@@ -205,6 +205,15 @@ function Armor({ b }: { b: { plates?: number; core?: boolean } }) {
   );
 }
 
+/** The Guardian's support roots still standing. */
+function Roots({ n }: { n: number }) {
+  return (
+    <span className="mr-1.5 tracking-tighter" data-testid="boss-roots" title="Raízes de sustentação">
+      {'🌿'.repeat(n)}
+    </span>
+  );
+}
+
 function BossBar() {
   const b = useHud((s) => s.boss);
   if (!b) return null;
@@ -221,7 +230,8 @@ function BossBar() {
             </span>
             <span className="shrink-0 text-[10px] font-bold opacity-75">
               {b.plates !== undefined && !b.dead && <Armor b={b} />}
-              {b.dead ? 'Derrotado!' : b.core ? 'NÚCLEO!' : b.enraged ? 'ENFURECIDO' : `${b.hp}/${b.maxHp}`}
+              {b.roots !== undefined && !b.dead && <Roots n={b.roots} />}
+              {b.dead ? 'Derrotado!' : b.core ? 'NÚCLEO!' : b.roots !== undefined ? 'ENRAIZADO' : b.enraged ? 'ENFURECIDO' : `${b.hp}/${b.maxHp}`}
             </span>
           </div>
           <div className="mt-0.5 h-2 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/15">
@@ -240,7 +250,8 @@ function BossBar() {
           </span>
           <span className="text-xs font-bold opacity-75">
             {b.plates !== undefined && !b.dead && <Armor b={b} />}
-            {b.dead ? 'Derrotado!' : b.core ? 'NÚCLEO EXPOSTO!' : b.enraged ? 'ENFURECIDO' : b.title} ·{' '}
+            {b.roots !== undefined && !b.dead && <Roots n={b.roots} />}
+            {b.dead ? 'Derrotado!' : b.core ? 'NÚCLEO EXPOSTO!' : b.roots !== undefined ? 'ENRAIZADO · SE CURA' : b.enraged ? 'ENFURECIDO' : b.title} ·{' '}
             {b.arc ? `Guardião do Arco ${b.arc}${b.level ? ` · Nv. ${b.level + 1}` : ''}` : `Chefão ${Math.max(1, b.index)}/${b.total}`}
           </span>
         </div>

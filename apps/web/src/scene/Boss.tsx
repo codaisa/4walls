@@ -503,6 +503,61 @@ function ChamberLava() {
 const dummy = new THREE.Object3D();
 const lavaTint = new THREE.Color();
 
+/**
+ * The Guardian's support roots feeding it: a living vine from each standing root to its feet,
+ * with a bead of green light running along it. They snap away as each root breaks.
+ */
+function RootTethers() {
+  const { controller, ox, oz } = useGame();
+  const vines = useRef<THREE.Mesh[]>([]);
+  const beads = useRef<THREE.Mesh[]>([]);
+  const res = useMemo(
+    () => ({
+      vine: new THREE.CylinderGeometry(0.07, 0.11, 1, 6, 1).rotateX(Math.PI / 2),
+      bead: new THREE.SphereGeometry(0.13, 10, 8),
+      vineMat: new THREE.MeshStandardMaterial({ color: '#4c3a24', emissive: new THREE.Color(0.1, 0.35, 0.08), roughness: 0.8 }),
+      beadMat: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 2.6, 0.7), toneMapped: false }),
+    }),
+    [],
+  );
+  useFrame(({ clock }) => {
+    const s = controller.state;
+    const b = s.boss;
+    const t = clock.elapsedTime;
+    const roots = b?.rooted && b.action !== 'dead' ? (s.adventure?.props ?? []).filter((p) => p.kind === 'root' && p.region === b.regionId && p.state === 'intact') : [];
+    for (let i = 0; i < 3; i++) {
+      const v = vines.current[i];
+      const bd = beads.current[i];
+      if (!v || !bd) continue;
+      const r = roots[i];
+      v.visible = bd.visible = !!r && !!b;
+      if (!r || !b) continue;
+      const ax = r.x + ox;
+      const az = r.y + oz;
+      const bx = b.x + ox;
+      const bz = b.y + oz;
+      const len = Math.hypot(bx - ax, bz - az);
+      v.position.set((ax + bx) / 2, 0.16, (az + bz) / 2);
+      v.lookAt(bx, 0.16, bz);
+      v.scale.set(1 + 0.15 * Math.sin(t * 3 + i), 1 + 0.15 * Math.sin(t * 3 + i), len);
+      // Life flows from the root to the boss.
+      const k = (t * 0.6 + i / 3) % 1;
+      bd.position.set(ax + (bx - ax) * k, 0.24 + Math.sin(k * Math.PI) * 0.12, az + (bz - az) * k);
+    }
+    res.vineMat.emissive.setRGB(0.1, 0.3 + 0.12 * Math.sin(t * 2.4), 0.08);
+  });
+  return (
+    <>
+      {[0, 1, 2].map((i) => (
+        <group key={i}>
+          <mesh ref={(m) => { if (m) vines.current[i] = m; }} geometry={res.vine} material={res.vineMat} visible={false} castShadow />
+          <mesh ref={(m) => { if (m) beads.current[i] = m; }} geometry={res.bead} material={res.beadMat} visible={false} />
+        </group>
+      ))}
+    </>
+  );
+}
+
 /** Shows the model of whichever boss is in the arena (the Boss Rush swaps them). */
 export function Boss() {
   const { controller } = useGame();
@@ -516,7 +571,7 @@ export function Boss() {
     }
   });
   const lava = controller.state.adventure ? <ChamberLava /> : null;
-  if (kind === 'guardian') return <><Guardian />{lava}</>;
+  if (kind === 'guardian') return <><Guardian /><RootTethers />{lava}</>;
   if (kind === 'golem') return <><Golem />{lava}</>;
   return lava;
 }

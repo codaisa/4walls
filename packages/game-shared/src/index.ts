@@ -235,6 +235,8 @@ export const BOSSES: Record<BossId, BossDef> = {
     sporesWindupSec: 0.7,
     burrowWindupSec: 0.6,
     burrowSec: 1.2,
+    // Adventure Guardian: rooted until its 3 support roots fall, then mobile; last breath at 35%.
+    adventurePhases: [0.35],
     sprouts: 3,
     enragedSprouts: 5,
     maxSprouts: 6,

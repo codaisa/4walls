@@ -648,6 +648,34 @@ export function Fx() {
             fx.shake = Math.min(1, fx.shake + 0.25);
             break;
           }
+          case 'bossRegen':
+            for (let i = 0; i < 12; i++)
+              sparks.spawn({
+                x: e.x + ox + rnd(-1, 1), y: rnd(0.2, 1), z: e.y + oz + rnd(-1, 1),
+                vx: rnd(-0.3, 0.3), vy: rnd(1.5, 3), vz: rnd(-0.3, 0.3),
+                life: rnd(0.6, 1), size: rnd(0.05, 0.09), color: '#7dff8a', intensity: 3, gravity: 0, drag: 1,
+              });
+            break;
+          case 'bossUprooted': {
+            const bx = e.x + ox;
+            const bz = e.y + oz;
+            shocks.spawn({ x: bx, y: 0.05, z: bz, life: 0.7, size: 2, grow: 3, color: '#a0d060', alpha: 0.9 });
+            for (let i = 0; i < 22; i++)
+              solids.spawn({
+                x: bx + rnd(-1.3, 1.3), y: 0.2, z: bz + rnd(-1.3, 1.3),
+                vx: rnd(-3.5, 3.5), vy: rnd(3, 7), vz: rnd(-3.5, 3.5),
+                life: rnd(0.8, 1.4), size: rnd(0.1, 0.2), color: '#4a3424', gravity: 16, drag: 0.4, bounce: true,
+              });
+            fx.shake = Math.min(1, fx.shake + 0.7);
+            break;
+          }
+          case 'bramblesWithered':
+            for (const c of e.cells)
+              smoke.spawn({
+                x: c.x + ox, y: 0.3, z: c.y + oz, vy: rnd(0.4, 0.9),
+                life: rnd(1, 1.6), size: rnd(0.5, 0.8), grow: 2, color: '#8a7a5a', alpha: 0.45, drag: 1.4, delay: rnd(0, 0.6),
+              });
+            break;
           case 'bossCore':
             for (let i = 0; i < 24; i++)
               sparks.spawn({
