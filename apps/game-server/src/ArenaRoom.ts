@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { Room, type Client } from 'colyseus';
-import { createGame, step, type GameEvent, type GameState, type InputMap } from '@4walls/core';
+import { createGame, step, type GameEvent, type GameState, type InputMap, regionInfo } from '@4walls/core';
 import { ARENAS, CHARACTER_IDS, EMPTY_INPUT, SLOT_COLORS, STARTER_CHARACTERS, levelInfo, type CharacterId, type ArenaId, type BossId, type Dir, type MatchPerformance } from '@4walls/shared';
 import type { AccountStore } from './accounts';
 import {
@@ -48,6 +48,7 @@ interface QueuedInput {
   roll: boolean;
   jump: boolean;
   campEnd?: boolean;
+  campBank?: boolean;
 }
 
 /**
@@ -80,6 +81,9 @@ export class ArenaRoom extends Room {
   private tally = new Map<string, { kills: number; enemies: number; powerups: number; mimics: number; elites: number }>();
   private bossesDown: BossId[] = [];
   private bossFights: { boss: BossId; level: number; tier: number }[] = [];
+  /** Task 3: resume the host's saved expedition on the next Adventure start; whose save this match writes. */
+  private resume = true;
+  private expeditionOwner: string | null = null;
 
   onCreate(options: CreateOptions = {}) {
     this.roomId = generateRoomCode((n) => new Uint8Array(randomBytes(n)));
@@ -126,6 +130,11 @@ export class ArenaRoom extends Room {
       if (client.sessionId !== this.hostId || this.phase !== 'lobby') return;
       if (!isOnlineMode(msg?.mode)) return;
       this.mode = msg.mode;
+      this.lobbyChanged();
+    });
+    this.on('resume', (client, msg: { resume?: unknown }) => {
+      if (client.sessionId !== this.hostId || this.phase !== 'lobby') return;
+      this.resume = msg?.resume !== false;
       this.lobbyChanged();
     });
     this.on('start', (client) => {
@@ -286,6 +295,8 @@ export class ArenaRoom extends Room {
       slots: this.slots,
       startsAt: this.startsAt,
       serverNow: Date.now(),
+      expedition: this.hostExpeditionInfo(),
+      resume: this.resume,
     };
   }
 
@@ -303,9 +314,15 @@ export class ArenaRoom extends Room {
     this.phase = 'playing';
     void this.lock();
     const arena = OWN_WORLD.includes(this.mode) ? 'caldeira' : this.arena;
+    // Task 3: the Adventure resumes the host's expedition from its last camp (or starts a new one).
+    const host = this.mode === 'adventure' ? this.hostAccount() : null;
+    const saved = host && this.resume ? host.expedition ?? null : null;
+    if (host && !this.resume) ArenaRoom.accounts?.clearExpedition(host);
+    this.expeditionOwner = host?.id ?? null;
     this.game = createGame({
       mode: this.mode,
-      seed: randomBytes(4).readInt32LE(0),
+      seed: saved ? saved.seed : randomBytes(4).readInt32LE(0),
+      ...(saved ? { expedition: saved.save } : {}),
       width: ARENAS[arena].width,
       height: ARENAS[arena].height,
       arenaId: arena,
@@ -337,7 +354,7 @@ export class ArenaRoom extends Room {
       const q = this.queues.get(slot) ?? [];
       const lastSeq = q.length ? q[q.length - 1].seq : (this.acks[slot] ?? -1);
       if (batch.seq <= lastSeq) continue; // stale or replayed
-      q.push({ seq: batch.seq, move: input.move, bomb: input.bomb, ability: input.ability, roll: !!input.roll, jump: !!input.jump, campEnd: !!input.campEnd });
+      q.push({ seq: batch.seq, move: input.move, bomb: input.bomb, ability: input.ability, roll: !!input.roll, jump: !!input.jump, campEnd: !!input.campEnd, campBank: !!input.campBank });
       if (q.length > MAX_QUEUED_INPUTS) {
         // Keep button presses from dropped frames so they are never silently lost.
         const dropped = q.splice(0, q.length - MAX_QUEUED_INPUTS);
@@ -346,6 +363,7 @@ export class ArenaRoom extends Room {
         if (dropped.some((d) => d.roll)) q[0].roll = true;
         if (dropped.some((d) => d.jump)) q[0].jump = true;
         if (dropped.some((d) => d.campEnd)) q[0].campEnd = true;
+        if (dropped.some((d) => d.campBank)) q[0].campBank = true;
       }
       this.queues.set(slot, q);
     }
@@ -365,12 +383,13 @@ export class ArenaRoom extends Room {
         later.roll ||= next.roll;
         later.jump ||= next.jump;
         later.campEnd ||= next.campEnd;
+        later.campBank ||= next.campBank;
         next = later;
       }
       if (next) {
         this.held.set(p.slot, next.move);
         this.acks[p.slot] = next.seq;
-        inputs[p.id] = { move: next.move, bomb: next.bomb, ability: next.ability, roll: next.roll, jump: next.jump, campEnd: next.campEnd };
+        inputs[p.id] = { move: next.move, bomb: next.bomb, ability: next.ability, roll: next.roll, jump: next.jump, campEnd: next.campEnd, campBank: next.campBank };
       } else {
         // No fresh input this tick (network jitter): keep walking in the held direction.
         inputs[p.id] = { ...EMPTY_INPUT, move: this.held.get(p.slot) ?? null };
@@ -408,6 +427,53 @@ export class ArenaRoom extends Room {
         if (e.tier) this.bossFights.push({ boss: e.boss, level: e.level ?? 0, tier: e.tier });
       }
       else if (e.type === 'heroJoined') this.unlockHero(e.playerId, e.characterId);
+      else if (e.type === 'campLit') this.saveHostExpedition();
+      else if (e.type === 'coinsBanked') this.payVault(e.amount);
+      else if (e.type === 'expeditionEnded') {
+        const owner = this.expeditionOwner ? ArenaRoom.accounts?.get(this.expeditionOwner) : null;
+        if (owner) ArenaRoom.accounts?.clearExpedition(owner);
+      }
+    }
+  }
+
+  /** The account behind the host's own player (null for guests). */
+  private hostAccount() {
+    const store = ArenaRoom.accounts;
+    if (!store) return null;
+    for (const s of this.slots) {
+      if (s.owner !== this.hostId) continue;
+      const id = this.slotAccount.get(s.slot);
+      const acc = id ? store.get(id) : null;
+      if (acc) return acc;
+    }
+    return null;
+  }
+
+  private hostExpeditionInfo() {
+    if (this.mode !== 'adventure') return null;
+    const e = this.hostAccount()?.expedition;
+    if (!e) return null;
+    return { camp: e.save.camp, camps: e.save.camps, coins: e.save.coins, region: regionInfo(e.seed, e.save.camp).name };
+  }
+
+  /** A campfire was lit: the host's account remembers the expedition from here. */
+  private saveHostExpedition() {
+    const g = this.game;
+    const ex = g?.expedition;
+    const owner = this.expeditionOwner ? ArenaRoom.accounts?.get(this.expeditionOwner) : null;
+    if (!g || !ex || !owner || ex.ended || ex.camp <= 0) return;
+    const { fallAt: _f, ended: _e, ...save } = ex;
+    ArenaRoom.accounts!.saveExpedition(owner, { seed: g.config.seed, save, players: g.players.length, at: Date.now() });
+  }
+
+  /** The vault pays every logged-in player still in the room, right away. */
+  private payVault(amount: number) {
+    const store = ArenaRoom.accounts;
+    if (!store) return;
+    for (const s of this.slots) {
+      const id = this.slotAccount.get(s.slot);
+      const acc = id && s.connected ? store.get(id) : null;
+      if (acc) store.addCoins(acc, amount);
     }
   }
 
@@ -456,6 +522,11 @@ export class ArenaRoom extends Room {
         },
         s.slot,
       );
+      // Task 3: the expedition goes into the history (online, every player's own).
+      if (g.expedition) {
+        const ex = g.expedition;
+        store.logExpedition(acc, { at: Date.now(), best: ex.best, camps: ex.camps, returns: ex.returns, coins: (ex.banked ?? 0) + (ex.ended ? ex.coins : 0), ended: !!ex.ended });
+      }
       // New level / cosmetics show up in the lobby too.
       s.level = report.levelAfter;
       s.loadout = report.account.loadout;

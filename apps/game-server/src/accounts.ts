@@ -21,8 +21,7 @@ import {
   type MatchPerformance,
   type RankingBoard,
   type RankingEntry,
-  type RewardReport,
-} from '@4walls/shared';
+  type RewardReport, type ExpeditionRecord, type SavedExpedition } from '@4walls/shared';
 import { sanitizeName } from '@4walls/protocol';
 
 interface StoredAccount extends AccountView {
@@ -123,6 +122,31 @@ export class AccountStore {
     return { ok: true, account: this.view(acc) };
   }
 
+  /** Task 3: the expedition this account hosts (overwritten at every campfire). */
+  saveExpedition(acc: StoredAccount, e: SavedExpedition) {
+    acc.expedition = structuredClone(e);
+    this.touch(acc);
+  }
+
+  clearExpedition(acc: StoredAccount) {
+    if (!acc.expedition) return;
+    acc.expedition = null;
+    this.touch(acc);
+  }
+
+  /** Coins from the expedition vault: paid right away. */
+  addCoins(acc: StoredAccount, amount: number) {
+    if (!(amount > 0)) return;
+    acc.coins += Math.round(amount);
+    this.touch(acc);
+  }
+
+  /** One expedition into the account's history (newest first, last 10). */
+  logExpedition(acc: StoredAccount, rec: ExpeditionRecord) {
+    acc.expeditions = [rec, ...(acc.expeditions ?? [])].slice(0, 10);
+    this.touch(acc);
+  }
+
   /** Starters, plus the heroes this account rescued. */
   canPlay(acc: StoredAccount | null, characterId: string) {
     return (STARTER_CHARACTERS as string[]).includes(characterId) || (!!acc && acc.characters.includes(characterId));
@@ -216,6 +240,8 @@ export class AccountStore {
     a.owned = (a.owned ?? []).filter((id) => COSMETICS[id]);
     a.achievements = a.achievements ?? [];
     a.history = a.history ?? [];
+    a.expedition = a.expedition ?? null;
+    a.expeditions = a.expeditions ?? [];
     a.seasonXp = a.seasonXp ?? {};
     a.characters = (a.characters ?? []).filter((id) => (CHARACTER_IDS as string[]).includes(id) && !(STARTER_CHARACTERS as string[]).includes(id));
     if (!this.canPlay(a, a.characterId)) a.characterId = 'bombito';

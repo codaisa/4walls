@@ -8,6 +8,7 @@ import { ROOM_NAME, type LobbyInfo } from '@4walls/protocol';
 import { COSMETICS, levelInfo, matchReward, type MatchPerformance, type RewardReport } from '@4walls/shared';
 import { AccountStore } from '../src/accounts';
 import { createServer } from '../src/server';
+import { ArenaRoom } from '../src/ArenaRoom';
 
 const perf = (p: Partial<MatchPerformance> = {}): MatchPerformance => ({
   mode: 'versus',
@@ -195,6 +196,50 @@ describe('account API + match rewards', () => {
     const acc = await waitFor(() => (pushed as { characters: string[] } | null)?.characters.includes(hero) && pushed);
     expect(acc).toBeTruthy();
     expect((await api('/api/me', { auth })).body.account.characters).toContain(hero);
+    await a.leave(true);
+  });
+
+  it('Task 3 online: the host resumes their saved expedition, fires re-save it, the vault pays now, ending clears it', async () => {
+    const { body } = await api('/api/account', { method: 'POST', body: JSON.stringify({ name: 'Anfitrião' }) });
+    const auth = body.credential as string;
+    const store = ArenaRoom.accounts!;
+    const acc = store.get(body.account.id)!;
+    store.saveExpedition(acc, { seed: 1234, save: { camp: 5, coins: 40, snapshot: [], returns: 0, camps: 1, best: 6 }, players: 1, at: 1 });
+    const client = new Client(`ws://localhost:${PORT}`);
+    const a = await client.create(ROOM_NAME, {});
+    let lobby: LobbyInfo | null = null;
+    let report: RewardReport | null = null;
+    a.onMessage('lobby', (m: LobbyInfo) => (lobby = m));
+    a.onMessage('rewards', (m: RewardReport) => (report = m));
+    for (const t of ['start', 'snap', 'account']) a.onMessage(t, () => {});
+    a.send('join_slot', { localId: 'kb1', auth });
+    a.send('mode', { mode: 'adventure' });
+    const l = await waitFor(() => (lobby as LobbyInfo | null)?.expedition && (lobby as LobbyInfo));
+    expect(l.expedition).toMatchObject({ camp: 5, camps: 1, coins: 40 });
+    expect(l.resume).toBe(true);
+    a.send('start', {});
+    const room = matchMaker.getLocalRoomById(a.roomId) as unknown as { game: import('@4walls/core').GameState | null };
+    const g = await waitFor(() => room.game?.phase === 'playing' && room.game);
+    expect(g.config.seed).toBe(1234);
+    expect(g.adventure!.regions.map((r) => r.id)).toEqual([5, 6]);
+    expect(g.expedition!.coins).toBe(40);
+    // At the fire (spawned next to it): lit and saved again.
+    await waitFor(() => g.adventure!.props.find((q) => q.kind === 'campfire')!.state === 'lit');
+    await waitFor(() => (acc.expedition?.at ?? 0) > 1);
+    // The vault pays right away.
+    const before = acc.coins;
+    let seq = 0;
+    const send = (t: number[]) => a.send('input', { seq: seq++, i: [t] });
+    for (let i = 0; i < 5; i++) send([0, -1, 0, 0, 0, 0, 0, 1]);
+    await waitFor(() => (g.expedition!.banked ?? 0) === 40);
+    expect(g.expedition!.coins).toBe(0);
+    await waitFor(() => acc.coins === before + 40);
+    // Ending at the fire: the save is gone, the history has it.
+    for (let i = 0; i < 5; i++) send([0, -1, 0, 0, 0, 0, 1, 0]);
+    const r = await waitFor(() => report as RewardReport | null);
+    expect(r).toBeTruthy();
+    expect(acc.expedition).toBeNull();
+    expect(acc.expeditions?.[0]).toMatchObject({ coins: 40, camps: 1, ended: true });
     await a.leave(true);
   });
 

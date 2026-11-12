@@ -39,6 +39,8 @@ export interface PlayerInput {
   jump?: boolean;
   /** Adventure: end the expedition at a lit campfire (keeps everything carried). */
   campEnd?: boolean;
+  /** Adventure: put the carried coins in the campfire's vault (safe from falls). */
+  campBank?: boolean;
 }
 export const EMPTY_INPUT: PlayerInput = { move: null, bomb: false, ability: false };
 
@@ -513,6 +515,28 @@ export interface ExpeditionSave {
   returns: number;
   camps: number;
   best: number;
+  /** Coins put in the vault at a campfire (never lost; online they went to the accounts). */
+  banked?: number;
+}
+
+/** An expedition saved on an account (online: the host's) or on this device. */
+export interface SavedExpedition {
+  seed: number;
+  save: ExpeditionSave;
+  players: number;
+  at: number;
+}
+
+/** One finished (or abandoned) expedition, for the account's history. */
+export interface ExpeditionRecord {
+  at: number;
+  /** Furthest region reached (0-based), camps lit, falls back to camp. */
+  best: number;
+  camps: number;
+  returns: number;
+  /** Coins kept: banked plus carried when ended at a fire. */
+  coins: number;
+  ended: boolean;
 }
 
 export interface GameConfig {

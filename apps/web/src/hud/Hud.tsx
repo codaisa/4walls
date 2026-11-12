@@ -19,9 +19,11 @@ interface HudProps {
   resultNote?: string;
   /** Task 3: end the expedition at a lit campfire. */
   onEndExpedition?: () => void;
+  /** Task 3: put the carried coins in the campfire's vault. */
+  onBankCoins?: () => void;
 }
 
-export function Hud({ onResume, onRestart, onExit, exitLabel, mode, resultNote, onEndExpedition }: HudProps) {
+export function Hud({ onResume, onRestart, onExit, exitLabel, mode, resultNote, onEndExpedition, onBankCoins }: HudProps) {
   const { phase, countdown, timeLeft, players, enemiesAlive, enemiesTotal, paused, showResult, result, banner, missing } = useHud();
   const mm = Math.floor(timeLeft / 60);
   const ss = String(timeLeft % 60).padStart(2, '0');
@@ -56,7 +58,7 @@ export function Hud({ onResume, onRestart, onExit, exitLabel, mode, resultNote, 
       </div>
 
       {(mode === 'bossrush' || mode === 'adventure') && <BossBar />}
-      {mode === 'adventure' && phase === 'playing' && onEndExpedition && <CampButton onEnd={onEndExpedition} />}
+      {mode === 'adventure' && phase === 'playing' && onEndExpedition && <CampButton onEnd={onEndExpedition} onBank={onBankCoins} />}
 
       {phase === 'countdown' && (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -88,7 +90,7 @@ export function Hud({ onResume, onRestart, onExit, exitLabel, mode, resultNote, 
             Continuar
           </MenuButton>
           {onRestart && mode !== 'adventure' && <MenuButton onClick={onRestart}>Reiniciar</MenuButton>}
-          {onEndExpedition && <PauseCampEnd onEnd={onEndExpedition} onResume={onResume} />}
+          {onEndExpedition && <PauseCampEnd onEnd={onEndExpedition} onBank={onBankCoins} onResume={onResume} />}
           <MenuButton onClick={onExit}>{exitLabel}</MenuButton>
           <AudioToggles />
           {!TOUCH && <ControlsToggle />}
@@ -130,9 +132,10 @@ export function Hud({ onResume, onRestart, onExit, exitLabel, mode, resultNote, 
  * Task 3: at a lit campfire, end the expedition and keep everything carried. Two taps (the first
  * one asks), so it never ends by accident.
  */
-function CampButton({ onEnd }: { onEnd: () => void }) {
+function CampButton({ onEnd, onBank }: { onEnd: () => void; onBank?: () => void }) {
   const near = useHud((s) => !!s.adventure?.campNear);
   const coins = useHud((s) => s.adventure?.coins ?? 0);
+  const banked = useHud((s) => s.adventure?.banked ?? 0);
   const [ask, setAsk] = useState(false);
   useEffect(() => {
     if (!ask) return;
@@ -144,7 +147,21 @@ function CampButton({ onEnd }: { onEnd: () => void }) {
   }, [near]);
   if (!near) return null;
   return (
-    <div className="pointer-events-auto absolute bottom-3 left-1/2 -translate-x-1/2 [@media(max-height:500px)]:bottom-1.5">
+    <div className="pointer-events-auto absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-2 [@media(max-height:500px)]:bottom-1.5">
+      {onBank && (coins > 0 ? (
+        <button
+          className="menu-btn !min-w-0 !px-4 !py-1.5 !text-base"
+          data-testid="camp-bank"
+          onClick={() => {
+            sfx.ui();
+            onBank();
+          }}
+        >
+          🔒 Guardar 🪙 {coins}
+        </button>
+      ) : banked > 0 ? (
+        <span className="hud-panel self-center px-3 py-1 text-sm font-bold text-amber-200">🔒 Cofre 🪙 {banked}</span>
+      ) : null)}
       <button
         className={`menu-btn !min-w-0 !px-4 !py-1.5 !text-base ${ask ? 'menu-btn-primary animate-pulse' : ''}`}
         data-testid="camp-end"
@@ -161,11 +178,22 @@ function CampButton({ onEnd }: { onEnd: () => void }) {
 }
 
 /** The same choice in the pause menu (gamepad / keyboard). */
-function PauseCampEnd({ onEnd, onResume }: { onEnd: () => void; onResume: () => void }) {
+function PauseCampEnd({ onEnd, onBank, onResume }: { onEnd: () => void; onBank?: () => void; onResume: () => void }) {
   const near = useHud((s) => !!s.adventure?.campNear);
   const coins = useHud((s) => s.adventure?.coins ?? 0);
   if (!near) return null;
   return (
+    <>
+    {onBank && coins > 0 && (
+      <MenuButton
+        onClick={() => {
+          onBank();
+          onResume();
+        }}
+      >
+        🔒 Guardar 🪙 {coins} no cofre
+      </MenuButton>
+    )}
     <MenuButton
       onClick={() => {
         onEnd();
@@ -174,6 +202,7 @@ function PauseCampEnd({ onEnd, onResume }: { onEnd: () => void; onResume: () => 
     >
       🏕️ Encerrar expedição (🪙 {coins})
     </MenuButton>
+    </>
   );
 }
 
@@ -487,7 +516,7 @@ function ResultTitle({ outcome, winner, reason, team }: { outcome: string; winne
     sub = 'Golem e Guardião caíram. A Caldeira e a Floresta estão livres.';
   } else if (outcome === 'victory' && reason === 'expeditionEnded' && adventure) {
     title = 'EXPEDIÇÃO ENCERRADA';
-    sub = `Vocês descansaram na região ${adventure.index} e guardaram 🪙 ${adventure.coins}.`;
+    sub = `Vocês descansaram na região ${adventure.index} e guardaram 🪙 ${adventure.coins + adventure.banked}.`;
     color = '#ffcf6a';
   } else if (outcome === 'victory' && reason === 'allRegionsCleared') {
     title = 'AVENTURA CONCLUÍDA!';

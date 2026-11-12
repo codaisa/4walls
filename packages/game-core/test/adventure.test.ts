@@ -1449,3 +1449,51 @@ describe('Task 3 · A1: camps, the expedition purse and falling back', () => {
     expect(chunkCells(b, 6)).toEqual(chunkCells(a, 6));
   });
 });
+
+describe('Task 3 · A2: the campfire vault', () => {
+  it('coins put in the vault at a lit fire are safe when the group falls; ending keeps both', () => {
+    const save = { camp: 5, coins: 0, snapshot: [], returns: 0, camps: 1, best: 5 };
+    const s = createGame({ mode: 'adventure', seed: 3, width: 0, height: 0, players: [{ id: 'p1', slot: 0, characterId: 'bombito', name: 'P1' }], expedition: save });
+    s.phase = 'playing';
+    step(s, {});
+    const fire = s.adventure!.props.find((p) => p.kind === 'campfire')!;
+    expect(fire.state).toBe('lit');
+    const p = s.players[0];
+    // Away from the fire nothing happens.
+    s.expedition!.coins = 80;
+    p.x = p.px = fire.x - 6;
+    step(s, { p1: { move: null, bomb: false, ability: false, campBank: true } });
+    expect(s.expedition!.banked ?? 0).toBe(0);
+    p.x = p.px = fire.x - 2;
+    step(s, { p1: { move: null, bomb: false, ability: false, campBank: true } });
+    expect(s.events.find((e) => e.type === 'coinsBanked')).toMatchObject({ amount: 80, banked: 80 });
+    expect(s.expedition).toMatchObject({ coins: 0, banked: 80 });
+    s.expedition!.coins = 20;
+    p.alive = false;
+    for (let i = 0; i < 60 * 3; i++) step(s, {});
+    expect(s.expedition).toMatchObject({ coins: 10, banked: 80, returns: 1 });
+  });
+});
+
+describe('Task 3: camps are safe', () => {
+  it('enemies from the next region never wander into the camp through the open gate', () => {
+    const save = { camp: 5, coins: 0, snapshot: [], returns: 0, camps: 1, best: 5 };
+    const s = createGame({ mode: 'adventure', seed: 3, width: 0, height: 0, players: [{ id: 'p1', slot: 0, characterId: 'bombito', name: 'P1' }], expedition: save });
+    s.phase = 'playing';
+    s.players[0].invulnUntil = 1e9;
+    // Every enemy of region 6 starts right at the open gate.
+    step(s, {});
+    const gate = exitGate(s, 5);
+    expect(gate.open).toBe(true);
+    const outside = DIRS.map((d) => ({ x: gate.x + DIR_VEC[d].x, y: gate.y + DIR_VEC[d].y })).find((c) => regionAt(s, c.x, c.y) === 6)!;
+    for (const e of s.enemies) {
+      e.x = e.px = e.tx = outside.x;
+      e.y = e.py = e.ty = outside.y;
+      e.dir = null;
+    }
+    for (let i = 0; i < 60 * 20; i++) {
+      step(s, {});
+      for (const e of s.enemies) if (e.alive) expect(regionAt(s, Math.round(e.x), Math.round(e.y))).not.toBe(5);
+    }
+  });
+});

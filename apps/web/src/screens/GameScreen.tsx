@@ -127,7 +127,7 @@ export function GameScreen() {
     // Task 3: every campfire saves the expedition on this device; ending it clears the save.
     const offSave = controller.state.adventure
       ? controller.on((e, s) => {
-          if (e.type === 'campLit') saveExpedition(s);
+          if (e.type === 'campLit' || e.type === 'coinsBanked') saveExpedition(s);
           else if (e.type === 'expeditionEnded') clearExpedition();
         })
       : () => {};
@@ -149,6 +149,7 @@ export function GameScreen() {
         onExit={exit}
         exitLabel={fromLobbyFlow ? 'Voltar ao lobby' : 'Menu principal'}
         onEndExpedition={plan.mode === 'adventure' ? () => controller.endExpedition() : undefined}
+        onBankCoins={plan.mode === 'adventure' ? () => controller.bankCoins() : undefined}
       />
       <HeroReveal key={`reveal-${controller.state.config.seed}`} controller={controller} />
       {controller.state.adventure && (

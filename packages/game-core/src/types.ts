@@ -495,6 +495,7 @@ export type GameEvent =
   | { type: 'groupFell'; atTick: number; camp: number }
   | { type: 'campReturn'; region: number; lost: number }
   | { type: 'expeditionEnded'; byId: string; coins: number }
+  | { type: 'coinsBanked'; byId: string; amount: number; banked: number }
   | { type: 'motesSummoned'; cells: { x: number; y: number }[] }
   | { type: 'gameOver'; result: GameResult };
 

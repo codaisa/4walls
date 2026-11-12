@@ -15,6 +15,8 @@ const TOUCH = isTouchDevice();
 import { TouchDock } from '../ui/TouchControls';
 import { useUiHandler } from '../ui/uiInput';
 import { MAX_LOCAL_PLAYERS, MODE_INFO, useMatchSetup, type LobbyPlayer } from '../store/useMatchSetup';
+import { describeExpedition, loadExpedition } from '../game/expeditionSave';
+import { useMatchSetup as useSetupStore } from '../store/useMatchSetup';
 
 const AUTO_START_MS = 3000;
 
@@ -57,6 +59,9 @@ export function LocalLobby() {
   const modeRef = useRef(mode);
   modeRef.current = mode;
 
+  const resume = useSetupStore((st) => st.resume);
+  const setResume = useSetupStore((st) => st.setResume);
+  const localSave = settingsOpen ? loadExpedition() : null;
   const canStart = players.length >= MODE_INFO[mode].min && disconnected.size === 0;
   const allReady = canStart && players.every((p) => p.ready);
 
@@ -241,6 +246,9 @@ export function LocalLobby() {
             start();
           }}
           onClose={() => setSettingsOpen(false)}
+          expedition={localSave ? { label: describeExpedition(localSave), coins: localSave.save.coins } : null}
+          resume={resume}
+          onResume={setResume}
         />
       )}
     </div>

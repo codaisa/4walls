@@ -7,7 +7,17 @@ import { randInt, nextRandom } from './rng';
 import type { EnemyState, GameState } from './types';
 import { bombAt, isOpenFloor, newId } from './world';
 
-const passable = (s: GameState, x: number, y: number) => isOpenFloor(s, x, y) && !bombAt(s, x, y);
+/** Task 3: camps are safe — no enemy ever walks (or leaps) into one. */
+function campCell(s: GameState, x: number, y: number) {
+  const adv = s.adventure;
+  if (!adv) return false;
+  const g = s.grid;
+  if (x < g.x0 || y < g.y0 || x >= g.x0 + g.w || y >= g.y0 + g.h) return false;
+  const id = adv.regionOf[(y - g.y0) * g.w + (x - g.x0)];
+  return id >= 0 && adv.regions.some((r) => r.id === id && r.objective.kind === 'camp');
+}
+
+const passable = (s: GameState, x: number, y: number) => isOpenFloor(s, x, y) && !bombAt(s, x, y) && !campCell(s, x, y);
 
 export function spawnEnemies(s: GameState, count: number) {
   const free: { x: number; y: number }[] = [];

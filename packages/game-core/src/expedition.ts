@@ -4,7 +4,7 @@ import type { ExpeditionState, GameState, PlayerState } from './types';
 /** Share of the carried purse lost when the whole group falls. */
 export const EXPEDITION_LOSS = 0.5;
 
-export const newExpedition = (): ExpeditionState => ({ camp: 0, coins: 0, snapshot: [], returns: 0, camps: 0, best: 0 });
+export const newExpedition = (): ExpeditionState => ({ camp: 0, coins: 0, snapshot: [], returns: 0, camps: 0, best: 0, banked: 0 });
 
 /** What a campfire remembers of a hero. */
 export const snapPlayer = (p: PlayerState): PlayerSnap => ({

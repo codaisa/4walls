@@ -46,6 +46,8 @@ export interface HudAdventure {
   objective: 'clear' | 'key' | 'lever' | 'seals' | 'purify' | 'boss' | 'camp';
   /** Task 3: the expedition purse, and whether someone stands at a lit campfire (can end it). */
   coins: number;
+  /** Coins already in the vault (safe). */
+  banked: number;
   campNear: boolean;
   /** Seconds until the fallen group wakes at the last camp (null when not falling). */
   fallIn: number | null;

@@ -3,7 +3,7 @@
  * accounts and grants rewards) and the client (which shows them). Everything here is cosmetic or
  * bookkeeping: nothing in this file changes gameplay (no pay-to-win).
  */
-import type { BossId, ModeId } from './index';
+import type { BossId, ExpeditionRecord, ModeId, SavedExpedition } from './index';
 
 // ───────────────────────────── levels ─────────────────────────────
 
@@ -363,6 +363,9 @@ export interface AccountView {
   achievements: AchievementId[];
   history: MatchRecord[];
   seasonXp: Record<string, number>;
+  /** Task 3: the expedition this account hosts (resumable from its last camp), and past ones. */
+  expedition?: SavedExpedition | null;
+  expeditions?: ExpeditionRecord[];
 }
 
 /** Result of one match for one account (sent by the server right after the match). */

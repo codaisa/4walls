@@ -1290,12 +1290,26 @@ export function returnToCamp(s: GameState) {
   s.events.push({ type: 'campReturn', region: ex.camp, lost });
 }
 
+/** A lit campfire within reach of a player (camps only). */
+const fireNear = (s: GameState, p: PlayerState) =>
+  s.adventure?.props.find((q) => q.kind === 'campfire' && q.state === 'lit' && Math.abs(q.x - p.x) + Math.abs(q.y - p.y) <= 3.2);
+
+/** The vault: carried coins go into it at a lit fire and are never lost again. */
+export function tryBankCoins(s: GameState, p: PlayerState) {
+  const ex = s.expedition;
+  if (!ex || ex.ended || ex.coins <= 0 || !fireNear(s, p)) return false;
+  const amount = ex.coins;
+  ex.banked = (ex.banked ?? 0) + amount;
+  ex.coins = 0;
+  s.events.push({ type: 'coinsBanked', byId: p.id, amount, banked: ex.banked });
+  return true;
+}
+
 /** A player at a lit campfire ends the expedition: everything carried is kept. */
 export function tryEndExpedition(s: GameState, p: PlayerState) {
   const ex = s.expedition;
   if (!ex || ex.ended || !s.adventure) return false;
-  const fire = s.adventure.props.find((q) => q.kind === 'campfire' && q.state === 'lit' && Math.abs(q.x - p.x) + Math.abs(q.y - p.y) <= 3.2);
-  if (!fire) return false;
+  if (!fireNear(s, p)) return false;
   ex.ended = true;
   s.events.push({ type: 'expeditionEnded', byId: p.id, coins: ex.coins });
   return true;

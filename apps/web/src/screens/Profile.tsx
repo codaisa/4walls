@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { ACHIEVEMENTS, SLOT_COLORS, currentSeason, type ModeId, type PlayerStats } from '@4walls/shared';
+import { ACHIEVEMENTS, SLOT_COLORS, currentSeason, type ExpeditionRecord, type ModeId, type PlayerStats, type SavedExpedition } from '@4walls/shared';
 import { sfx } from '../audio/Sfx';
 import { ensureAccount, useAccount } from '../store/useAccount';
 import { useProfile } from '../store/useProfile';
@@ -88,6 +88,8 @@ export function Profile() {
               <Atlas found={s!.atlas ?? []} best={s!.bestDepth ?? 0} />
 
               <Bestiary s={s!} />
+
+              <Expeditions saved={account.expedition ?? null} log={account.expeditions ?? []} />
 
               <div className="hud-panel px-3 py-2">
                 <h2 className="mb-1 text-xs font-bold uppercase tracking-widest text-amber-100/60">Por modo</h2>
@@ -179,6 +181,30 @@ const ATLAS_VARIANTS = [
 
 /** Adventure atlas: every biome × mood seen on a journey (the deeper laps bring new moods). */
 const MEDAL_ICON = ['—', '🥉', '🥈', '🥇'];
+
+/** Task 3: the expedition this account hosts online, and the last ones. */
+function Expeditions({ saved, log }: { saved: SavedExpedition | null; log: ExpeditionRecord[] }) {
+  return (
+    <div className="hud-panel px-3 py-2" data-testid="expeditions">
+      <h2 className="mb-1 text-xs font-bold uppercase tracking-widest text-amber-100/60">Expedições</h2>
+      {saved ? (
+        <div className="mb-1 rounded-lg bg-amber-300/15 px-2 py-1 text-sm ring-1 ring-amber-300/40">
+          🏕️ Em andamento: acampamento {saved.save.camps} · região {saved.save.camp + 1} · 🪙 {saved.save.coins}
+          <span className="block text-[10px] text-white/60">Continue numa sala online de Aventura (você como anfitrião).</span>
+        </div>
+      ) : null}
+      {log.length === 0 && !saved && <div className="text-sm text-white/55">Nenhuma ainda. Acenda uma fogueira na Aventura online!</div>}
+      {log.slice(0, 5).map((e) => (
+        <div key={e.at} className="flex justify-between gap-2 text-sm">
+          <span className="truncate">
+            {e.ended ? '🏁' : '🚪'} Região {e.best + 1} · {e.camps} {e.camps === 1 ? 'acampamento' : 'acampamentos'}
+          </span>
+          <span className="shrink-0 text-white/70">🪙 {e.coins}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /** B5: the bosses and beasts met in the Adventure (strongest beaten, best medal). */
 function Bestiary({ s }: { s: PlayerStats }) {

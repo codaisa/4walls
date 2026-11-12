@@ -7,7 +7,7 @@ antes da próxima:
 |---|---|---|---|
 | 1 | **Mapa**: regiões viram fases, objetivos, mecânicas de ambiente, segredos, navegação, arcos | — | **Concluída** (M1–M5) |
 | 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | **Concluída** (B1–B5, seção 5) |
-| 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Em andamento: A1 concluído (seção 6) |
+| 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Em andamento: A1 e A2 concluídos (seção 6) |
 
 Ponto de partida (como está hoje):
 - 5 regiões-ilha num reticulado de blocos de 16×14 casas, ligadas por corredores e geradas por seed.
@@ -414,7 +414,7 @@ Pontos de atenção:
 
 ## 6. Tarefa 3 — Acampamentos e progressão (plano detalhado)
 
-> Status: **aprovado** com as recomendações (corações no A4, perda de 50%, um acampamento por arco, save online na conta do anfitrião). **A1 concluído.**
+> Status: **aprovado** com as recomendações (corações no A4, perda de 50%, um acampamento por arco, save online na conta do anfitrião). **A1 e A2 concluídos.**
 
 ### 6.1 A ideia em uma frase
 
@@ -599,5 +599,15 @@ Entram:
   - encerrar apaga o save.
 - **Online:** o snapshot leva a expedição, e o espelho refaz o mundo a partir do acampamento quando o grupo volta. O comando de encerrar vai junto com o input. O save no servidor (conta do anfitrião) é o A2.
 - **Fica para o A2+:** cofre (guardar sem encerrar), save online e "Continuar expedição" no lobby da sala, a fogueira simples na região 1, moradores e lojinha (A3).
+
+**Como ficou o A2 (online e conta):**
+- **Save na conta do anfitrião:** numa sala online de Aventura, cada fogueira acesa grava a expedição na conta de quem é o anfitrião (seed, acampamento, moedas, cofre, a foto dos heróis).
+- **Continuar na sala:** nas opções da partida, o anfitrião vê "🏕️ Continuar · Acampamento N · Região R · nome · 🪙" ou "Nova expedição". "Nova" apaga a salva ao começar. Continuar recria o mesmo mundo a partir do acampamento.
+- **Cofre:** perto de uma fogueira acesa, "🔒 Guardar 🪙 N" põe as moedas carregadas no cofre. No online, o cofre paga na hora a cada jogador logado na sala. O que está no cofre não se perde numa queda. A mesma opção está no menu de pausa. O painel mostra "🔒 Cofre 🪙 N".
+- **Encerrar:** paga o que ainda estiver carregado e apaga o save do anfitrião.
+- **Histórico:** cada partida online de Aventura entra no histórico da conta (região mais funda, acampamentos e moedas guardadas). O Perfil ganhou o painel "Expedições", com a expedição em andamento e as últimas 5.
+- **Acampamento seguro:** nenhum inimigo entra numa região de acampamento, nem pelo portão aberto (antes, um Magmito da região seguinte podia entrar).
+- **Voltar sem derrubar a sala:** o servidor recria o mundo a partir do acampamento e os clientes acompanham (A1).
+- **Migração:** contas antigas ganham os campos novos vazios.
 
 **Decisões aprovadas (12/11/2026):** corações (B, no A4), 50% de perda, um acampamento por arco, save online na conta do anfitrião.

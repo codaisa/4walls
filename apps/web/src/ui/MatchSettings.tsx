@@ -1,8 +1,7 @@
 import { useRef } from 'react';
 import { ARENAS, ARENA_IDS, type ArenaId } from '@4walls/shared';
 import { sfx } from '../audio/Sfx';
-import { MODE_INFO, useMatchSetup, type LocalMode } from '../store/useMatchSetup';
-import { describeExpedition, loadExpedition } from '../game/expeditionSave';
+import { MODE_INFO, type LocalMode } from '../store/useMatchSetup';
 import { useMenuNav } from './useMenuNav';
 
 interface Props {
@@ -15,15 +14,18 @@ interface Props {
   onArena: (a: ArenaId) => void;
   onStart: () => void;
   onClose: () => void;
+  /** Task 3 (Adventure): a saved expedition to continue, and the current choice. */
+  expedition?: { label: string; coins: number } | null;
+  resume?: boolean;
+  onResume?: (resume: boolean) => void;
 }
 
 /** Match settings (mode + arena), fully usable with a gamepad: D-pad moves, A picks, B closes. */
-export function MatchSettings({ mode, arena, canStart, onMode, onArena, onStart, onClose, modes = Object.keys(MODE_INFO) as LocalMode[] }: Props) {
+export function MatchSettings({ mode, arena, canStart, onMode, onArena, onStart, onClose, modes = Object.keys(MODE_INFO) as LocalMode[], expedition, resume = true, onResume }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   useMenuNav(ref, { onBack: onClose });
-  const resume = useMatchSetup((s) => s.resume);
-  const setResume = useMatchSetup((s) => s.setResume);
-  const saved = mode === 'adventure' && modes.includes('adventure') ? loadExpedition() : null;
+  const saved = mode === 'adventure' && onResume ? expedition : null;
+  const setResume = (r: boolean) => onResume?.(r);
   const pick = (fn: () => void) => () => {
     sfx.ui();
     fn();
@@ -50,7 +52,7 @@ export function MatchSettings({ mode, arena, canStart, onMode, onArena, onStart,
               <button data-nav onClick={pick(() => setResume(true))} className={`choice ${resume ? 'choice-on' : ''}`} data-testid="resume-expedition">
                 <span className="font-display text-xl [@media(max-height:500px)]:text-lg">🏕️ Continuar</span>
                 <span className="text-xs opacity-75 [@media(max-height:500px)]:text-[10px]">
-                  {describeExpedition(saved)} · 🪙 {saved.save.coins}
+                  {saved.label} · 🪙 {saved.coins}
                 </span>
               </button>
               <button data-nav onClick={pick(() => setResume(false))} className={`choice ${!resume ? 'choice-on' : ''}`}>

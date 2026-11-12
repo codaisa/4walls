@@ -1,6 +1,6 @@
 import { ARENAS, BOSS_ARENA, BOSS_RUSH, CHARACTERS, RULES, secToTicks, type CharacterId, type GameConfig } from '@4walls/shared';
 import { updateMines, useAbility } from './abilities';
-import { createAdventure, revealAround, spawnAdventureEnemies, tryEndExpedition, updateAdventure } from './adventure';
+import { createAdventure, revealAround, spawnAdventureEnemies, tryBankCoins, tryEndExpedition, updateAdventure } from './adventure';
 import { applySnap, newExpedition, snapPlayer } from './expedition';
 import { scheduleFirstEvent, updateArenaEvents } from './arenaEvents';
 import { buildBossArena, spawnBoss, updateBoss } from './boss';
@@ -157,6 +157,7 @@ export function step(s: GameState, inputs: InputMap): void {
     const input = inputs[p.id];
     stepPlayerMovement(s, p, input);
     if (s.tick < p.frozenUntil) continue;
+    if (input?.campBank) tryBankCoins(s, p);
     if (input?.campEnd) tryEndExpedition(s, p);
     if (input?.bomb) tryPlaceBomb(s, p);
     if (input?.ability) useAbility(s, p);

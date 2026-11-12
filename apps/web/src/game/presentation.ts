@@ -21,6 +21,8 @@ export interface MatchView {
   isLocal?(playerId: string): boolean;
   /** Task 3: end the expedition at the campfire (sent with the next input). */
   endExpedition?(): void;
+  /** Task 3: put the carried coins in the campfire's vault. */
+  bankCoins?(): void;
 }
 
 export const RESULT_DELAY_MS = 1400;
@@ -332,7 +334,9 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
     case 'campLit':
       sfx.brazier();
       sfx.missionDone();
-      if (tick - campReturnTick > 90) hud.set({ banner: { text: e.again ? 'FOGUEIRA ACESA!' : 'ACAMPAMENTO! EXPEDIÇÃO SALVA', key: tick + 31 } });
+      // Relit at a camp already saved (resuming, or back after a fall): quiet, and the gate's banner too.
+      if (e.again) campReturnTick = Math.max(campReturnTick, tick);
+      else if (tick - campReturnTick > 90) hud.set({ banner: { text: 'ACAMPAMENTO! EXPEDIÇÃO SALVA', key: tick + 31 } });
       break;
     case 'coins':
       if (e.amount >= 10) sfx.pickup();
@@ -348,6 +352,10 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
       break;
     case 'expeditionEnded':
       sfx.victory();
+      break;
+    case 'coinsBanked':
+      sfx.chest(true);
+      hud.set({ banner: { text: `🔒 ${e.amount} 🪙 NO COFRE!`, key: tick + 34 } });
       break;
     case 'mistStrike':
       sfx.hiss();
@@ -448,6 +456,7 @@ function adventureInfo(s: GameState): HudAdventure | null {
     depth: adv.depth + 1,
     objective: r.objective.kind,
     coins: s.expedition?.coins ?? 0,
+    banked: s.expedition?.banked ?? 0,
     campNear:
       !!s.expedition &&
       !s.expedition.ended &&

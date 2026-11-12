@@ -78,12 +78,14 @@ export interface Messages {
   mode: { mode: OnlineMode };
   arena: { arena: ArenaId };
   start: Record<string, never>;
+  /** Adventure (host): continue the saved expedition or start a new one. */
+  resume: { resume: boolean };
   /** One message per client tick with the input of every local slot. */
   input: InputBatch;
 }
 
-/** [slot, dirIndex (-1 = none), bomb (0/1), ability (0/1), roll (0/1), jump (0/1), campEnd (0/1)] */
-export type InputTuple = [number, number, number, number, number?, number?, number?];
+/** [slot, dirIndex (-1 = none), bomb (0/1), ability (0/1), roll (0/1), jump (0/1), campEnd (0/1), campBank (0/1)] */
+export type InputTuple = [number, number, number, number, number?, number?, number?, number?];
 export interface InputBatch {
   seq: number;
   i: InputTuple[];
@@ -97,6 +99,7 @@ export const encodeInput = (slot: number, inp: PlayerInput): InputTuple => [
   inp.roll ? 1 : 0,
   inp.jump ? 1 : 0,
   inp.campEnd ? 1 : 0,
+  inp.campBank ? 1 : 0,
 ];
 
 /** Never trust a client payload: coerce anything malformed into a safe, empty input. */
@@ -114,11 +117,11 @@ export function parseInputBatch(raw: unknown): { seq: number; inputs: { slot: nu
   if (!Number.isSafeInteger(r.seq) || (r.seq as number) < 0 || !Array.isArray(r.i) || r.i.length > MAX_ROOM_SLOTS) return null;
   const inputs: { slot: number; input: PlayerInput }[] = [];
   for (const t of r.i) {
-    if (!Array.isArray(t) || t.length < 3 || t.length > 7) return null;
-    const [slot, d, b, a, r, j, c] = t;
+    if (!Array.isArray(t) || t.length < 3 || t.length > 8) return null;
+    const [slot, d, b, a, r, j, c, v] = t;
     if (!Number.isInteger(slot) || slot < 0 || slot >= MAX_ROOM_SLOTS) return null;
     if (!Number.isInteger(d) || d < -1 || d >= DIRS.length) return null;
-    inputs.push({ slot, input: { move: d >= 0 ? DIRS[d] : null, bomb: b === 1, ability: a === 1, roll: r === 1, jump: j === 1, ...(c === 1 ? { campEnd: true } : {}) } });
+    inputs.push({ slot, input: { move: d >= 0 ? DIRS[d] : null, bomb: b === 1, ability: a === 1, roll: r === 1, jump: j === 1, ...(c === 1 ? { campEnd: true } : {}), ...(v === 1 ? { campBank: true } : {}) } });
   }
   return { seq: r.seq as number, inputs };
 }
@@ -153,6 +156,9 @@ export interface LobbyInfo {
   /** Server time (ms, Date.now) when the auto-start fires, or null. */
   startsAt: number | null;
   serverNow: number;
+  /** Task 3: the host's saved expedition (Adventure), and whether the next start resumes it. */
+  expedition?: { camp: number; camps: number; coins: number; region: string } | null;
+  resume?: boolean;
 }
 
 export interface StartInfo {

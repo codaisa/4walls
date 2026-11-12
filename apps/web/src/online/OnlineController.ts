@@ -112,8 +112,12 @@ export class OnlineController implements MatchView {
   }
 
   private campEnd = false;
+  private campBank = false;
   endExpedition() {
     this.campEnd = true;
+  }
+  bankCoins() {
+    this.campBank = true;
   }
 
   update(dt: number) {
@@ -169,7 +173,7 @@ export class OnlineController implements MatchView {
     const moves = new Map<number, Dir | null>();
     for (const l of this.locals) {
       const inp = this.input.read(l.slot);
-      tuples.push(encodeInput(l.slot, this.campEnd ? { ...inp, campEnd: true } : inp));
+      tuples.push(encodeInput(l.slot, this.campEnd || this.campBank ? { ...inp, ...(this.campEnd ? { campEnd: true } : {}), ...(this.campBank ? { campBank: true } : {}) } : inp));
       moves.set(l.slot, inp.move);
       const p = this.state.players.find((pp) => pp.slot === l.slot);
       if (p) {
@@ -178,6 +182,7 @@ export class OnlineController implements MatchView {
       }
     }
     this.campEnd = false;
+    this.campBank = false;
     online.send('input', { seq: this.seq, i: tuples });
     this.pending.push({ seq: this.seq, moves });
     if (this.pending.length > 120) this.pending.shift();

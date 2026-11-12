@@ -76,8 +76,12 @@ export class GameController implements MatchView {
   }
 
   private campEnd = false;
+  private campBank = false;
   endExpedition() {
     this.campEnd = true;
+  }
+  bankCoins() {
+    this.campBank = true;
   }
 
   update(dt: number) {
@@ -89,9 +93,11 @@ export class GameController implements MatchView {
       const inputs: InputMap = {};
       for (const p of this.state.players) inputs[p.id] = this.input.read(p.slot);
       // Task 3: "end the expedition" from the camp panel, on behalf of the first player near the fire.
-      if (this.campEnd) {
-        this.campEnd = false;
-        for (const p of this.state.players) inputs[p.id] = { ...(inputs[p.id] ?? EMPTY_INPUT), campEnd: true };
+      if (this.campEnd || this.campBank) {
+        const extra = { ...(this.campEnd ? { campEnd: true } : {}), ...(this.campBank ? { campBank: true } : {}) };
+        this.campEnd = this.campBank = false;
+        // Only one player banks (all of them would just be a no-op after the first).
+        for (const p of this.state.players) inputs[p.id] = { ...(inputs[p.id] ?? EMPTY_INPUT), ...extra };
       }
       step(this.state, inputs);
       for (const e of this.state.events) {

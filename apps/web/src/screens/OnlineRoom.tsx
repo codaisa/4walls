@@ -74,7 +74,7 @@ function OnlineMatch({ start, locals, mode, onLeave, reconnecting }: { start: St
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#1a0d10]">
       <GameScene controller={controller} />
-      <Hud mode={mode} onResume={() => controller.toggleMenu(false)} onExit={onLeave} exitLabel="Sair da sala" resultNote="Voltando à sala…" onEndExpedition={mode === 'adventure' ? () => controller.endExpedition() : undefined} />
+      <Hud mode={mode} onResume={() => controller.toggleMenu(false)} onExit={onLeave} exitLabel="Sair da sala" resultNote="Voltando à sala…" onEndExpedition={mode === 'adventure' ? () => controller.endExpedition() : undefined} onBankCoins={mode === 'adventure' ? () => controller.bankCoins() : undefined} />
       <HeroReveal controller={controller} />
       {controller.state.adventure && (
         <>
@@ -280,6 +280,9 @@ function RoomLobby({ lobby, me, onLeave, reconnecting }: { lobby: LobbyInfo; me:
             online.send('start', {});
           }}
           onClose={() => setSettingsOpen(false)}
+          expedition={lobby.expedition ? { label: `Acampamento ${lobby.expedition.camps} · Região ${lobby.expedition.camp + 1} · ${lobby.expedition.region}`, coins: lobby.expedition.coins } : null}
+          resume={lobby.resume ?? true}
+          onResume={(resume) => online.send('resume', { resume })}
         />
       )}
     </div>
