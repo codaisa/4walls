@@ -41,6 +41,8 @@ export interface PlayerInput {
   campEnd?: boolean;
   /** Adventure: put the carried coins in the campfire's vault (safe from falls). */
   campBank?: boolean;
+  /** Adventure: a camp service (1-based index into CAMP_ACTIONS; 0/undefined = none). */
+  campAction?: number;
 }
 export const EMPTY_INPUT: PlayerInput = { move: null, bomb: false, ability: false };
 
@@ -445,6 +447,47 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
 export const CHARACTER_IDS = Object.keys(CHARACTERS) as CharacterId[];
 export const STARTER_CHARACTERS = CHARACTER_IDS.filter((id) => CHARACTERS[id].starter);
 
+/** A3 — camp services, each opened by a rescued hero living at the camp. */
+export type CampService = 'shop' | 'smith' | 'cook' | 'scout' | 'contract' | 'wheel' | 'hero';
+export type ContractKind = 'gold' | 'chests' | 'clean';
+export const RESIDENT_OF: Record<Exclude<CampService, 'hero'>, CharacterId> = {
+  shop: 'silvio',
+  smith: 'bombiao',
+  cook: 'bombzaga',
+  scout: 'senha',
+  contract: 'reipelota',
+  wheel: 'tiringao',
+};
+export interface CampActionDef {
+  id: string;
+  service: CampService;
+  name: string;
+  desc: string;
+  icon: string;
+  /** Base price (grows with the camps lit); 0 = free. */
+  price: number;
+}
+const CA = (d: CampActionDef) => d;
+export const CAMP_ACTIONS: CampActionDef[] = [
+  CA({ id: 'shop:bombUp', service: 'shop', name: 'Bomba extra', desc: '+1 bomba ao mesmo tempo', icon: '💣', price: 30 }),
+  CA({ id: 'shop:fireUp', service: 'shop', name: 'Fogo', desc: '+1 de alcance', icon: '🔥', price: 30 }),
+  CA({ id: 'shop:speedUp', service: 'shop', name: 'Velocidade', desc: 'Um pouco mais rápido', icon: '👟', price: 25 }),
+  CA({ id: 'shop:shield', service: 'shop', name: 'Escudo', desc: 'Aguenta um golpe', icon: '🛡️', price: 40 }),
+  CA({ id: 'shop:feather', service: 'shop', name: 'Pena do Retorno', desc: 'Um golpe fatal não te derruba (1 uso)', icon: '🪶', price: 70 }),
+  CA({ id: 'smith:bomb', service: 'smith', name: 'Forjar bomba', desc: '+1 bomba (1 trabalho por acampamento)', icon: '⚒️', price: 110 }),
+  CA({ id: 'smith:range', service: 'smith', name: 'Forjar pavio', desc: '+1 alcance (1 trabalho por acampamento)', icon: '🧨', price: 110 }),
+  CA({ id: 'cook:shield', service: 'cook', name: 'Baião de dois', desc: 'Sai com escudo (1 refeição por acampamento)', icon: '🍲', price: 20 }),
+  CA({ id: 'cook:speed', service: 'cook', name: 'Cuscuz arretado', desc: '+velocidade (1 refeição por acampamento)', icon: '🌽', price: 20 }),
+  CA({ id: 'cook:feather', service: 'cook', name: 'Carne de sol', desc: 'Uma vida extra (Pena do Retorno)', icon: '🥩', price: 35 }),
+  CA({ id: 'scout', service: 'scout', name: 'Reconhecer o arco', desc: 'Revela no mapa as regiões até o próximo acampamento e quais baús são Mímicos', icon: '🔭', price: 40 }),
+  CA({ id: 'contract:gold', service: 'contract', name: 'Contrato de ouro', desc: 'Vença o chefe do arco com medalha de ouro', icon: '🥇', price: 0 }),
+  CA({ id: 'contract:chests', service: 'contract', name: 'Caça ao tesouro', desc: 'Abra 3 baús antes do próximo acampamento', icon: '🧰', price: 0 }),
+  CA({ id: 'contract:clean', service: 'contract', name: 'Sem quedas', desc: 'Chegue ao próximo acampamento sem o grupo cair', icon: '🏃', price: 0 }),
+  CA({ id: 'wheel', service: 'wheel', name: 'Roleta do Tiringão', desc: 'Um raro, uma pena ou moedas em dobro… ou nada! (1 por acampamento)', icon: '🎡', price: 30 }),
+  ...CHARACTER_IDS.map((id) => CA({ id: `hero:${id}`, service: 'hero', name: CHARACTERS[id].name, desc: CHARACTERS[id].tagline, icon: '🎭', price: 0 })),
+];
+export const campActionIndex = (id: string) => CAMP_ACTIONS.findIndex((a) => a.id === id) + 1;
+
 export type ArenaId = 'caldeira' | 'floresta';
 export interface ArenaDef {
   id: ArenaId;
@@ -502,6 +545,8 @@ export interface PlayerSnap {
   hasRemote: boolean;
   canThrow: boolean;
   special: { kind: 'fire' | 'ice'; charges: number } | null;
+  /** Feathers of Return: a lethal hit is shrugged off once per feather. */
+  feather?: number;
 }
 
 /** Task 3: an Adventure expedition's progress (what a campfire saves). */
@@ -517,7 +562,14 @@ export interface ExpeditionSave {
   best: number;
   /** Coins put in the vault at a campfire (never lost; online they went to the accounts). */
   banked?: number;
+  /** A3: heroes living at the camps (open their services), what was used at the current camp,
+   *  the scout's reach (next camp region) and the contract taken for the arc ahead. */
+  residents?: string[];
+  used?: string[];
+  scoutTo?: number;
+  contract?: { kind: ContractKind; progress: number; goal: number; reward: number; until: number } | null;
 }
+
 
 /** An expedition saved on an account (online: the host's) or on this device. */
 export interface SavedExpedition {
@@ -557,4 +609,6 @@ export interface GameConfig {
   classicBosses?: boolean;
   /** Adventure: resume an expedition from its last campfire. */
   expedition?: ExpeditionSave;
+  /** Adventure: heroes the group already rescued (they live at the camps). */
+  residents?: string[];
 }

@@ -15,6 +15,13 @@ export function hitPlayer(s: GameState, p: PlayerState, byId: string | null): vo
     s.events.push({ type: 'shieldBroken', playerId: p.id });
     return;
   }
+  // A3: a Feather of Return spends itself instead of the player.
+  if ((p.feather ?? 0) > 0) {
+    p.feather = (p.feather ?? 1) - 1;
+    p.invulnUntil = s.tick + secToTicks(2);
+    s.events.push({ type: 'featherSaved', playerId: p.id, x: p.x, y: p.y });
+    return;
+  }
   p.alive = false;
   p.diedTick = s.tick;
   p.moving = false;

@@ -83,6 +83,10 @@ export class GameController implements MatchView {
   bankCoins() {
     this.campBank = true;
   }
+  private campActions = new Map<number, number>();
+  campAction(slot: number, index: number) {
+    this.campActions.set(slot, index);
+  }
 
   update(dt: number) {
     this.input.poll();
@@ -93,6 +97,11 @@ export class GameController implements MatchView {
       const inputs: InputMap = {};
       for (const p of this.state.players) inputs[p.id] = this.input.read(p.slot);
       // Task 3: "end the expedition" from the camp panel, on behalf of the first player near the fire.
+      for (const p of this.state.players) {
+        const a = this.campActions.get(p.slot);
+        if (a) inputs[p.id] = { ...(inputs[p.id] ?? EMPTY_INPUT), campAction: a };
+      }
+      this.campActions.clear();
       if (this.campEnd || this.campBank) {
         const extra = { ...(this.campEnd ? { campEnd: true } : {}), ...(this.campBank ? { campBank: true } : {}) };
         this.campEnd = this.campBank = false;

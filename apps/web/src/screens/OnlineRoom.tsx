@@ -29,6 +29,7 @@ import { MatchTouchControls } from './GameScreen';
 import { useUiHandler } from '../ui/uiInput';
 import { EmptySlot, PlayerSlotCard, StatusLine } from './LocalLobby';
 import { credential, ensureAccount } from '../store/useAccount';
+import { CampPanel } from '../ui/CampPanel';
 
 export function OnlineRoom() {
   const navigate = useNavigate();
@@ -76,6 +77,7 @@ function OnlineMatch({ start, locals, mode, onLeave, reconnecting }: { start: St
       <GameScene controller={controller} />
       <Hud mode={mode} onResume={() => controller.toggleMenu(false)} onExit={onLeave} exitLabel="Sair da sala" resultNote="Voltando à sala…" onEndExpedition={mode === 'adventure' ? () => controller.endExpedition() : undefined} onBankCoins={mode === 'adventure' ? () => controller.bankCoins() : undefined} />
       <HeroReveal controller={controller} />
+      {mode === 'adventure' && <CampPanel controller={controller} slots={locals.map((l) => l.slot)} />}
       {controller.state.adventure && (
         <>
           <ChapterCard key={`chapter-${controller.state.config.seed}`} controller={controller} />

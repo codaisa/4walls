@@ -13,3 +13,4 @@ export * from './modes';
 export * from './simulation';
 export * from './boss';
 export * from './expedition';
+export * from './camp';

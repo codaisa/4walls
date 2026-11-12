@@ -134,6 +134,7 @@ export function Hud({ onResume, onRestart, onExit, exitLabel, mode, resultNote, 
  */
 function CampButton({ onEnd, onBank }: { onEnd: () => void; onBank?: () => void }) {
   const near = useHud((s) => !!s.adventure?.campNear);
+  const inCamp = useHud((s) => !!s.adventure?.inCamp);
   const coins = useHud((s) => s.adventure?.coins ?? 0);
   const banked = useHud((s) => s.adventure?.banked ?? 0);
   const [ask, setAsk] = useState(false);
@@ -145,12 +146,23 @@ function CampButton({ onEnd, onBank }: { onEnd: () => void; onBank?: () => void 
   useEffect(() => {
     if (!near) setAsk(false);
   }, [near]);
-  if (!near) return null;
+  if (!inCamp) return null;
   return (
     <div className="pointer-events-auto absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-2 [@media(max-height:500px)]:bottom-1.5">
+      <button
+        className="menu-btn menu-btn-primary !min-w-0 whitespace-nowrap !px-3 !py-1 !text-sm"
+        data-testid="camp-open"
+        onClick={() => {
+          sfx.ui();
+          useHud.getState().set({ campOpen: true });
+        }}
+      >
+        🏕️ Acampamento
+      </button>
+      {near && <>
       {onBank && (coins > 0 ? (
         <button
-          className="menu-btn !min-w-0 !px-4 !py-1.5 !text-base"
+          className="menu-btn !min-w-0 whitespace-nowrap !px-3 !py-1 !text-sm"
           data-testid="camp-bank"
           onClick={() => {
             sfx.ui();
@@ -163,7 +175,7 @@ function CampButton({ onEnd, onBank }: { onEnd: () => void; onBank?: () => void 
         <span className="hud-panel self-center px-3 py-1 text-sm font-bold text-amber-200">🔒 Cofre 🪙 {banked}</span>
       ) : null)}
       <button
-        className={`menu-btn !min-w-0 !px-4 !py-1.5 !text-base ${ask ? 'menu-btn-primary animate-pulse' : ''}`}
+        className={`menu-btn !min-w-0 whitespace-nowrap !px-3 !py-1 !text-sm ${ask ? 'menu-btn-primary animate-pulse' : ''}`}
         data-testid="camp-end"
         onClick={() => {
           sfx.ui();
@@ -171,8 +183,9 @@ function CampButton({ onEnd, onBank }: { onEnd: () => void; onBank?: () => void 
           else setAsk(true);
         }}
       >
-        {ask ? `Encerrar e guardar 🪙 ${coins}?` : '🏕️ Encerrar expedição'}
+        {ask ? `Encerrar e guardar 🪙 ${coins}?` : '🏁 Encerrar'}
       </button>
+      </>}
     </div>
   );
 }
@@ -180,10 +193,21 @@ function CampButton({ onEnd, onBank }: { onEnd: () => void; onBank?: () => void 
 /** The same choice in the pause menu (gamepad / keyboard). */
 function PauseCampEnd({ onEnd, onBank, onResume }: { onEnd: () => void; onBank?: () => void; onResume: () => void }) {
   const near = useHud((s) => !!s.adventure?.campNear);
+  const inCamp = useHud((s) => !!s.adventure?.inCamp);
   const coins = useHud((s) => s.adventure?.coins ?? 0);
-  if (!near) return null;
+  if (!inCamp) return null;
   return (
     <>
+    <MenuButton
+      primary
+      onClick={() => {
+        useHud.getState().set({ campOpen: true });
+        onResume();
+      }}
+    >
+      🏕️ Acampamento
+    </MenuButton>
+    {near && <>
     {onBank && coins > 0 && (
       <MenuButton
         onClick={() => {
@@ -200,8 +224,9 @@ function PauseCampEnd({ onEnd, onBank, onResume }: { onEnd: () => void; onBank?:
         onResume();
       }}
     >
-      🏕️ Encerrar expedição (🪙 {coins})
+      🏁 Encerrar expedição (🪙 {coins})
     </MenuButton>
+    </>}
     </>
   );
 }
@@ -392,6 +417,11 @@ function AdventurePanel() {
         <div className={`text-[11px] font-bold ${a.braziers.lit === a.braziers.goal ? 'text-emerald-300' : 'text-orange-200/90'}`} data-testid="mission">
           🔥 Braseiros {a.braziers.lit}/{a.braziers.goal}
           {a.braziers.lit === a.braziers.goal ? ' · tesouro revelado!' : ' (opcional)'}
+        </div>
+      )}
+      {a.contract && (
+        <div className="text-[11px] font-bold text-amber-200/90" data-testid="contract">
+          📜 {a.contract.name} {a.contract.goal > 1 ? `${a.contract.progress}/${a.contract.goal}` : ''}
         </div>
       )}
       {a.fallIn !== null && (

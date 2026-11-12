@@ -16,8 +16,9 @@ import { useUiHandler } from '../ui/uiInput';
 import { isTouchDevice } from '../input/InputManager';
 import { TouchControls } from '../ui/TouchControls';
 import { useHud } from '../store/useHud';
-import { myLoadout } from '../store/useAccount';
+import { myLoadout, useAccount } from '../store/useAccount';
 import { clearExpedition, loadExpedition, saveExpedition } from '../game/expeditionSave';
+import { CampPanel } from '../ui/CampPanel';
 
 interface MatchPlan {
   mode: LocalMode;
@@ -42,7 +43,8 @@ function quickSolo(): MatchPlan {
 function expeditionStart(resume: boolean, clear = false) {
   const saved = resume ? loadExpedition() : null;
   if (!resume && clear) clearExpedition();
-  return saved ? { seed: saved.seed, expedition: saved.save } : { seed: newSeed() };
+  const residents = useAccount.getState().account?.characters ?? [];
+  return saved ? { seed: saved.seed, expedition: saved.save, residents } : { seed: newSeed(), residents };
 }
 
 /** Adventure quick start from the main menu: one player, fog-covered regions to unlock. */
@@ -152,6 +154,7 @@ export function GameScreen() {
         onBankCoins={plan.mode === 'adventure' ? () => controller.bankCoins() : undefined}
       />
       <HeroReveal key={`reveal-${controller.state.config.seed}`} controller={controller} />
+      {plan.mode === 'adventure' && <CampPanel controller={controller} slots={plan.config.players.map((p) => p.slot)} />}
       {controller.state.adventure && (
         <>
           <ChapterCard key={`chapter-${controller.state.config.seed}`} controller={controller} />

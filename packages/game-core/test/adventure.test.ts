@@ -1,6 +1,6 @@
-import { ADVENTURE, BOSSES, Cell, DIR_VEC, DIRS } from '@4walls/shared';
+import { ADVENTURE, BOSSES, Cell, DIR_VEC, DIRS, campActionIndex } from '@4walls/shared';
 import { describe, expect, it } from 'vitest';
-import { ELITE_MAGMITE_HP, MIMIC_HP, elitesFor, makeEnemy, ALL_PLATES, arcBoss, bodySide, lavaRing, leapCells, spawnBoss, arcInfo, arcOfRegion, chamberCenter, isPit, cellIndex, createGame, difficulty, geyserPhase, regionDifficulty, spawnBomb, getCell, inBounds, platformPos, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
+import { addResident, ELITE_MAGMITE_HP, MIMIC_HP, elitesFor, makeEnemy, ALL_PLATES, arcBoss, bodySide, lavaRing, leapCells, spawnBoss, arcInfo, arcOfRegion, chamberCenter, isPit, cellIndex, createGame, difficulty, geyserPhase, regionDifficulty, spawnBomb, getCell, inBounds, platformPos, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
 
 const make = (seed = 11, players = 1) => {
   const s = createGame({
@@ -192,7 +192,7 @@ describe('endless adventure: the journey', () => {
         const gateNeighbor = DIRS.map((d) => ({ x: g.x + DIR_VEC[d].x, y: g.y + DIR_VEC[d].y })).some((c) => inBounds(s.grid, c.x, c.y) && seen.has(cellIndex(s.grid, c.x, c.y)) && regionAt(s, c.x, c.y) === id);
         expect(gateNeighbor, `seed ${seed} region ${id}: exit`).toBe(true);
         const isletOf = (pp: { x: number; y: number }) => DIRS.filter((d) => getCell(s.grid, pp.x + DIR_VEC[d].x, pp.y + DIR_VEC[d].y) === Cell.Lava).length >= 2;
-        for (const p of s.adventure!.props.filter((pp) => pp.region === id && !['brazier', 'lever', 'bridge', 'platform', 'seal', 'root', 'bramble', 'grass', 'totem', 'campfire'].includes(pp.kind) && !isletOf(pp))) {
+        for (const p of s.adventure!.props.filter((pp) => pp.region === id && !['brazier', 'lever', 'bridge', 'platform', 'seal', 'root', 'bramble', 'grass', 'totem', 'campfire', 'tent'].includes(pp.kind) && !isletOf(pp))) {
           // Secret chests sit behind a cracked wall: open it for the check.
           for (const d of DIRS) {
             const x = p.x + DIR_VEC[d].x;
@@ -202,7 +202,7 @@ describe('endless adventure: the journey', () => {
           expect(reach(s, start).has(cellIndex(s.grid, p.x, p.y)), `seed ${seed} region ${id}: ${p.kind}`).toBe(true);
         }
         // Braziers and levers stand like pillars: one of their sides must be reachable.
-        for (const b of s.adventure!.props.filter((pp) => pp.region === id && ['brazier', 'lever', 'seal', 'root', 'totem', 'campfire'].includes(pp.kind))) {
+        for (const b of s.adventure!.props.filter((pp) => pp.region === id && ['brazier', 'lever', 'seal', 'root', 'totem', 'campfire', 'tent'].includes(pp.kind))) {
           const side = DIRS.some((d) => {
             const x = b.x + DIR_VEC[d].x;
             const y = b.y + DIR_VEC[d].y;
@@ -1495,5 +1495,100 @@ describe('Task 3: camps are safe', () => {
       step(s, {});
       for (const e of s.enemies) if (e.alive) expect(regionAt(s, Math.round(e.x), Math.round(e.y))).not.toBe(5);
     }
+  });
+});
+
+describe('Task 3 · A3: camp services and residents', () => {
+  const at = (residents: string[] = [], coins = 500) => {
+    const save = { camp: 5, coins, snapshot: [], returns: 0, camps: 1, best: 5 };
+    const s = createGame({ mode: 'adventure', seed: 3, width: 0, height: 0, players: [{ id: 'p1', slot: 0, characterId: 'bombito', name: 'P1' }], expedition: save, residents });
+    s.phase = 'playing';
+    s.players[0].invulnUntil = 1e9;
+    step(s, {});
+    return s;
+  };
+  const act = (s: GameState, id: string) => {
+    step(s, { p1: { move: null, bomb: false, ability: false, campAction: campActionIndex(id) } });
+    return s.events.find((e) => e.type === 'campBought' || e.type === 'wheelSpun');
+  };
+
+  it('the camp has tents around the fire; residents come from the group and from rescues', () => {
+    const s = at(['silvio', 'ninja']);
+    const tents = s.adventure!.props.filter((p) => p.kind === 'tent' && p.region === 5);
+    expect(tents.length).toBeGreaterThanOrEqual(4);
+    for (const t of tents) expect(getCell(s.grid, t.x, t.y)).toBe(Cell.Wall);
+    // Starters never "live" at the camp; rescued heroes do.
+    expect(s.expedition!.residents).toEqual(['silvio']);
+    addResident(s, 'bombiao');
+    expect(s.events.some((e) => e.type === 'residentArrived')).toBe(true);
+    expect(s.expedition!.residents).toEqual(['silvio', 'bombiao']);
+  });
+
+  it('a service needs its resident; buying spends the purse and applies right away', () => {
+    const s = at([]);
+    const p = s.players[0];
+    expect(act(s, 'shop:bombUp')).toBeUndefined();
+    addResident(s, 'silvio');
+    const bombs = p.maxBombs;
+    expect(act(s, 'shop:bombUp')).toMatchObject({ type: 'campBought', price: 30 });
+    expect(p.maxBombs).toBe(bombs + 1);
+    expect(s.expedition!.coins).toBe(470);
+    // Not in the camp: closed.
+    const r6 = s.adventure!.regions.find((r) => r.id === 6)!;
+    p.x = p.px = r6.cx * ADVENTURE.chunkW + 7;
+    p.y = p.py = r6.cy * ADVENTURE.chunkH + 7;
+    expect(act(s, 'shop:fireUp')).toBeUndefined();
+  });
+
+  it('the smith and the cook work once per camp; not enough coins means no deal', () => {
+    const s = at(['bombiao', 'bombzaga'], 140);
+    const p = s.players[0];
+    expect(act(s, 'smith:range')).toBeTruthy();
+    expect(act(s, 'smith:bomb')).toBeUndefined();
+    expect(s.expedition!.coins).toBe(30);
+    expect(act(s, 'cook:feather')).toBeUndefined(); // 35 > 30
+    expect(act(s, 'cook:shield')).toBeTruthy();
+    expect(p.shield).toBe(1);
+    expect(act(s, 'cook:speed')).toBeUndefined();
+  });
+
+  it('a Feather of Return shrugs off a lethal hit once', () => {
+    const s = at(['silvio']);
+    const p = s.players[0];
+    act(s, 'shop:feather');
+    expect(p.feather).toBe(1);
+    p.invulnUntil = 0;
+    s.flames.push({ x: Math.round(p.x), y: Math.round(p.y), part: 'center', dir: null, bombId: 9, ownerId: 'meteor', bornTick: s.tick, untilTick: s.tick + 2, kind: 'normal' });
+    step(s, {});
+    expect(p.alive).toBe(true);
+    expect(s.events.some((e) => e.type === 'featherSaved')).toBe(true);
+    expect(p.feather).toBe(0);
+  });
+
+  it('the scout reveals the arc ahead; contracts pay on success and fail on a fall', () => {
+    const s = at(['senha', 'reipelota']);
+    act(s, 'scout');
+    const next = arcInfo(3, 2).start;
+    expect(s.expedition!.scoutTo).toBe(next);
+    const r6 = s.adventure!.regions.find((r) => r.id === 6)!;
+    const i = cellIndex(s.grid, r6.cx * ADVENTURE.chunkW + 7, r6.cy * ADVENTURE.chunkH + 7);
+    for (let k = 0; k < 4; k++) step(s, {});
+    expect(s.adventure!.explored[i]).toBe(1);
+    act(s, 'contract:clean');
+    expect(s.expedition!.contract).toMatchObject({ kind: 'clean', until: next });
+    expect(act(s, 'contract:chests')).toBeUndefined(); // one contract at a time
+    s.players[0].alive = false;
+    for (let k = 0; k < 60 * 3; k++) step(s, {});
+    expect(s.expedition!.contract).toBeNull();
+  });
+
+  it('heroes can be swapped at the camp: starters and residents only', () => {
+    const s = at(['senha']);
+    const p = s.players[0];
+    expect(act(s, 'hero:tiringao')).toBeUndefined();
+    expect(act(s, 'hero:senha')).toBeTruthy();
+    expect(p.characterId).toBe('senha');
+    expect(act(s, 'hero:ninja')).toBeTruthy();
+    expect(p.characterId).toBe('ninja');
   });
 });

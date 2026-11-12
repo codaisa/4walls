@@ -1,10 +1,12 @@
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, Suspense, useState } from 'react';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Cell } from '@4walls/shared';
 import { GEYSER_PERIOD, GEYSER_WARN, geyserPhase, getCell, platformPos, type PropState } from '@4walls/core';
 import { lerp, useGame } from './context';
+import { RESIDENT_OF } from '@4walls/shared';
+import { ShowcaseAvatar } from './ShowcaseAvatar';
 
 const wood = new THREE.MeshStandardMaterial({ color: '#8a4f24', roughness: 0.75 });
 const woodDark = new THREE.MeshStandardMaterial({ color: '#5e3216', roughness: 0.8 });
@@ -28,7 +30,7 @@ export function AdventureProps() {
   return (
     <>
       {props.map((p) =>
-        p.kind === 'chest' ? <Chest key={p.id} id={p.id} /> : p.kind === 'campfire' ? <Campfire key={p.id} id={p.id} /> : p.kind === 'key' ? <GateKey key={p.id} id={p.id} /> : p.kind === 'brazier' ? (
+        p.kind === 'chest' ? <Chest key={p.id} id={p.id} /> : p.kind === 'campfire' ? <Campfire key={p.id} id={p.id} /> : p.kind === 'tent' ? <Tent key={p.id} id={p.id} /> : p.kind === 'key' ? <GateKey key={p.id} id={p.id} /> : p.kind === 'brazier' ? (
           <Brazier key={p.id} id={p.id} />
         ) : p.kind === 'vent' ? (
           <AshVent key={p.id} id={p.id} />
@@ -73,6 +75,7 @@ function Chest({ id }: { id: number }) {
   const revealedAt = useRef<number | null>(null);
   const shine = useRef<THREE.Mesh>(null!);
   const crown = useRef<THREE.Group>(null!);
+  const warn = useRef<THREE.Mesh>(null!);
   const openedAt = useRef<number | null>(p0.state === 'open' ? -1 : null);
   useEffect(
     () =>
@@ -106,6 +109,8 @@ function Chest({ id }: { id: number }) {
     const k = since < 0 ? 0 : Math.min(1, since / 380);
     // Overshoot on the hinge, then rest wide open.
     lid.current.rotation.x = -k * (1.9 + 0.25 * Math.sin(Math.min(1, since / 600) * Math.PI));
+    warn.current.visible = !!p.mimic && !dbl && since < 0 && (controller.state.expedition?.scoutTo ?? -1) > p.region;
+    if (warn.current.visible) warn.current.position.y = 0.95 + 0.06 * Math.sin(t * 5);
     // The Mimic's tell: now and then the lid twitches by itself, as if something breathed inside.
     if (p.mimic && !dbl && since < 0) {
       const w = (t + id * 0.71) % 5.5;
@@ -146,6 +151,11 @@ function Chest({ id }: { id: number }) {
       </mesh>
       <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]} material={glowRing.clone()}>
         <ringGeometry args={[0.38, 0.46, 32]} />
+      </mesh>
+      {/* Scouted: this chest is a Mimic. */}
+      <mesh ref={warn} position={[0, 0.95, 0]} visible={false}>
+        <octahedronGeometry args={[0.13, 0]} />
+        <meshBasicMaterial color={new THREE.Color(3, 0.3, 0.2)} toneMapped={false} />
       </mesh>
       {/* The double chest left by a beaten Mimic: gold crown and gems. */}
       <group ref={crown} visible={false}>
@@ -285,6 +295,51 @@ const emberGlow = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.5,
 const ashMat = new THREE.MeshStandardMaterial({ color: '#6e6468', roughness: 1, transparent: true, opacity: 0.88, depthWrite: false });
 
 const logMat = new THREE.MeshStandardMaterial({ color: '#5b3a22', roughness: 0.9 });
+
+const TENT_COLOR: Record<string, string> = { shop: '#d9534f', smith: '#6d6a75', cook: '#e8a33d', scout: '#3f8fd2', contract: '#8a5cc7', wheel: '#3fb37f' };
+const tentGeo = new THREE.ConeGeometry(0.62, 1.05, 4, 1);
+tentGeo.rotateY(Math.PI / 4);
+
+/** A3 — a resident's tent: colored canvas, a pennant; the hero stands at the door once rescued. */
+function Tent({ id }: { id: number }) {
+  const { controller, ox, oz } = useGame();
+  const get = useProp(id);
+  const p0 = get()!;
+  const service = (p0.service ?? 'shop') as keyof typeof RESIDENT_OF;
+  const resident = RESIDENT_OF[service];
+  const [home, setHome] = useState(() => !!controller.state.expedition?.residents?.includes(resident));
+  const flag = useRef<THREE.Mesh>(null!);
+  useFrame(({ clock }) => {
+    const h = !!controller.state.expedition?.residents?.includes(resident);
+    if (h !== home) setHome(h);
+    flag.current.rotation.y = Math.sin(clock.elapsedTime * 3 + id) * 0.4;
+  });
+  // The door faces the fire.
+  const fire = controller.state.adventure?.props.find((q) => q.kind === 'campfire' && q.region === p0.region);
+  const yaw = fire ? Math.atan2(fire.x - p0.x, fire.y - p0.y) : 0;
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: TENT_COLOR[service] ?? '#aa7744', roughness: 0.85, side: THREE.DoubleSide, flatShading: true }), [service]);
+  return (
+    <group position={[p0.x + ox, 0, p0.y + oz]} rotation-y={yaw}>
+      <mesh position={[0, 0.52, 0]} geometry={tentGeo} material={mat} castShadow receiveShadow />
+      <mesh position={[0, 0.3, 0.42]} material={coal}>
+        <planeGeometry args={[0.32, 0.55]} />
+      </mesh>
+      <mesh position={[0, 1.18, 0]} material={logMat}>
+        <cylinderGeometry args={[0.02, 0.02, 0.35, 5]} />
+      </mesh>
+      <mesh ref={flag} position={[0.1, 1.28, 0]} material={mat}>
+        <planeGeometry args={[0.2, 0.12]} />
+      </mesh>
+      {home && (
+        <group position={[0, 0, 0.62]} scale={0.8}>
+          <Suspense fallback={null}>
+            <ShowcaseAvatar characterId={resident} colorIndex={(Object.keys(RESIDENT_OF).indexOf(service) + 1) % 4} />
+          </Suspense>
+        </group>
+      )}
+    </group>
+  );
+}
 
 /** Task 3 — the camp's fire: stones and crossed logs; the group gathering lights it. */
 function Campfire({ id }: { id: number }) {

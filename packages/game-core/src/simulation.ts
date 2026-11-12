@@ -1,7 +1,8 @@
-import { ARENAS, BOSS_ARENA, BOSS_RUSH, CHARACTERS, RULES, secToTicks, type CharacterId, type GameConfig } from '@4walls/shared';
+import { ARENAS, BOSS_ARENA, BOSS_RUSH, CHARACTERS, RULES, STARTER_CHARACTERS, secToTicks, type CharacterId, type GameConfig } from '@4walls/shared';
 import { updateMines, useAbility } from './abilities';
 import { createAdventure, revealAround, spawnAdventureEnemies, tryBankCoins, tryEndExpedition, updateAdventure } from './adventure';
 import { applySnap, newExpedition, snapPlayer } from './expedition';
+import { tryCampAction } from './camp';
 import { scheduleFirstEvent, updateArenaEvents } from './arenaEvents';
 import { buildBossArena, spawnBoss, updateBoss } from './boss';
 import { tryPlaceBomb, updateBombs } from './bombs';
@@ -101,6 +102,8 @@ export function createGame(config: GameConfig): GameState {
     s.expedition = save ? { ...save, snapshot: save.snapshot.map((q) => ({ ...q })) } : newExpedition();
     for (const p of s.players) applySnap(p, s.expedition.snapshot.find((q) => q.slot === p.slot));
     if (!save) s.expedition.snapshot = s.players.map(snapPlayer);
+    // A3: the group's rescued heroes live at the camps (plus those met on this expedition).
+    s.expedition.residents = [...new Set([...(s.expedition.residents ?? []), ...(cfg.residents ?? [])])].filter((id) => !(STARTER_CHARACTERS as string[]).includes(id));
     spawnAdventureEnemies(s);
     revealAround(s);
   } else if (bossArena) {
@@ -158,6 +161,7 @@ export function step(s: GameState, inputs: InputMap): void {
     stepPlayerMovement(s, p, input);
     if (s.tick < p.frozenUntil) continue;
     if (input?.campBank) tryBankCoins(s, p);
+    if (input?.campAction) tryCampAction(s, p, input.campAction);
     if (input?.campEnd) tryEndExpedition(s, p);
     if (input?.bomb) tryPlaceBomb(s, p);
     if (input?.ability) useAbility(s, p);

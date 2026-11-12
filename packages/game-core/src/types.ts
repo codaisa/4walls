@@ -59,6 +59,8 @@ export interface PlayerState {
   maneuverReadyTick: number;
   /** Turbo ability (Ayrton Senha): double speed until this tick. */
   turboUntil: number;
+  /** A3: Feathers of Return (a lethal hit is shrugged off, once each). */
+  feather?: number;
 }
 
 export interface Maneuver {
@@ -236,7 +238,7 @@ export interface GateState {
   kind?: 'exit' | 'back';
 }
 
-export type PropKind = 'chest' | 'key' | 'brazier' | 'vent' | 'bridge' | 'platform' | 'geyser' | 'lever' | 'seal' | 'root' | 'bramble' | 'grass' | 'totem' | 'campfire';
+export type PropKind = 'chest' | 'key' | 'brazier' | 'vent' | 'bridge' | 'platform' | 'geyser' | 'lever' | 'seal' | 'root' | 'bramble' | 'grass' | 'totem' | 'campfire' | 'tent';
 
 /**
  * Adventure props. Chest: opened by walking onto it or by a blast, drops loot (rare = secret).
@@ -255,6 +257,8 @@ export interface PropState {
   hp?: number;
   /** bridge: a fragile plank bridge or a drawbridge plank (lowered by the lever). */
   variant?: 'fragile' | 'draw';
+  /** tent: the camp service it houses. */
+  service?: string;
   /** platform: the river cells it shuttles across, from the near bank to the far one. */
   track?: { x: number; y: number }[];
   rare?: boolean;
@@ -496,6 +500,13 @@ export type GameEvent =
   | { type: 'campReturn'; region: number; lost: number }
   | { type: 'expeditionEnded'; byId: string; coins: number }
   | { type: 'coinsBanked'; byId: string; amount: number; banked: number }
+  /** A3: camp services. */
+  | { type: 'campBought'; playerId: string; action: string; price: number }
+  | { type: 'featherSaved'; playerId: string; x: number; y: number }
+  | { type: 'wheelSpun'; playerId: string; result: 'rare' | 'feather' | 'coins' | 'nothing'; powerup?: PowerupType }
+  | { type: 'contractDone'; kind: string; reward: number }
+  | { type: 'contractFailed'; kind: string }
+  | { type: 'residentArrived'; characterId: string }
   | { type: 'motesSummoned'; cells: { x: number; y: number }[] }
   | { type: 'gameOver'; result: GameResult };
 

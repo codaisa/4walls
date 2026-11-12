@@ -1,7 +1,8 @@
 import { ADVENTURE, BOSSES, Cell, CHARACTER_IDS, CHARACTERS, DIR_VEC, DIRS, POWERUPS, RULES, secToTicks, type BiomeId, type BossId, type CharacterId, type PowerupType } from '@4walls/shared';
 import { spawnBoss } from './boss';
 import { ELITE_MAGMITE_HP, wakeMimic } from './enemies';
-import { EXPEDITION_LOSS, addCoins, applySnap, snapPlayer } from './expedition';
+import { EXPEDITION_LOSS, addCoins, applySnap, contractStep, snapPlayer } from './expedition';
+import { addResident } from './camp';
 import { cellIndex, createGrid, getCell, inBounds, setCell } from './grid';
 import { nextRandom, pickWeighted, randInt } from './rng';
 import type { AdventureState, CageState, EnemyState, GameState, GateState, Grid, PlayerState, PropState, RegionDir, RegionObjectiveKind, RegionState, RegionVariant } from './types';
@@ -947,13 +948,15 @@ function campBlueprint(seed: number, adv: AdventureState, id: number, info: Retu
   const exitDir = adv.dirs[id];
   const exit = edgeCell(ox, oy, exitDir);
   const entry = id > 0 ? edgeCell(ox, oy, opposite(adv.dirs[id - 1])) : null;
-  // Paths from the doorways into the clearing.
+  // Paths from the doorways into the clearing (kept clear all the way to the fire).
+  const paths = new Set<number>();
   for (const d of [entry, exit]) {
     if (!d) continue;
     let x = d.x;
     let y = d.y;
-    while (cells[at(x, y)] !== Cell.Floor || (x === d.x && y === d.y)) {
+    for (let guard = 0; guard < CW + CH; guard++) {
       set(x, y, Cell.Floor);
+      paths.add(at(x, y));
       if (x === center.x && y === center.y) break;
       if (x !== center.x) x += Math.sign(center.x - x);
       else y += Math.sign(center.y - y);
@@ -970,6 +973,16 @@ function campBlueprint(seed: number, adv: AdventureState, id: number, info: Retu
   }
   set(center.x, center.y, Cell.Wall); // the fire stands like a pillar
   const props: Omit<PropState, 'tick'>[] = [{ id: id * 64, kind: 'campfire', region: id, x: center.x, y: center.y, state: 'unlit' }];
+  // Tents of the residents, in a ring around the fire (never on the paths in and out).
+  const TENTS: [number, number, string][] = [[-3, -3, 'shop'], [3, -3, 'smith'], [-5, 0, 'cook'], [5, 0, 'scout'], [-3, 3, 'contract'], [3, 3, 'wheel']];
+  let tentSeq = 1;
+  for (const [dx, dy, service] of TENTS) {
+    const x = center.x + dx;
+    const y = center.y + dy;
+    if (paths.has(at(x, y)) || cells[at(x, y)] !== Cell.Floor) continue;
+    set(x, y, Cell.Wall);
+    props.push({ id: id * 64 + tentSeq++, kind: 'tent', region: id, x, y, state: 'idle', service });
+  }
   const spawns = [
     { x: center.x - 2, y: center.y },
     { x: center.x + 2, y: center.y },
@@ -1250,6 +1263,10 @@ export function returnToCamp(s: GameState) {
   const ex = s.expedition!;
   const lost = Math.floor(ex.coins * EXPEDITION_LOSS);
   ex.coins -= lost;
+  if (ex.contract?.kind === 'clean') {
+    s.events.push({ type: 'contractFailed', kind: 'clean' });
+    ex.contract = null;
+  }
   ex.returns++;
   ex.fallAt = undefined;
   const journey = s.adventure!.journey;
@@ -1324,6 +1341,14 @@ function updateCampfire(s: GameState, pr: PropState) {
   pr.state = 'lit';
   pr.tick = s.tick;
   let again = true;
+  if (ex?.contract && pr.region >= ex.contract.until) {
+    const c = ex.contract;
+    ex.contract = null;
+    if (c.kind === 'clean') {
+      addCoins(s, c.reward, pr.x, pr.y);
+      s.events.push({ type: 'contractDone', kind: c.kind, reward: c.reward });
+    } else s.events.push({ type: 'contractFailed', kind: c.kind });
+  }
   if (ex) {
     again = ex.camp === pr.region;
     if (!again) ex.camps++;
@@ -1736,6 +1761,7 @@ function openChest(s: GameState, pr: PropState, byId: string | null) {
   pr.tick = s.tick;
   s.events.push({ type: 'chestOpened', propId: pr.id, x: pr.x, y: pr.y, rare: !!pr.rare, byId });
   addCoins(s, (pr.hp === 2 ? 30 : pr.rare ? 15 : 5) + Math.floor(pr.region / 2), pr.x, pr.y);
+  contractStep(s, 'chests', pr.region);
   const loot: PowerupType[] = [pickWeighted(s, Object.values(POWERUPS), (d) => d.weight).type];
   if (pr.rare) loot.push(RARE_LOOT[randInt(s, RARE_LOOT.length)]);
   // The Mimic's double chest: twice the loot, and always a rare piece.
@@ -1832,6 +1858,7 @@ export function rescueHero(s: GameState, c: CageState, rescuer: PlayerState) {
   becomeHero(s, target, hero);
   target.invulnUntil = s.tick + secToTicks(Math.max(REVIVE_INVULN_SEC, RULES.invulnSec));
   s.events.push({ type: 'heroJoined', playerId: target.id, byId: rescuer.id, characterId: hero, previousId, revived: !!fallen, x: target.x, y: target.y });
+  addResident(s, hero);
 }
 
 /** Swaps a player's class, keeping the power-ups they earned (speed and bomb perks re-based). */
@@ -1907,6 +1934,13 @@ function safeCellsNear(s: GameState, x: number, y: number, n: number) {
 export function revealAround(s: GameState) {
   const adv = s.adventure;
   if (!adv) return;
+  // A3: the scout already walked the arc ahead: its regions show whole on the map.
+  const scoutTo = s.expedition?.scoutTo ?? -1;
+  if (scoutTo >= 0)
+    for (let i = 0; i < adv.regionOf.length; i++) {
+      const reg = adv.regionOf[i];
+      if (reg >= 0 && reg < scoutTo && reg > (s.expedition?.camp ?? 0) - 1) adv.explored[i] = 1;
+    }
   const R = ADVENTURE.revealRadius;
   const r = Math.ceil(R);
   for (const p of s.players) {

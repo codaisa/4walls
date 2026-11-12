@@ -49,6 +49,7 @@ interface QueuedInput {
   jump: boolean;
   campEnd?: boolean;
   campBank?: boolean;
+  campAction?: number;
 }
 
 /**
@@ -323,6 +324,8 @@ export class ArenaRoom extends Room {
       mode: this.mode,
       seed: saved ? saved.seed : randomBytes(4).readInt32LE(0),
       ...(saved ? { expedition: saved.save } : {}),
+      // A3: heroes the group's accounts rescued live at the camps.
+      ...(this.mode === 'adventure' ? { residents: this.partyHeroes() } : {}),
       width: ARENAS[arena].width,
       height: ARENAS[arena].height,
       arenaId: arena,
@@ -354,7 +357,7 @@ export class ArenaRoom extends Room {
       const q = this.queues.get(slot) ?? [];
       const lastSeq = q.length ? q[q.length - 1].seq : (this.acks[slot] ?? -1);
       if (batch.seq <= lastSeq) continue; // stale or replayed
-      q.push({ seq: batch.seq, move: input.move, bomb: input.bomb, ability: input.ability, roll: !!input.roll, jump: !!input.jump, campEnd: !!input.campEnd, campBank: !!input.campBank });
+      q.push({ seq: batch.seq, move: input.move, bomb: input.bomb, ability: input.ability, roll: !!input.roll, jump: !!input.jump, campEnd: !!input.campEnd, campBank: !!input.campBank, campAction: input.campAction ?? 0 });
       if (q.length > MAX_QUEUED_INPUTS) {
         // Keep button presses from dropped frames so they are never silently lost.
         const dropped = q.splice(0, q.length - MAX_QUEUED_INPUTS);
@@ -364,6 +367,7 @@ export class ArenaRoom extends Room {
         if (dropped.some((d) => d.jump)) q[0].jump = true;
         if (dropped.some((d) => d.campEnd)) q[0].campEnd = true;
         if (dropped.some((d) => d.campBank)) q[0].campBank = true;
+        if (!q[0].campAction) q[0].campAction = dropped.find((d) => d.campAction)?.campAction ?? 0;
       }
       this.queues.set(slot, q);
     }
@@ -384,12 +388,13 @@ export class ArenaRoom extends Room {
         later.jump ||= next.jump;
         later.campEnd ||= next.campEnd;
         later.campBank ||= next.campBank;
+        later.campAction ||= next.campAction;
         next = later;
       }
       if (next) {
         this.held.set(p.slot, next.move);
         this.acks[p.slot] = next.seq;
-        inputs[p.id] = { move: next.move, bomb: next.bomb, ability: next.ability, roll: next.roll, jump: next.jump, campEnd: next.campEnd, campBank: next.campBank };
+        inputs[p.id] = { move: next.move, bomb: next.bomb, ability: next.ability, roll: next.roll, jump: next.jump, campEnd: next.campEnd, campBank: next.campBank, ...(next.campAction ? { campAction: next.campAction } : {}) };
       } else {
         // No fresh input this tick (network jitter): keep walking in the held direction.
         inputs[p.id] = { ...EMPTY_INPUT, move: this.held.get(p.slot) ?? null };
@@ -434,6 +439,17 @@ export class ArenaRoom extends Room {
         if (owner) ArenaRoom.accounts?.clearExpedition(owner);
       }
     }
+  }
+
+  /** Heroes rescued by any logged-in player of the room. */
+  private partyHeroes() {
+    const store = ArenaRoom.accounts;
+    const out = new Set<string>();
+    for (const s of this.slots) {
+      const id = this.slotAccount.get(s.slot);
+      for (const c of (id && store?.get(id)?.characters) || []) out.add(c);
+    }
+    return [...out];
   }
 
   /** The account behind the host's own player (null for guests). */

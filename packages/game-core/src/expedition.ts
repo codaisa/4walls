@@ -20,6 +20,7 @@ export const snapPlayer = (p: PlayerState): PlayerSnap => ({
   hasRemote: p.hasRemote,
   canThrow: p.canThrow,
   special: p.special ? { kind: p.special.kind as 'fire' | 'ice', charges: p.special.charges } : null,
+  ...(p.feather ? { feather: p.feather } : {}),
 });
 
 export function applySnap(p: PlayerState, snap: PlayerSnap | undefined) {
@@ -36,7 +37,19 @@ export function applySnap(p: PlayerState, snap: PlayerSnap | undefined) {
     hasRemote: snap.hasRemote,
     canThrow: snap.canThrow,
     special: snap.special ? { ...snap.special } : null,
+    feather: snap.feather ?? 0,
   });
+}
+
+/** A3: contract progress (chests opened, a gold medal); completes and pays when the goal is met. */
+export function contractStep(s: GameState, kind: 'gold' | 'chests', region: number) {
+  const c = s.expedition?.contract;
+  if (!c || c.kind !== kind || region >= c.until) return;
+  c.progress++;
+  if (c.progress < c.goal) return;
+  s.expedition!.contract = null;
+  addCoins(s, c.reward, 0, 0);
+  s.events.push({ type: 'contractDone', kind: c.kind, reward: c.reward });
 }
 
 /** Coins into the group's purse (Adventure only). */

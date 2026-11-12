@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createGame, spawnBoss, step, type GameState } from '@4walls/core';
 import type { ModeId } from '@4walls/shared';
-import { applySnapshot, encodeSnapshot, isOnlineMode, sanitizeName } from '../src';
+import { applySnapshot, encodeInput, encodeSnapshot, isOnlineMode, parseInputBatch, sanitizeName } from '../src';
+import { CAMP_ACTIONS, campActionIndex } from '@4walls/shared';
 
 const cfg = (mode: ModeId) => ({
   mode,
@@ -99,5 +100,12 @@ describe('every mode online', () => {
     expect(sanitizeName('', 'P2')).toBe('P2');
     expect(sanitizeName(42, 'P3')).toBe('P3');
     expect(sanitizeName('NomeMuitoComprido123', 'P1')).toHaveLength(12);
+  });
+
+  it('camp commands travel in the input tuple; out-of-range actions are dropped', () => {
+    const idx = campActionIndex('shop:bombUp');
+    const t = encodeInput(0, { move: null, bomb: false, ability: false, campBank: true, campAction: idx });
+    expect(parseInputBatch({ seq: 1, i: [t] })!.inputs[0].input).toMatchObject({ campBank: true, campAction: idx });
+    expect(parseInputBatch({ seq: 1, i: [[0, -1, 0, 0, 0, 0, 0, 0, CAMP_ACTIONS.length + 5]] })!.inputs[0].input.campAction).toBeUndefined();
   });
 });

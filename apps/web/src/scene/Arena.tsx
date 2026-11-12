@@ -43,7 +43,7 @@ export function Arena({ theme }: { theme: ArenaTheme }) {
     // Cage cells are crates in the rules but drawn by <Cages />.
     const cageSet = new Set(adventure?.cages.map((c) => k(c.x, c.y)) ?? []);
     // Braziers stand on wall cells in the rules but are drawn by <AdventureProps />.
-    const propSet = new Set(adventure?.props.filter((p) => p.kind === 'brazier' || p.kind === 'lever' || p.kind === 'seal' || p.kind === 'root' || p.kind === 'totem' || p.kind === 'campfire').map((p) => k(p.x, p.y)) ?? []);
+    const propSet = new Set(adventure?.props.filter((p) => p.kind === 'brazier' || p.kind === 'lever' || p.kind === 'seal' || p.kind === 'root' || p.kind === 'totem' || p.kind === 'campfire' || p.kind === 'tent').map((p) => k(p.x, p.y)) ?? []);
     // Boss Rush Guardian: its support roots are drawn by <Boss /> (they turn back into floor).
     for (const a of controller.state.boss?.anchors ?? []) propSet.add(k(a.x, a.y));
     // Brambles are crates in the rules, drawn as thorn bushes by <AdventureProps />.

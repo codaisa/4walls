@@ -7,7 +7,7 @@ antes da próxima:
 |---|---|---|---|
 | 1 | **Mapa**: regiões viram fases, objetivos, mecânicas de ambiente, segredos, navegação, arcos | — | **Concluída** (M1–M5) |
 | 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | **Concluída** (B1–B5, seção 5) |
-| 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Em andamento: A1 e A2 concluídos (seção 6) |
+| 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Em andamento: A1, A2 e A3 concluídos (seção 6) |
 
 Ponto de partida (como está hoje):
 - 5 regiões-ilha num reticulado de blocos de 16×14 casas, ligadas por corredores e geradas por seed.
@@ -414,7 +414,7 @@ Pontos de atenção:
 
 ## 6. Tarefa 3 — Acampamentos e progressão (plano detalhado)
 
-> Status: **aprovado** com as recomendações (corações no A4, perda de 50%, um acampamento por arco, save online na conta do anfitrião). **A1 e A2 concluídos.**
+> Status: **aprovado** com as recomendações (corações no A4, perda de 50%, um acampamento por arco, save online na conta do anfitrião). **A1, A2 e A3 concluídos.**
 
 ### 6.1 A ideia em uma frase
 
@@ -609,5 +609,24 @@ Entram:
 - **Acampamento seguro:** nenhum inimigo entra numa região de acampamento, nem pelo portão aberto (antes, um Magmito da região seguinte podia entrar).
 - **Voltar sem derrubar a sala:** o servidor recria o mundo a partir do acampamento e os clientes acompanham (A1).
 - **Migração:** contas antigas ganham os campos novos vazios.
+
+**Como ficou o A3 (serviços e moradores):**
+- **Tendas:** até 6 tendas coloridas em volta da fogueira, uma por serviço. Ficam de fora as que cairiam no caminho de entrada ou de saída. Quando o morador já foi resgatado, ele aparece em pé na porta da tenda, virado para a fogueira.
+- **Moradores:** os heróis já resgatados por qualquer conta do grupo (no local, pela conta deste aparelho) e os resgatados nesta expedição ("X VAI MORAR NO ACAMPAMENTO!"). Ficam salvos na expedição.
+- **Painel "🏕️ Acampamento":**
+  - abre por um botão em qualquer lugar do acampamento com a fogueira acesa, ou pelo menu de pausa;
+  - tem uma aba por tenda, com as moedas no topo e a escolha do jogador quando vários jogam no mesmo aparelho;
+  - funciona com toque, mouse e controle;
+  - cada botão mostra o preço ou o motivo de estar bloqueado.
+- **Regras:** cada compra é validada pela própria simulação (preço, saldo, um uso por acampamento, morador presente), então local e online seguem as mesmas regras. Os preços sobem 15% a cada acampamento.
+- **Serviços:**
+  - **Lojinha (Silvio Bombos):** bomba, fogo, velocidade, escudo e Pena do Retorno (um golpe fatal não derruba; máximo 2).
+  - **Ferreiro (Bombião):** +1 bomba ou +1 alcance; um trabalho por jogador por acampamento.
+  - **Cozinha (Luiz Bombzaga):** escudo, velocidade ou uma pena; uma refeição por jogador.
+  - **Batedor (Ayrton Senha):** revela no mapa as regiões até o próximo acampamento, e os baús Mímicos ganham um losango vermelho.
+  - **Contratos (Rei Pelota):** ouro no chefe, 3 baús ou chegar sem o grupo cair; o prêmio cresce com a profundidade. Um contrato por vez, acompanhado no painel do objetivo.
+  - **Roleta (Tiringão):** um raro, uma pena, o dobro das moedas apostadas ou nada; uma vez por jogador.
+  - **Heróis:** troca entre os iniciais e os moradores (sem custo).
+- **Fica para depois:** abrir o Ateliê (cosméticos) pelo acampamento; os NPCs andando entre as tendas (por enquanto ficam parados na porta).
 
 **Decisões aprovadas (12/11/2026):** corações (B, no A4), 50% de perda, um acampamento por arco, save online na conta do anfitrião.

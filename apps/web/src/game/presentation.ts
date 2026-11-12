@@ -1,5 +1,5 @@
 import { activeBombCount, regionAt, type GameEvent, type GameState, anchorsLeft } from '@4walls/core';
-import { BOSSES, CHARACTERS, GAME_EVENTS, POWERUPS, secToTicks, type CharacterId } from '@4walls/shared';
+import { BOSSES, CHARACTERS, GAME_EVENTS, POWERUPS, secToTicks, type CharacterId, CAMP_ACTIONS } from '@4walls/shared';
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 import { sfx } from '../audio/Sfx';
@@ -23,6 +23,8 @@ export interface MatchView {
   endExpedition?(): void;
   /** Task 3: put the carried coins in the campfire's vault. */
   bankCoins?(): void;
+  /** A3: a camp service for one of this device's players (1-based CAMP_ACTIONS index). */
+  campAction?(slot: number, index: number): void;
 }
 
 export const RESULT_DELAY_MS = 1400;
@@ -353,6 +355,29 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
     case 'expeditionEnded':
       sfx.victory();
       break;
+    case 'campBought':
+      sfx.pickup();
+      break;
+    case 'featherSaved':
+      sfx.shield();
+      hud.set({ banner: { text: '🪶 PENA DO RETORNO!', key: tick + 35 } });
+      break;
+    case 'wheelSpun':
+      sfx.laugh();
+      hud.set({ banner: { text: e.result === 'rare' ? '🎡 PRÊMIO RARO!' : e.result === 'feather' ? '🎡 UMA PENA DO RETORNO!' : e.result === 'coins' ? '🎡 MOEDAS EM DOBRO!' : '🎡 NÃO FOI DESSA VEZ!', key: tick + 36 } });
+      break;
+    case 'contractDone':
+      sfx.prize();
+      hud.set({ banner: { text: `📜 CONTRATO CUMPRIDO! +${e.reward} 🪙`, key: tick + 37 } });
+      break;
+    case 'contractFailed':
+      sfx.alarm(1);
+      hud.set({ banner: { text: '📜 CONTRATO PERDIDO', key: tick + 38 } });
+      break;
+    case 'residentArrived':
+      sfx.secret();
+      hud.set({ banner: { text: `${(CHARACTERS[e.characterId as keyof typeof CHARACTERS]?.name ?? 'UM HERÓI').toUpperCase()} VAI MORAR NO ACAMPAMENTO!`, key: tick + 39 } });
+      break;
     case 'coinsBanked':
       sfx.chest(true);
       hud.set({ banner: { text: `🔒 ${e.amount} 🪙 NO COFRE!`, key: tick + 34 } });
@@ -457,6 +482,14 @@ function adventureInfo(s: GameState): HudAdventure | null {
     objective: r.objective.kind,
     coins: s.expedition?.coins ?? 0,
     banked: s.expedition?.banked ?? 0,
+    inCamp:
+      !!s.expedition &&
+      !s.expedition.ended &&
+      r.objective.kind === 'camp' &&
+      adv.props.some((q) => q.kind === 'campfire' && q.region === r.id && q.state === 'lit'),
+    contract: s.expedition?.contract
+      ? { name: CAMP_ACTIONS.find((a) => a.id === `contract:${s.expedition!.contract!.kind}`)?.name ?? '', progress: s.expedition.contract.progress, goal: s.expedition.contract.goal }
+      : null,
     campNear:
       !!s.expedition &&
       !s.expedition.ended &&

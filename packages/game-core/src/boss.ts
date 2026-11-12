@@ -5,7 +5,7 @@ import { cellIndex, createGrid, getCell, inBounds, setCell } from './grid';
 import { nextRandom, pickWeighted, randInt } from './rng';
 import type { BossAttack, BossGoals, BossState, Flame, GameState, Grid, PlayerState } from './types';
 import { cellOf, flamesAt, isPit, newId } from './world';
-import { addCoins } from './expedition';
+import { addCoins, contractStep } from './expedition';
 
 /** Bosses cover the 3×3 cells around their center; players touching that body die. */
 const BODY_HALF = 1;
@@ -318,6 +318,7 @@ function takeDamage(s: GameState, b: BossState, def: BossDef): boolean {
         s.events.push({ type: 'bossDefeated', boss: b.kind, x: b.x, y: b.y, level: b.level ?? 0, tier, goals });
         dropReward(s, b, tier);
         if (b.regionId !== undefined) addCoins(s, 30 * tier + 15 * (b.level ?? 0), b.x, b.y);
+        if (b.regionId !== undefined && tier === 3) contractStep(s, 'gold', b.regionId);
       } else s.events.push({ type: 'bossDefeated', boss: b.kind, x: b.x, y: b.y });
       coolLava(s, b);
       if (reworkedGuardian(b)) witherBrambles(s, b);

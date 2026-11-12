@@ -49,6 +49,9 @@ export interface HudAdventure {
   /** Coins already in the vault (safe). */
   banked: number;
   campNear: boolean;
+  /** A3: standing in a camp whose fire is lit (its services are open), and the contract in play. */
+  inCamp: boolean;
+  contract: { name: string; progress: number; goal: number } | null;
   /** Seconds until the fallen group wakes at the last camp (null when not falling). */
   fallIn: number | null;
   progress: number;
@@ -85,6 +88,8 @@ export interface HudBoss {
 }
 
 export interface HudState {
+  /** A3: the camp services panel is open. */
+  campOpen: boolean;
   phase: Phase;
   countdown: number;
   timeLeft: number;
@@ -116,6 +121,7 @@ function readControlsHidden() {
 }
 
 export const useHud = create<HudState>((set) => ({
+  campOpen: false,
   phase: 'countdown',
   countdown: 3,
   timeLeft: 0,
