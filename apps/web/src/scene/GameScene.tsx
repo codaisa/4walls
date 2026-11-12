@@ -17,6 +17,8 @@ import { EdgeProbe } from '../ui/EdgeArrows';
 import { Enemies } from './Enemies';
 import { Flames } from './Flames';
 import { Fx } from './Fx';
+import { VfxLayer } from '../vfx/VfxLayer';
+import { VfxEvents } from '../vfx/VfxEvents';
 import { GameContext, useGame, type SceneCtx } from './context';
 import { Lava } from './Lava';
 import { Hazards } from './Hazards';
@@ -38,10 +40,11 @@ function GameLoop() {
 function FpsProbe({ out, post }: { out: React.RefObject<HTMLDivElement | null>; post: boolean }) {
   const gl = useThree((st) => st.gl);
   const scene = useThree((st) => st.scene);
-  // Dev: reach the scene from the console for profiling.
+  const advance = useThree((st) => st.advance);
+  // Dev: reach the scene from the console for profiling (and step frames when the tab is hidden).
   useEffect(() => {
-    if (import.meta.env.DEV) (window as unknown as { __three?: unknown }).__three = { gl, scene };
-  }, [gl, scene]);
+    if (import.meta.env.DEV) (window as unknown as { __three?: unknown }).__three = { gl, scene, advance };
+  }, [gl, scene, advance]);
   const acc = useMemo(() => ({ frames: 0, time: 0, calls: 0, tris: 0, worst: 0, gpu: 0, gpuN: 0 }), []);
   // GPU time per frame (dev measurement; needs EXT_disjoint_timer_query_webgl2).
   const timer = useMemo(() => {
@@ -219,6 +222,8 @@ export function GameScene({ controller }: { controller: MatchView }) {
         <Enemies />
         <Flames />
         <Fx />
+        <VfxLayer />
+        <VfxEvents theme={theme} />
         <CameraRig />
         {controller.state.adventure && <EdgeProbe />}
         {gfx.post && (

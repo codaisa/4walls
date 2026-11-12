@@ -4,6 +4,8 @@ import type { MatchView } from '../game/presentation';
 export interface FxBus {
   /** Camera trauma (0..1), decays over time. */
   shake: number;
+  /** V6: impact zoom (0..1): the camera lunges toward the action, then eases back. */
+  punch?: number;
 }
 
 export interface SceneCtx {

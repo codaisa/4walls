@@ -2,6 +2,7 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, Suspense, useState } from 'react';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Cell } from '@4walls/shared';
 import { GEYSER_PERIOD, GEYSER_WARN, geyserPhase, getCell, platformPos, type PropState } from '@4walls/core';
 import { lerp, useGame } from './context';
@@ -914,13 +915,45 @@ function Root({ id }: { id: number }) {
 }
 
 /** Bramble: a thorny bush in place of a crate; cut, it sprouts back while a corrupted root lives. */
+/**
+ * V1 (performance): props built from many small primitives are merged once into a single
+ * geometry per material and shared by every copy — a bramble was 15 draw calls, now 2; a tuft
+ * of grass 15, now 3 (and only 1 while it stands dry).
+ */
+function merged(parts: { geo: THREE.BufferGeometry; p: [number, number, number]; r?: [number, number, number]; s?: number | [number, number, number] }[]) {
+  const o = new THREE.Object3D();
+  const geos = parts.map(({ geo, p, r, s }) => {
+    o.position.set(...p);
+    o.rotation.set(...(r ?? [0, 0, 0]));
+    if (Array.isArray(s)) o.scale.set(...s);
+    else o.scale.setScalar(s ?? 1);
+    o.updateMatrix();
+    const g = (geo.index ? geo.toNonIndexed() : geo.clone()).applyMatrix4(o.matrix);
+    g.deleteAttribute('uv');
+    return g;
+  });
+  return mergeGeometries(geos, false)!;
+}
+
+let brambleGeo: { lumps: THREE.BufferGeometry; tips: THREE.BufferGeometry } | null = null;
+function brambleGeometry() {
+  if (brambleGeo) return brambleGeo;
+  const ico = new THREE.IcosahedronGeometry(1, 0);
+  const cone = new THREE.ConeGeometry(0.03, 0.16, 4);
+  brambleGeo = {
+    lumps: merged(Array.from({ length: 5 }, (_, i) => ({ geo: ico, p: [Math.cos(i * 1.3) * 0.18, 0.3 + (i % 2) * 0.16, Math.sin(i * 1.3) * 0.18] as [number, number, number], s: 0.22 + (i % 3) * 0.05 }))),
+    tips: merged(Array.from({ length: 10 }, (_, i) => ({ geo: cone, p: [Math.cos(i * 2.4) * 0.34, 0.25 + (i % 3) * 0.14, Math.sin(i * 2.4) * 0.34] as [number, number, number], r: [Math.sin(i * 2.4) * 1.2, 0, -Math.cos(i * 2.4) * 1.2] as [number, number, number] }))),
+  };
+  return brambleGeo;
+}
+
 function Bramble({ id }: { id: number }) {
   const { controller, ox, oz } = useGame();
   const get = useProp(id);
   const p0 = get()!;
   const bush = useRef<THREE.Group>(null!);
   const grow = useRef({ shown: 1, target: 1 });
-  const lumps = useMemo(() => Array.from({ length: 5 }, (_, i) => ({ x: Math.cos(i * 1.3) * 0.18, y: 0.3 + (i % 2) * 0.16, z: Math.sin(i * 1.3) * 0.18, s: 0.22 + (i % 3) * 0.05 })), []);
+  const geo = brambleGeometry();
   useFrame((_, dt) => {
     const p = get();
     if (!p) return;
@@ -933,20 +966,23 @@ function Bramble({ id }: { id: number }) {
   });
   return (
     <group position={[p0.x + ox, 0, p0.y + oz]}>
-      <group ref={bush}>
-        {lumps.map((l, i) => (
-          <mesh key={i} position={[l.x, l.y, l.z]} scale={l.s} material={thorn} castShadow>
-            <icosahedronGeometry args={[1, 0]} />
-          </mesh>
-        ))}
-        {Array.from({ length: 10 }, (_, i) => (
-          <mesh key={i} position={[Math.cos(i * 2.4) * 0.34, 0.25 + (i % 3) * 0.14, Math.sin(i * 2.4) * 0.34]} rotation={[Math.sin(i * 2.4) * 1.2, 0, -Math.cos(i * 2.4) * 1.2]} material={thornTip}>
-            <coneGeometry args={[0.03, 0.16, 4]} />
-          </mesh>
-        ))}
+      <group ref={bush} rotation-y={id * 1.7}>
+        <mesh geometry={geo.lumps} material={thorn} castShadow />
+        <mesh geometry={geo.tips} material={thornTip} />
       </group>
     </group>
   );
+}
+
+let grassGeo: { blades: THREE.BufferGeometry; fire: THREE.BufferGeometry } | null = null;
+function grassGeometry() {
+  if (grassGeo) return grassGeo;
+  const blades = Array.from({ length: 9 }, (_, i) => ({ x: ((i % 3) - 1) * 0.26 + Math.sin(i * 3.1) * 0.06, z: (Math.floor(i / 3) - 1) * 0.26 + Math.cos(i * 2.3) * 0.06, h: 0.22 + (i % 4) * 0.05, r: i * 0.7 }));
+  grassGeo = {
+    blades: merged(blades.map((b) => ({ geo: new THREE.ConeGeometry(0.07, b.h, 4), p: [b.x, b.h / 2, b.z] as [number, number, number], r: [0, b.r, 0.15] as [number, number, number] }))),
+    fire: merged(blades.slice(0, 5).map((b, i) => ({ geo: new THREE.ConeGeometry(0.13, 0.5, 6, 1, true), p: [b.x, 0.22 + (i % 2) * 0.04, b.z] as [number, number, number], s: [1, 0.8 + (i % 3) * 0.2, 1] as [number, number, number] }))),
+  };
+  return grassGeo;
 }
 
 /** Dry grass: straw tufts that flare up when a blast reaches them, then leave black ash. */
@@ -954,10 +990,10 @@ function Grass({ id }: { id: number }) {
   const { ox, oz } = useGame();
   const get = useProp(id);
   const p0 = get()!;
-  const tufts = useRef<THREE.Group>(null!);
-  const fire = useRef<THREE.Group>(null!);
+  const tufts = useRef<THREE.Mesh>(null!);
+  const fire = useRef<THREE.Mesh>(null!);
   const scorch = useRef<THREE.Mesh>(null!);
-  const blades = useMemo(() => Array.from({ length: 9 }, (_, i) => ({ x: ((i % 3) - 1) * 0.26 + Math.sin(i * 3.1) * 0.06, z: (Math.floor(i / 3) - 1) * 0.26 + Math.cos(i * 2.3) * 0.06, h: 0.22 + (i % 4) * 0.05, r: i * 0.7 })), []);
+  const geo = grassGeometry();
   useFrame(({ clock }) => {
     const p = get();
     if (!p) return;
@@ -966,24 +1002,16 @@ function Grass({ id }: { id: number }) {
     fire.current.visible = p.state === 'burning';
     scorch.current.visible = p.state !== 'dry';
     if (p.state === 'dry') tufts.current.rotation.z = Math.sin(t * 1.5 + id) * 0.05;
-    if (p.state === 'burning') fire.current.children.forEach((f, i) => (f.scale.y = 0.7 + 0.5 * Math.abs(Math.sin(t * 14 + i * 1.7))));
+    // The merged flames flicker together (height and a little sway).
+    if (p.state === 'burning') {
+      fire.current.scale.set(1, 0.75 + 0.45 * Math.abs(Math.sin(t * 14 + id)), 1);
+      fire.current.rotation.y = Math.sin(t * 9 + id) * 0.25;
+    }
   });
   return (
-    <group position={[p0.x + ox, 0, p0.y + oz]}>
-      <group ref={tufts}>
-        {blades.map((b, i) => (
-          <mesh key={i} position={[b.x, b.h / 2, b.z]} rotation={[0, b.r, 0.15]} material={straw}>
-            <coneGeometry args={[0.07, b.h, 4]} />
-          </mesh>
-        ))}
-      </group>
-      <group ref={fire} visible={false}>
-        {blades.slice(0, 5).map((b, i) => (
-          <mesh key={i} position={[b.x, 0.22, b.z]} material={fireMat}>
-            <coneGeometry args={[0.13, 0.5, 6, 1, true]} />
-          </mesh>
-        ))}
-      </group>
+    <group position={[p0.x + ox, 0, p0.y + oz]} rotation-y={id * 2.3}>
+      <mesh ref={tufts} geometry={geo.blades} material={straw} />
+      <mesh ref={fire} geometry={geo.fire} material={fireMat} visible={false} />
       <mesh ref={scorch} position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]} material={ash} visible={false}>
         <circleGeometry args={[0.45, 12]} />
       </mesh>

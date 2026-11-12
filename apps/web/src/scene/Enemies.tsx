@@ -15,6 +15,7 @@ export function Enemies() {
   const bodies = useRef<(THREE.Group | null)[]>([]);
   const yaw = useRef<number[]>(Array(POOL).fill(0));
   const deathT = useRef<number[]>(Array(POOL).fill(0));
+  const hurtT = useRef<number[]>(Array(POOL).fill(0));
   const magmite = useRef<(THREE.Group | null)[]>([]);
   const sprout = useRef<(THREE.Group | null)[]>([]);
   const spark = useRef<(THREE.Group | null)[]>([]);
@@ -171,6 +172,17 @@ export function Enemies() {
       b.position.y = hop * 0.16;
       const squash = 1 - (1 - hop) * 0.18;
       b.scale.set(1 / Math.sqrt(squash), squash, 1 / Math.sqrt(squash));
+      // V6: a hit knocks it flat for a moment, then it springs back (with a little overshoot).
+      const hurt = e.alive && (e.hurtUntil ?? 0) > s.tick;
+      if (hurt && !hurtT.current[i]) hurtT.current[i] = t;
+      if (!hurt && hurtT.current[i] && t - hurtT.current[i] > 0.35) hurtT.current[i] = 0;
+      if (hurtT.current[i]) {
+        const k = Math.min(1, (t - hurtT.current[i]) / 0.35);
+        const amt = Math.sin(k * Math.PI * 2.2) * (1 - k) * 0.38;
+        b.scale.x *= 1 + amt;
+        b.scale.z *= 1 + amt;
+        b.scale.y *= 1 - amt;
+      }
       if (isMimic) {
         const j = jaw.current[i];
         let open = 0.3 * Math.abs(Math.sin(t * 8 + i));

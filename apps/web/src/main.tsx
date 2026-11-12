@@ -12,6 +12,7 @@ import { MainMenu } from './screens/MainMenu';
 import { startUiInput } from './ui/uiInput';
 import { ensureAccount } from './store/useAccount';
 import './store/useSettings';
+import { applyMaterialStyle } from './scene/materialStyle';
 import { startPwa } from './pwa';
 
 // Every other screen loads on demand: the home screen comes up without the game code.
@@ -25,7 +26,11 @@ const Profile = named(() => import('./screens/Profile'), 'Profile');
 const Ranking = named(() => import('./screens/Ranking'), 'Ranking');
 const Shop = named(() => import('./screens/Shop'), 'Shop');
 const Settings = named(() => import('./screens/Settings'), 'Settings');
+// V1: live VFX catalog, development builds only.
+const VfxLab = import.meta.env.DEV ? named(() => import('./screens/VfxLab'), 'VfxLab') : null;
 
+// V5: rim light + scenery color variation in the standard shaders (before anything compiles).
+applyMaterialStyle();
 // Installable app + fullscreen on phones.
 startPwa();
 // Keyboard and gamepads drive every screen through one input loop.
@@ -56,6 +61,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/ranking" element={<Ranking />} />
           <Route path="/perfil" element={<Profile />} />
           <Route path="/config" element={<Settings />} />
+          {VfxLab && <Route path="/vfx" element={<VfxLab />} />}
         </Routes>
       </Suspense>
       <RotatePrompt />

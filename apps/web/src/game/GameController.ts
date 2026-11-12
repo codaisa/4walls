@@ -24,6 +24,8 @@ export class GameController implements MatchView {
   /** A free device took over a player whose controller was lost (so restarts keep it). */
   onRebind: ((slot: number, device: DeviceId) => void) | null = null;
   private acc = 0;
+  /** V2: seconds left of hit-stop (set by the effects layer). */
+  hitstop = 0;
   private listeners = new Set<EventListener>();
   private resultTimer: number | null = null;
   private bindings: LocalPlayerBinding[];
@@ -92,6 +94,11 @@ export class GameController implements MatchView {
     this.input.poll();
     if (this.input.consumePause() && this.state.phase !== 'ended') this.setPaused(!this.paused);
     if (this.paused) return;
+    // V2: hit-stop — the simulation holds for a few frames on a heavy hit (local play only).
+    if (this.hitstop > 0) {
+      this.hitstop -= dt;
+      return;
+    }
     this.acc += Math.min(dt, 0.25);
     while (this.acc >= TICK_DT) {
       const inputs: InputMap = {};

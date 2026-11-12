@@ -253,7 +253,8 @@ function PlayerCard({ p }: { p: HudPlayer }) {
         {p.hearts !== undefined && (
           <div className="flex items-center gap-0.5 text-sm leading-none" data-testid="hearts" title="Corações">
             {Array.from({ length: Math.max(p.maxHearts ?? 3, p.hearts) }, (_, i) => (
-              <span key={i} className={i < p.hearts! ? '' : 'opacity-25 grayscale'}>
+              // V6: the heart just lost breaks (remounts with an animation); the last one beats.
+              <span key={i < p.hearts! ? `f${i}` : `e${i}`} className={`inline-block ${i < p.hearts! ? (p.hearts === 1 ? 'heart-low' : '') : 'heart-break opacity-25 grayscale'}`}>
                 {i >= (p.maxHearts ?? 3) ? '💛' : '❤️'}
               </span>
             ))}
@@ -417,7 +418,7 @@ function AdventurePanel() {
   return (
     <div className="hud-panel min-w-56 px-4 py-1.5 text-center [@media(max-height:500px)]:min-w-40 [@media(max-height:500px)]:px-3 [@media(max-height:500px)]:py-0.5" data-testid="adventure-panel">
       <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">
-        Região {a.index} · {a.chapter} · <span className="text-amber-200 opacity-100" data-testid="expedition-coins">🪙 {a.coins}</span>
+        Região {a.index} · {a.chapter} · <span key={a.coins} className="coin-bump inline-block text-amber-200 opacity-100" data-testid="expedition-coins">🪙 {a.coins}</span>
       </div>
       <div className="font-display text-2xl leading-tight [@media(max-height:500px)]:text-base">{a.regionName}</div>
       <div className="flex items-center justify-center gap-2 text-sm font-bold [@media(max-height:500px)]:text-xs" data-testid="adventure-objective">

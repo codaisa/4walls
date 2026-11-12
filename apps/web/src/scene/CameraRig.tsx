@@ -139,14 +139,21 @@ export function CameraRig() {
     desired.set(sm.x, Math.sin(ELEVATION) * sm.dist, sm.z + Math.cos(ELEVATION) * sm.dist);
 
     // Camera shake can be turned off in the settings (motion sickness).
-    const trauma = useSettings.getState().shake ? fx.shake * fx.shake : 0;
+    const shakeOn = useSettings.getState().shake;
+    const trauma = shakeOn ? fx.shake * fx.shake : 0;
     const t = clock.elapsedTime * 38;
-    desired.x += Math.sin(t * 1.1) * trauma * 0.35;
-    desired.y += Math.sin(t * 1.7 + 1) * trauma * 0.25;
-    desired.z += Math.sin(t * 1.3 + 2) * trauma * 0.3;
+    // V6: layered shake — a heavy low rumble plus a fast jitter, and a slight roll.
+    desired.x += (Math.sin(t * 1.1) * 0.7 + Math.sin(t * 2.9 + 4) * 0.3) * trauma * 0.35;
+    desired.y += (Math.sin(t * 1.7 + 1) * 0.7 + Math.sin(t * 3.7 + 2) * 0.3) * trauma * 0.25;
+    desired.z += (Math.sin(t * 1.3 + 2) * 0.7 + Math.sin(t * 3.1 + 5) * 0.3) * trauma * 0.3;
+    // V6: impact zoom — a quick lunge toward the focus that eases back.
+    const punch = shakeOn ? (fx.punch ?? 0) : 0;
+    if (punch > 0) desired.lerp(target, punch * punch * 0.07);
+    fx.punch = Math.max(0, (fx.punch ?? 0) - dt * 3.5);
 
     camera.position.copy(desired);
     camera.lookAt(target);
+    if (trauma > 0) camera.rotateZ(Math.sin(t * 0.9 + 3) * trauma * 0.025);
 
     // Large worlds: the key light (and its shadow frustum) travels with the camera focus.
     if (follow) {

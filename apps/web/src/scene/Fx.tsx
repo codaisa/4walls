@@ -166,8 +166,8 @@ export function Fx() {
             fireballs.spawn({ x: cx, y: 0.55, z: cz, vy: 1.6, life: 0.5, size: 1.0, grow: 1.9, color: '#fff', kind, drag: 2 });
             fireballs.spawn({ x: cx, y: 0.9, z: cz, vy: 2.4, life: 0.6, size: 0.7, grow: 2.0, color: '#fff', kind, drag: 2.5, delay: 0.05 });
             shocks.spawn({ x: cx, y: 0.05, z: cz, life: 0.45, size: 1.2, grow: 4.2, color: ice ? '#9fe6ff' : '#ff9a3a', alpha: 0.9 });
-            // Glowing embers that bounce and skitter across the floor.
-            for (let i = 0; i < 10; i++)
+            // Glowing embers that bounce and skitter across the floor (V2: fewer; the core adds streaks).
+            for (let i = 0; i < 4; i++)
               sparks.spawn({
                 x: cx, y: 0.4, z: cz, vx: rnd(-4, 4), vy: rnd(3, 6), vz: rnd(-4, 4),
                 life: rnd(0.8, 1.4), size: rnd(0.04, 0.07), color: palette[0], intensity: 3, gravity: 14, drag: 0.6, bounce: true,
@@ -176,19 +176,14 @@ export function Fx() {
               const wx = c.x + ox;
               const wz = c.y + oz;
               const dist = Math.abs(c.x - e.x) + Math.abs(c.y - e.y);
-              for (let i = 0; i < 4; i++)
+              for (let i = 0; i < 2; i++)
                 sparks.spawn({
                   x: wx + rnd(-0.3, 0.3), y: rnd(0.2, 0.6), z: wz + rnd(-0.3, 0.3),
                   vx: rnd(-2.5, 2.5), vy: rnd(2.5, 7), vz: rnd(-2.5, 2.5),
                   life: rnd(0.35, 0.9), size: rnd(0.035, 0.08), color: Math.random() < 0.5 ? palette[0] : palette[1],
                   intensity: 4, gravity: 9, drag: 1.5,
                 });
-              // A rolling fireball travels down each arm (staggered by distance from the bomb).
-              fireballs.spawn({
-                x: wx + rnd(-0.15, 0.15), y: rnd(0.35, 0.55), z: wz + rnd(-0.15, 0.15),
-                vx: rnd(-0.3, 0.3), vy: rnd(0.8, 1.6), vz: rnd(-0.3, 0.3),
-                life: rnd(0.32, 0.45), size: rnd(0.55, 0.75), grow: 1.6, color: '#fff', kind, drag: 2, delay: dist * 0.012,
-              });
+              // V2: the rolling fireball down each arm is the flipbook 'explosion.arm' (VfxEvents).
               // Smoke (or frost mist) lingering after the fire.
               for (let i = 0; i < 2; i++)
                 smoke.spawn({
@@ -221,7 +216,7 @@ export function Fx() {
                 vx: rnd(-0.6, 0.6), vy: rnd(0.3, 0.8), vz: rnd(-0.6, 0.6),
                 life: rnd(0.9, 1.4), size: rnd(0.45, 0.65), grow: 2.2, color: '#a07a5c', alpha: 0.55, drag: 1.5, delay: i * 0.05,
               });
-            for (let i = 0; i < 11; i++)
+            for (let i = 0; i < 5; i++)
               solids.spawn({
                 x: e.x + ox + rnd(-0.3, 0.3), y: rnd(0.2, 0.7), z: e.y + oz + rnd(-0.3, 0.3),
                 vx: rnd(-3, 3), vy: rnd(2.5, 6), vz: rnd(-3, 3),
@@ -554,7 +549,7 @@ export function Fx() {
                 life: rnd(0.9, 1.4), size: rnd(0.6, 0.9), grow: 2, color: '#6b5a52', alpha: 0.55, drag: 2.2,
               });
             }
-            for (let i = 0; i < 14; i++)
+            for (let i = 0; i < 6; i++)
               solids.spawn({
                 x: bx + rnd(-1.4, 1.4), y: 0.2, z: bz + rnd(-1.4, 1.4),
                 vx: rnd(-3, 3), vy: rnd(3, 6), vz: rnd(-3, 3),
@@ -792,7 +787,7 @@ export function Fx() {
               });
             break;
           case 'coins':
-            for (let i = 0; i < Math.min(24, 6 + e.amount / 2); i++)
+            for (let i = 0; i < Math.min(10, 2 + e.amount / 4); i++)
               sparks.spawn({
                 x: e.x + ox + rnd(-0.3, 0.3), y: 0.5, z: e.y + oz + rnd(-0.3, 0.3),
                 vx: rnd(-1.5, 1.5), vy: rnd(3, 5.5), vz: rnd(-1.5, 1.5),
@@ -836,7 +831,7 @@ export function Fx() {
               });
             break;
           case 'enemyDied':
-            for (let i = 0; i < 24; i++)
+            for (let i = 0; i < 10; i++)
               sparks.spawn({
                 x: e.x + ox, y: 0.35, z: e.y + oz,
                 vx: rnd(-3, 3), vy: rnd(1.5, 5), vz: rnd(-3, 3),
@@ -854,7 +849,7 @@ export function Fx() {
     solids.update(d, solidMesh.current);
     // A charging boss kicks up dust.
     const boss = controller.state.boss;
-    if (boss && boss.action === 'charge' && Math.random() < 0.6)
+    if (boss && boss.action === 'charge' && Math.random() < 0.25)
       smoke.spawn({
         x: boss.x + ox + rnd(-1, 1), y: 0.2, z: boss.y + oz + rnd(-1, 1), vy: rnd(0.2, 0.5),
         life: rnd(0.7, 1.1), size: rnd(0.5, 0.8), grow: 2, color: '#6b5a52', alpha: 0.5, drag: 1.5,

@@ -1,6 +1,6 @@
 # 4Walls — Inventário de VFX, animação e texturas
 
-> Status: **aprovado** (só CC0). **V0 concluído** (seção 6).
+> Status: **aprovado** (só CC0). **V0 a V6 concluídos** (seções 6 e 7).
 > Objetivo: um **sistema de VFX coerente** (não uma coleção solta). Explosões, ambientes, chefes e
 > transições de bioma devem parecer polidos e satisfatórios **sem perder desempenho no celular**.
 
@@ -182,3 +182,22 @@ Num celular os números são muitas vezes maiores, mas a **proporção** do ganh
 **Ainda não feito (vai para o V1):**
 - os objetos de cenário (tendas, baús, capim, espinheiros) ainda são várias malhas cada; instanciar reduz bem as chamadas de desenho da Aventura;
 - conferir num celular de verdade.
+
+## 7. Resultado do V1 ao V6 (12/11/2026)
+
+**Decisão de assets:** o atlas de efeitos é **pintado em código** (`apps/web/src/vfx/atlas.ts`), no lugar dos pacotes Kenney. Assim o estilo fica único, o download é zero e não há licença a rastrear. Os pacotes CC0 seguem aprovados se faltar algo. Catálogo: `docs/VFX_CATALOGO.md`.
+
+| Marco | O que entrou |
+|---|---|
+| **V1 — Biblioteca** | Atlas 8×8 com 40 sprites e 3 flipbooks. Pool de sprites em 2 chamadas de desenho no total. 40 efeitos como dados, com qualidade mínima por camada. Página `/vfx` (só em dev). Espinheiros: 15 → 2 chamadas de desenho cada. Capim: 15 → 1 (3 quando queima). |
+| **V2 — Combate** | Explosão com núcleo em flipbook, faíscas esticadas, estilhaços e marca queimada. A bola de fogo de cada braço virou flipbook (mais barata que o ruído por pixel). Baforada da bomba posta, lascas de bloco, poeira de corrida, pouso e rolamento. Golpe no herói: **flash branco**, corte, estrelas e **micro-pausa** de 75 ms (só no jogo local). Coração perdido, power-up queimando, inimigo atingido e "puf" ao morrer, moedas quicando, cura. |
+| **V3 — Chefes** | Runa no chão durante a preparação, rastro da investida, rachadura e onda na pancada, pouso, troca de fase (clarão e anéis), aura de fúria, raízes, esporos, bolhas de lava subindo, golpe da névoa, rastro das motas, placas da armadura e grande final. |
+| **V4 — Mundo** | Ambiente por bioma em volta da câmera: brasas e cinzas no vulcão, pólen e folhas na floresta, mistura na transição; vagalumes à noite e névoa rasteira. Fagulhas das fogueiras, braseiros e capim em chamas. |
+| **V5 — Materiais** | Luz de contorno em todo material iluminado (heróis e inimigos se destacam do chão) e variação de cor por posição no cenário (blocos, pilares e chão sem cara de plástico repetido). Feito por vértice, no shader padrão, antes de compilar: não recompila no meio do jogo. Médio e alto. |
+| **V6 — Animação** | Inimigos amassam e voltam com mola ao levar dano. Câmera com tremor em camadas (ronco grave + tremida rápida + leve rotação) e **zoom de impacto** em dano, pancada, troca de fase e vitória (desligados junto com o tremor nos Ajustes). Interface: o coração perdido trinca, o último coração bate e o contador de moedas pula. |
+
+**Custo medido (médio, 844×390, região inicial):** +2 chamadas de desenho e algumas dezenas de sprites vivos no ambiente. GPU 3,3 a 3,6 ms (V0: 3,1 ms). Boss Rush com o Golem furioso: 3,4 ms.
+
+**Não verificado:** celular de verdade (as medidas são da placa deste PC).
+
+**Ficou para depois:** fluxo de lava nos rios, brilho girando nos portais abertos (o efeito existe, falta ligar aos portões), faíscas do pavio, moedas voando até o contador.

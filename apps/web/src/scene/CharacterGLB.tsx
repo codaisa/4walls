@@ -1,3 +1,4 @@
+import { flashAmount } from '../vfx/hitFlash';
 import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { Component, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -87,9 +88,11 @@ function CharacterGLB({ playerId }: { playerId: string }) {
   // Each player gets its own skeleton and materials (tinted with the player's colors).
   const ownHat = controller.state.config.players.find((p) => p.id === playerId)?.loadout?.hat;
   const hat = BUILT_IN_HEADGEAR.has(player.characterId) ? null : ownHat;
-  const { scene, mixer, actions, tinted, eyes, anchor } = useMemo(() => {
+  const { scene, mixer, actions, tinted, eyes, anchor, body } = useMemo(() => {
     const scene = cloneSkinned(gltf.scene) as THREE.Group;
     const tinted: THREE.MeshStandardMaterial[] = [];
+    // V2: body materials (with their own glow) for the white hit flash.
+    const body: { m: THREE.MeshStandardMaterial; e: THREE.Color; i: number }[] = [];
     // Expression eye sets live on the same face; exactly one is shown at a time.
     const eyes: Record<Expression, THREE.Material[]> = { Eye: [], EyeHappy: [], EyeX: [] };
     // White block head stays white; the suit, gloves and boots carry the player's color.
@@ -108,6 +111,7 @@ function CharacterGLB({ playerId }: { playerId: string }) {
         else if (c.name === 'Boot') c.color.copy(boot);
         if (c.name in eyes) eyes[c.name as Expression].push(c);
         if ('emissiveIntensity' in c) tinted.push(c);
+        if (c.name !== 'Spark' && !(c.name in eyes) && 'emissive' in c) body.push({ m: c, e: c.emissive.clone(), i: c.emissiveIntensity });
         return c;
       });
       mesh.material = Array.isArray(mesh.material) ? mats : mats[0];
@@ -123,14 +127,14 @@ function CharacterGLB({ playerId }: { playerId: string }) {
     }
     // Hat anchor is measured on the rest pose, before any animation runs.
     const anchor = headAnchor(scene, player.characterId);
-    return { scene, mixer, actions, tinted, eyes, anchor };
+    return { scene, mixer, actions, tinted, eyes, anchor, body };
   }, [gltf, colors.primary, colors.secondary]);
 
   const root = useRef<THREE.Group>(null!);
   const shield = useRef<THREE.Mesh>(null!);
   const ghost = useRef<THREE.Mesh>(null!);
   const ice = useRef<THREE.Mesh>(null!);
-  const anim = useRef({ yaw: 0, current: '' as Clip | '', deathT: 0, castUntil: 0, throwUntil: 0, slideUntil: 0, moveStart: -1, squash: 0, wasAir: false });
+  const anim = useRef({ yaw: 0, current: '' as Clip | '', deathT: 0, castUntil: 0, throwUntil: 0, slideUntil: 0, moveStart: -1, squash: 0, wasAir: false, flashing: false });
 
   const play = (name: Clip, fade = 0.18) => {
     const a = anim.current;
@@ -233,7 +237,21 @@ function CharacterGLB({ playerId }: { playerId: string }) {
     const ghosting = p.alive && s.tick < p.ghostUntil;
     ghost.current.visible = ghosting && ((p.ghostUntil - s.tick) / 60 > 2 || Math.floor(t * 8) % 2 === 0);
     const invuln = p.alive && s.tick < p.invulnUntil;
-    root.current.visible = !invuln || Math.floor(t * 16) % 2 === 0 || !p.alive;
+    // V2: white flash on a hit (shown solid, over the invulnerability blink).
+    const flash = flashAmount(p.id, now);
+    root.current.visible = flash > 0 || !invuln || Math.floor(t * 16) % 2 === 0 || !p.alive;
+    if (flash > 0 || a.flashing) {
+      a.flashing = flash > 0;
+      for (const b of body) {
+        if (flash > 0) {
+          b.m.emissive.setRGB(1, 1, 1);
+          b.m.emissiveIntensity = flash * 0.75;
+        } else {
+          b.m.emissive.copy(b.e);
+          b.m.emissiveIntensity = b.i;
+        }
+      }
+    }
 
     // Fuse spark / lamp flicker.
     const flick = 0.75 + Math.random() * 0.5;

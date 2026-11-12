@@ -13,6 +13,8 @@ export interface MatchView {
   /** Fractional simulation tick, for time-based animations (fuses, flames). */
   readonly tickF: number;
   paused: boolean;
+  /** V2: hit-stop seconds (local play; online ignores it). */
+  hitstop?: number;
   on(fn: (e: GameEvent, s: GameState) => void): () => void;
   update(dt: number): void;
   /** Per-player interpolation override (locally predicted players in online play). */

@@ -15,6 +15,12 @@ script de download.
 | `Lava004` | Textura PBR 1K | ambientCG (Lennart Demes) | ambientCG — https://ambientcg.com/view?id=Lava004 | CC0 1.0 | Sim | Não exigida | 2026-11-11 | Cor estilizada para o tile de lava; máscara de emissão extraída do mapa de emissão. Arquivos extras do pacote (.blend, .usdc, .tres, .mtlx, NormalDX, prévia) foram apagados sem abrir. | `.../ambientcg/Lava004/` → `processed/vol_lava_*.jpg` |
 | Lilita One / Nunito | Fontes | Juan Montoreano / Vernon Adams et al. | Google Fonts via @fontsource | SIL OFL 1.1 | Sim | Não exigida | — | — | `node_modules/@fontsource/*` |
 
+### Efeitos visuais (V1–V6)
+
+O atlas de sprites dos efeitos (`apps/web/src/vfx/atlas.ts`) é **pintado em código** quando o jogo carrega: brilhos, faíscas, fumaça, explosão em flipbook, chamas, folhas, neve, corações, moedas, runas, rachaduras e outros. **Nenhum arquivo de terceiros foi baixado** para os efeitos, então não há licença a registrar.
+
+As fontes CC0 pesquisadas no inventário (Kenney Particle Pack e Smoke Particles, Screaming Brain Noise Pack, Brackeys VFX Bundle) continuam aprovadas para o futuro. Qualquer uma que entrar ganha uma linha na tabela acima.
+
 Referências das licenças: Poly Haven → https://polyhaven.com/license · ambientCG → https://docs.ambientcg.com/license/
 
 ### Animações Mixamo (Adobe)
