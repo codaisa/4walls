@@ -61,6 +61,11 @@ export interface PlayerState {
   turboUntil: number;
   /** A3: Feathers of Return (a lethal hit is shrugged off, once each). */
   feather?: number;
+  /** A4: hearts (Adventure only): a hit takes one, the last one is a fall. */
+  hearts?: number;
+  maxHearts?: number;
+  /** A4 (Pavio Duplo): bombs placed so far. */
+  fuseCount?: number;
 }
 
 export interface Maneuver {
@@ -507,6 +512,11 @@ export type GameEvent =
   | { type: 'contractDone'; kind: string; reward: number }
   | { type: 'contractFailed'; kind: string }
   | { type: 'residentArrived'; characterId: string }
+  /** A4: hearts and relics. */
+  | { type: 'heartLost'; playerId: string; hearts: number; x: number; y: number }
+  | { type: 'heartsRestored' }
+  | { type: 'relicFound'; relic: string; x: number; y: number }
+  | { type: 'relicSaved'; relic: string; playerId: string; x: number; y: number }
   | { type: 'motesSummoned'; cells: { x: number; y: number }[] }
   | { type: 'gameOver'; result: GameResult };
 

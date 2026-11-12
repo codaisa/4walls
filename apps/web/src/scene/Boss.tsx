@@ -616,6 +616,7 @@ function BossMood({ children }: { children: ReactNode }) {
     const b = controller.state.boss;
     const t = clock.elapsedTime;
     const night = b?.mod === 'night';
+    const lantern = !!controller.state.expedition?.relics?.includes('lantern');
     // Re-tint now and then (plates and parts can come back).
     if (t - last.current > 0.5) {
       last.current = t;
@@ -626,7 +627,7 @@ function BossMood({ children }: { children: ReactNode }) {
           const sm = mat as THREE.MeshStandardMaterial;
           if (!sm.color || !('emissive' in sm)) continue;
           if (!sm.userData.dayColor) sm.userData.dayColor = sm.color.clone();
-          sm.color.copy(sm.userData.dayColor as THREE.Color).multiplyScalar(night ? 0.12 : 1);
+          sm.color.copy(sm.userData.dayColor as THREE.Color).multiplyScalar(night ? (lantern ? 0.5 : 0.12) : 1);
         }
       });
     }

@@ -1,6 +1,6 @@
-import { ADVENTURE, BOSSES, Cell, DIR_VEC, DIRS, campActionIndex } from '@4walls/shared';
+import { ADVENTURE, BOSSES, Cell, DIR_VEC, DIRS, campActionIndex, RELIC_IDS } from '@4walls/shared';
 import { describe, expect, it } from 'vitest';
-import { addResident, ELITE_MAGMITE_HP, MIMIC_HP, elitesFor, makeEnemy, ALL_PLATES, arcBoss, bodySide, lavaRing, leapCells, spawnBoss, arcInfo, arcOfRegion, chamberCenter, isPit, cellIndex, createGame, difficulty, geyserPhase, regionDifficulty, spawnBomb, getCell, inBounds, platformPos, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
+import { addCoins, grantRelic, addResident, ELITE_MAGMITE_HP, MIMIC_HP, elitesFor, makeEnemy, ALL_PLATES, arcBoss, bodySide, lavaRing, leapCells, spawnBoss, arcInfo, arcOfRegion, chamberCenter, isPit, cellIndex, createGame, difficulty, geyserPhase, regionDifficulty, spawnBomb, getCell, inBounds, platformPos, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
 
 const make = (seed = 11, players = 1) => {
   const s = createGame({
@@ -450,6 +450,7 @@ describe('endless adventure: M3 lava river', () => {
     const g = props(s, 'geyser')[0];
     while (geyserPhase(g, s.tick + 1) !== 0) step(s, {});
     const p = s.players[0];
+    p.hearts = 1; // the last heart
     p.x = p.px = g.x;
     p.y = p.py = g.y;
     step(s, {});
@@ -582,6 +583,7 @@ describe('endless adventure: M4 obsidian and forest', () => {
     const a = tufts.find((t) => tufts.some((u) => Math.abs(u.x - t.x) + Math.abs(u.y - t.y) === 1))!;
     const b = tufts.find((u) => Math.abs(u.x - a.x) + Math.abs(u.y - a.y) === 1)!;
     const victim = s.players[1];
+    victim.hearts = 1; // the last heart
     victim.x = victim.px = b.x;
     victim.y = victim.py = b.y;
     s.players[0].invulnUntil = 1e9;
@@ -747,7 +749,7 @@ describe('endless adventure: B1 Guardian Chambers', () => {
     walkThrough(s, 3);
     const b = s.boss!;
     expect(b).toMatchObject({ kind: 'golem', regionId: 4, level: 0 });
-    expect(b.hp).toBe(Math.round(BOSSES.golem.hp * 1.5 * 0.8));
+    expect(b.hp).toBe(Math.round(BOSSES.golem.hp * 1.5 * 0.8 * 1.2));
     for (const p of s.players) p.invulnUntil = 1e9;
     for (let i = 0; i < 60 * 50; i++) {
       step(s, {});
@@ -1557,6 +1559,7 @@ describe('Task 3 · A3: camp services and residents', () => {
     const p = s.players[0];
     act(s, 'shop:feather');
     expect(p.feather).toBe(1);
+    p.hearts = 1; // the feather saves the last heart
     p.invulnUntil = 0;
     s.flames.push({ x: Math.round(p.x), y: Math.round(p.y), part: 'center', dir: null, bombId: 9, ownerId: 'meteor', bornTick: s.tick, untilTick: s.tick + 2, kind: 'normal' });
     step(s, {});
@@ -1590,5 +1593,89 @@ describe('Task 3 · A3: camp services and residents', () => {
     expect(p.characterId).toBe('senha');
     expect(act(s, 'hero:ninja')).toBeTruthy();
     expect(p.characterId).toBe('ninja');
+  });
+});
+
+describe('Task 3 · A4: hearts and relics', () => {
+  const at = (relics: string[] = [], players = 1) => {
+    const save = { camp: 5, coins: 100, snapshot: [], returns: 0, camps: 1, best: 5, relics };
+    const s = createGame({ mode: 'adventure', seed: 3, width: 0, height: 0, players: Array.from({ length: players }, (_, i) => ({ id: `p${i + 1}`, slot: i, characterId: 'bombito', name: `P${i + 1}` })), expedition: save });
+    s.phase = 'playing';
+    step(s, {});
+    return s;
+  };
+  const burn = (s: GameState, p: GameState['players'][number]) => {
+    p.invulnUntil = 0;
+    s.flames.push({ x: Math.round(p.x), y: Math.round(p.y), part: 'center', dir: null, bombId: 9, ownerId: 'meteor', bornTick: s.tick, untilTick: s.tick + 2, kind: 'normal' });
+    step(s, {});
+  };
+
+  it('three hearts in the Adventure: a hit takes one, the third is a fall; the camp fills them back', () => {
+    const s = at();
+    const p = s.players[0];
+    expect(p).toMatchObject({ hearts: 3, maxHearts: 3 });
+    burn(s, p);
+    expect(p).toMatchObject({ alive: true, hearts: 2 });
+    expect(s.events.some((e) => e.type === 'heartLost')).toBe(true);
+    burn(s, p);
+    expect(p.hearts).toBe(1);
+    // Relighting the camp's fire (back after a fall) fills the hearts.
+    burn(s, p);
+    expect(p.alive).toBe(false);
+    for (let i = 0; i < 60 * 3; i++) step(s, {});
+    expect(p).toMatchObject({ alive: true, hearts: 3 });
+  });
+
+  it('Versus and Boss Rush keep the single hit', () => {
+    const s = createGame({ mode: 'bossrush', seed: 3, width: 0, height: 0, players: [{ id: 'p1', slot: 0, characterId: 'bombito', name: 'P1' }] });
+    expect(s.players[0].hearts).toBeUndefined();
+  });
+
+  it('relics: found once each, and they work', () => {
+    const s = at();
+    expect(grantRelic(s, 0, 0)).toBeTruthy();
+    expect(s.events.some((e) => e.type === 'relicFound')).toBe(true);
+    for (let i = 0; i < 10; i++) grantRelic(s, 0, 0);
+    expect(new Set(s.expedition!.relics).size).toBe(RELIC_IDS.length);
+    expect(s.expedition!.relics!.length).toBe(RELIC_IDS.length);
+    // Ímã de moedas: +25%.
+    const before = s.expedition!.coins;
+    addCoins(s, 40, 0, 0);
+    expect(s.expedition!.coins - before).toBe(50);
+  });
+
+  it('Coração de Magma: the first fall of the arc puts you back on solid ground', () => {
+    const s = at(['magma_heart']);
+    const p = s.players[0];
+    // Dig a lava cell next to the player and walk them into it.
+    const x = Math.round(p.x);
+    const y = Math.round(p.y);
+    setCell(s.grid, x, y, Cell.Lava);
+    step(s, {});
+    expect(p.alive).toBe(true);
+    expect(s.events.some((e) => e.type === 'relicSaved')).toBe(true);
+    expect(getCell(s.grid, Math.round(p.x), Math.round(p.y))).not.toBe(Cell.Lava);
+    // Only once per arc.
+    setCell(s.grid, Math.round(p.x), Math.round(p.y), Cell.Lava);
+    p.invulnUntil = 0;
+    step(s, {});
+    expect(p.alive).toBe(false);
+  });
+
+  it('Pavio Duplo: every fifth bomb reaches one cell further', () => {
+    const s = at(['double_fuse']);
+    const p = s.players[0];
+    p.maxBombs = 8;
+    const ranges: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      p.x = p.px = Math.round(p.x);
+      step(s, { p1: { move: null, bomb: true, ability: false } });
+      const b = s.bombs[s.bombs.length - 1];
+      ranges.push(b.range);
+      s.bombs.pop();
+      step(s, {});
+    }
+    expect(ranges[4]).toBe(p.range + 1);
+    expect(ranges.slice(0, 4).every((r) => r === p.range)).toBe(true);
   });
 });

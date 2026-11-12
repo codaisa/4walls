@@ -1,7 +1,7 @@
 import { ARENAS, BOSS_ARENA, BOSS_RUSH, CHARACTERS, RULES, STARTER_CHARACTERS, secToTicks, type CharacterId, type GameConfig } from '@4walls/shared';
 import { updateMines, useAbility } from './abilities';
 import { createAdventure, revealAround, spawnAdventureEnemies, tryBankCoins, tryEndExpedition, updateAdventure } from './adventure';
-import { applySnap, newExpedition, snapPlayer } from './expedition';
+import { HEARTS, applySnap, hasRelic, newExpedition, snapPlayer } from './expedition';
 import { tryCampAction } from './camp';
 import { scheduleFirstEvent, updateArenaEvents } from './arenaEvents';
 import { buildBossArena, spawnBoss, updateBoss } from './boss';
@@ -100,7 +100,11 @@ export function createGame(config: GameConfig): GameState {
     // Task 3: a new expedition, or one resumed at its last campfire (heroes as they were there).
     const save = cfg.expedition;
     s.expedition = save ? { ...save, snapshot: save.snapshot.map((q) => ({ ...q })) } : newExpedition();
-    for (const p of s.players) applySnap(p, s.expedition.snapshot.find((q) => q.slot === p.slot));
+    for (const p of s.players) {
+      p.maxHearts = HEARTS;
+      applySnap(p, s.expedition.snapshot.find((q) => q.slot === p.slot));
+      p.hearts = p.maxHearts;
+    }
     if (!save) s.expedition.snapshot = s.players.map(snapPlayer);
     // A3: the group's rescued heroes live at the camps (plus those met on this expedition).
     s.expedition.residents = [...new Set([...(s.expedition.residents ?? []), ...(cfg.residents ?? [])])].filter((id) => !(STARTER_CHARACTERS as string[]).includes(id));
@@ -163,7 +167,14 @@ export function step(s: GameState, inputs: InputMap): void {
     if (input?.campBank) tryBankCoins(s, p);
     if (input?.campAction) tryCampAction(s, p, input.campAction);
     if (input?.campEnd) tryEndExpedition(s, p);
-    if (input?.bomb) tryPlaceBomb(s, p);
+    if (input?.bomb) {
+      const b = tryPlaceBomb(s, p);
+      // A4 (Pavio Duplo): every fifth bomb reaches one cell further.
+      if (b && hasRelic(s, 'double_fuse')) {
+        p.fuseCount = (p.fuseCount ?? 0) + 1;
+        if (p.fuseCount % 5 === 0) b.range += 1;
+      }
+    }
     if (input?.ability) useAbility(s, p);
   }
 

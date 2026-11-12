@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { ACHIEVEMENTS, SLOT_COLORS, currentSeason, type ExpeditionRecord, type ModeId, type PlayerStats, type SavedExpedition } from '@4walls/shared';
+import { ACHIEVEMENTS, RELICS, SLOT_COLORS, currentSeason, type ExpeditionRecord, type ModeId, type PlayerStats, type SavedExpedition } from '@4walls/shared';
 import { sfx } from '../audio/Sfx';
 import { ensureAccount, useAccount } from '../store/useAccount';
 import { useProfile } from '../store/useProfile';
@@ -90,6 +90,8 @@ export function Profile() {
               <Bestiary s={s!} />
 
               <Expeditions saved={account.expedition ?? null} log={account.expeditions ?? []} />
+
+              <Codex found={s!.codex ?? []} />
 
               <div className="hud-panel px-3 py-2">
                 <h2 className="mb-1 text-xs font-bold uppercase tracking-widest text-amber-100/60">Por modo</h2>
@@ -181,6 +183,27 @@ const ATLAS_VARIANTS = [
 
 /** Adventure atlas: every biome × mood seen on a journey (the deeper laps bring new moods). */
 const MEDAL_ICON = ['—', '🥉', '🥈', '🥇'];
+
+/** A4: every relic ever found (unknown ones stay hidden). */
+function Codex({ found }: { found: string[] }) {
+  return (
+    <div className="hud-panel px-3 py-2" data-testid="codex">
+      <h2 className="mb-1 text-xs font-bold uppercase tracking-widest text-amber-100/60">
+        Códice · {found.length}/{RELICS.length}
+      </h2>
+      <div className="grid grid-cols-4 gap-1 text-center">
+        {RELICS.map((r) => {
+          const ok = found.includes(r.id);
+          return (
+            <span key={r.id} className={`rounded-md py-1 text-xl ${ok ? 'bg-amber-300/20 ring-1 ring-amber-300/50' : 'bg-black/30 text-white/25'}`} title={ok ? `${r.name}: ${r.desc}` : '???'}>
+              {ok ? r.icon : '?'}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /** Task 3: the expedition this account hosts online, and the last ones. */
 function Expeditions({ saved, log }: { saved: SavedExpedition | null; log: ExpeditionRecord[] }) {

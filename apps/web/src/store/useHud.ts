@@ -14,6 +14,10 @@ export interface HudPlayer {
   range: number;
   speedLevel: number;
   shield: boolean;
+  /** A4 (Adventure): hearts left / max; feathers of return. */
+  hearts?: number;
+  maxHearts?: number;
+  feathers?: number;
   kills: number;
   character: string;
   abilityName: string;
@@ -52,6 +56,8 @@ export interface HudAdventure {
   /** A3: standing in a camp whose fire is lit (its services are open), and the contract in play. */
   inCamp: boolean;
   contract: { name: string; progress: number; goal: number } | null;
+  /** A4: relics of this expedition. */
+  relics: string[];
   /** Seconds until the fallen group wakes at the last camp (null when not falling). */
   fallIn: number | null;
   progress: number;

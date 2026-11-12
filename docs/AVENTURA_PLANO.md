@@ -7,7 +7,7 @@ antes da próxima:
 |---|---|---|---|
 | 1 | **Mapa**: regiões viram fases, objetivos, mecânicas de ambiente, segredos, navegação, arcos | — | **Concluída** (M1–M5) |
 | 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | **Concluída** (B1–B5, seção 5) |
-| 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Em andamento: A1, A2 e A3 concluídos (seção 6) |
+| 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Em andamento: A1 a A4 concluídos (seção 6) |
 
 Ponto de partida (como está hoje):
 - 5 regiões-ilha num reticulado de blocos de 16×14 casas, ligadas por corredores e geradas por seed.
@@ -414,7 +414,7 @@ Pontos de atenção:
 
 ## 6. Tarefa 3 — Acampamentos e progressão (plano detalhado)
 
-> Status: **aprovado** com as recomendações (corações no A4, perda de 50%, um acampamento por arco, save online na conta do anfitrião). **A1, A2 e A3 concluídos.**
+> Status: **aprovado** com as recomendações (corações no A4, perda de 50%, um acampamento por arco, save online na conta do anfitrião). **A1 a A4 concluídos.**
 
 ### 6.1 A ideia em uma frase
 
@@ -628,5 +628,34 @@ Entram:
   - **Roleta (Tiringão):** um raro, uma pena, o dobro das moedas apostadas ou nada; uma vez por jogador.
   - **Heróis:** troca entre os iniciais e os moradores (sem custo).
 - **Fica para depois:** abrir o Ateliê (cosméticos) pelo acampamento; os NPCs andando entre as tendas (por enquanto ficam parados na porta).
+
+**Como ficou o A4 (corações, relíquias e códice):**
+- **Corações (só na Aventura):** 3 por jogador, mostrados no cartão do jogador.
+  - Um golpe tira 1 coração e dá 2 s de proteção; o último golpe derruba.
+  - O escudo e a Pena do Retorno continuam valendo antes dos corações.
+  - Fogueira acesa ou voltar ao acampamento enchem tudo; quem volta por portão ou totem tem 2.
+  - Cair na lava ou no abismo continua derrubando na hora.
+  - A Carne de sol da cozinha dá um coração extra acima do máximo (💛).
+  - Versus e Boss Rush continuam com o golpe único.
+- **Equilíbrio:** os chefes da Aventura ganharam +20% de vida. As medalhas não mudaram: "ninguém cair" continua sendo ninguém perder todos os corações.
+- **Relíquias (8, valem a expedição inteira, ícones no painel do objetivo):**
+  - Coração de Magma: a 1ª queda de cada arco volta para o chão firme.
+  - Pavio Duplo: a cada 5 bombas, uma sai com +1 de alcance.
+  - Bota de Obsidiana: pontes frágeis aguentam +1 s.
+  - Semente do Guardião: totens recarregam sozinhos em 20 s.
+  - Ímã de Moedas: +25% de moedas.
+  - Olho do Mímico: Mímicos marcados e sem mordida.
+  - Coroa Partida: elites dão o dobro de moedas.
+  - Lanterna: à noite o chefe fica bem mais visível.
+- **De onde vêm:** baús raros (10%), baús duplos do Mímico (30%), a 1ª medalha de ouro contra cada chefe na expedição (garantida) e a roleta do Tiringão (8%).
+- **Códice:** cada relíquia achada entra para sempre no Perfil (painel "Códice", 8 espaços).
+- **Conquistas novas:**
+  - Primeira Fogueira;
+  - Andarilho: 5 acampamentos numa expedição, com o título "Andarilho";
+  - Cofre Cheio: 1.000 moedas guardadas;
+  - Palavra de Honra: 10 contratos;
+  - Arqueólogo: códice completo, com o título "Arqueólogo".
+- **XP novo:** "Acampamentos" e "Contratos".
+- **Correção:** como a Aventura online só termina na fogueira, quem sai da sala no meio da expedição agora tem a partida registrada (XP, códice, histórico). Antes saía sem nada.
 
 **Decisões aprovadas (12/11/2026):** corações (B, no A4), 50% de perda, um acampamento por arco, save online na conta do anfitrião.

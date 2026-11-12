@@ -145,3 +145,16 @@ describe('B5 bestiary and medals', () => {
     for (const id of ['title_forjado', 'title_coracao', 'title_mimico', 'title_implacavel']) expect(COSMETICS[id]).toBeTruthy();
   });
 });
+
+describe('A4: codex and expedition achievements', () => {
+  it('relics fill the codex; camps, contracts and kept coins unlock achievements', () => {
+    const p = perf({ mode: 'adventure', camps: 5, contracts: 10, kept: 1200, relics: ['lantern', 'coin_magnet'] });
+    const s = applyMatchToStats(EMPTY_STATS, p);
+    expect(s).toMatchObject({ campsBest: 5, contracts: 10, bestKept: 1200, codex: ['coin_magnet', 'lantern'] });
+    const done = ACHIEVEMENTS.filter((a) => a.progress(s)[0] >= a.progress(s)[1]).map((a) => a.id);
+    expect(done).toEqual(expect.arrayContaining(['first_camp', 'camps5', 'vault1000', 'contracts10']));
+    expect(done).not.toContain('codex8');
+    expect(matchReward(p).lines.find((l) => l.label === 'Acampamentos')?.xp).toBe(200);
+    expect(earnedItems(1, ['camps5', 'codex8'], {})).toEqual(expect.arrayContaining(['title_andarilho', 'title_arqueologo']));
+  });
+});

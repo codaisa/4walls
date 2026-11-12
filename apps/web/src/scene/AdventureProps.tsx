@@ -109,7 +109,8 @@ function Chest({ id }: { id: number }) {
     const k = since < 0 ? 0 : Math.min(1, since / 380);
     // Overshoot on the hinge, then rest wide open.
     lid.current.rotation.x = -k * (1.9 + 0.25 * Math.sin(Math.min(1, since / 600) * Math.PI));
-    warn.current.visible = !!p.mimic && !dbl && since < 0 && (controller.state.expedition?.scoutTo ?? -1) > p.region;
+    const ex = controller.state.expedition;
+    warn.current.visible = !!p.mimic && !dbl && since < 0 && ((ex?.scoutTo ?? -1) > p.region || !!ex?.relics?.includes('mimic_eye'));
     if (warn.current.visible) warn.current.position.y = 0.95 + 0.06 * Math.sin(t * 5);
     // The Mimic's tell: now and then the lid twitches by itself, as if something breathed inside.
     if (p.mimic && !dbl && since < 0) {

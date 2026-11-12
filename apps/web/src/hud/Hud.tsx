@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { RULES, SLOT_COLORS, type ModeId } from '@4walls/shared';
+import { RELICS, RULES, SLOT_COLORS, type ModeId } from '@4walls/shared';
 import { useHud, type HudPlayer } from '../store/useHud';
 import { useMenuNav } from '../ui/useMenuNav';
 import { isTouchDevice } from '../input/InputManager';
@@ -250,6 +250,16 @@ function PlayerCard({ p }: { p: HudPlayer }) {
           <span className="text-[10px] font-bold uppercase opacity-60">{p.character}</span>
           {p.frozen && <span title="Congelado">🧊</span>}
         </div>
+        {p.hearts !== undefined && (
+          <div className="flex items-center gap-0.5 text-sm leading-none" data-testid="hearts" title="Corações">
+            {Array.from({ length: Math.max(p.maxHearts ?? 3, p.hearts) }, (_, i) => (
+              <span key={i} className={i < p.hearts! ? '' : 'opacity-25 grayscale'}>
+                {i >= (p.maxHearts ?? 3) ? '💛' : '❤️'}
+              </span>
+            ))}
+            {p.feathers ? <span className="ml-1 text-xs font-bold">🪶{p.feathers > 1 ? `×${p.feathers}` : ''}</span> : null}
+          </div>
+        )}
         <div className="flex gap-2.5 text-xs font-bold">
           <Stat icon="💣" value={`${p.bombsAvailable}/${p.bombs}`} title="Bombas" />
           <Stat icon="🔥" value={p.range} title="Alcance" />
@@ -417,6 +427,11 @@ function AdventurePanel() {
         <div className={`text-[11px] font-bold ${a.braziers.lit === a.braziers.goal ? 'text-emerald-300' : 'text-orange-200/90'}`} data-testid="mission">
           🔥 Braseiros {a.braziers.lit}/{a.braziers.goal}
           {a.braziers.lit === a.braziers.goal ? ' · tesouro revelado!' : ' (opcional)'}
+        </div>
+      )}
+      {a.relics.length > 0 && (
+        <div className="text-sm leading-tight tracking-tight" data-testid="relics" title={a.relics.map((id) => RELICS.find((r) => r.id === id)?.name).join(' · ')}>
+          {a.relics.map((id) => RELICS.find((r) => r.id === id)?.icon ?? '🏺').join(' ')}
         </div>
       )}
       {a.contract && (

@@ -179,6 +179,8 @@ export class ArenaRoom extends Room {
     if (this.game && this.phase === 'playing') {
       // Players of a departed connection are knocked out (they can't be controlled any more).
       for (const s of mine) {
+        // The endless Adventure only ends at a campfire: whoever leaves keeps what they earned.
+        if (this.game.mode === 'adventure') this.bookSlot(this.game, s, false);
         const p = this.game.players.find((pp) => pp.slot === s.slot);
         if (p) p.left = true;
         if (p?.alive) {
@@ -335,6 +337,7 @@ export class ArenaRoom extends Room {
     this.tally = new Map(this.game.players.map((p) => [p.id, { kills: 0, enemies: 0, powerups: 0, mimics: 0, elites: 0 }]));
     this.bossesDown = [];
     this.bossFights = [];
+    this.booked = new Set();
     this.queues.clear();
     this.held.clear();
     this.acks = {};
@@ -499,55 +502,66 @@ export class ArenaRoom extends Room {
     return t;
   }
 
+  /** Slots whose match is already booked (a player who left the endless Adventure). */
+  private booked = new Set<number>();
+
   /** Books XP / coins / stats for every logged-in player still in the room and tells them. */
   private grantRewards(g: GameState) {
+    if (!g.result) return;
+    for (const s of this.slots) if (s.connected) this.bookSlot(g, s, true);
+  }
+
+  /** One player's match: stats, XP, coins (and the report when they are still here to see it). */
+  private bookSlot(g: GameState, s: LobbySlot, ended: boolean) {
     const store = ArenaRoom.accounts;
     const result = g.result;
-    if (!store || !result) return;
+    if (!store || this.booked.has(s.slot)) return;
+    const accId = this.slotAccount.get(s.slot);
+    const acc = accId ? store.get(accId) : null;
+    const p = g.players.find((pp) => pp.slot === s.slot);
+    if (!acc || !p) return;
+    this.booked.add(s.slot);
     const seconds = Math.max(0, (g.tick - g.countdownTicks) / SERVER_TICK_HZ);
-    for (const s of this.slots) {
-      const accId = this.slotAccount.get(s.slot);
-      const acc = accId ? store.get(accId) : null;
-      const p = g.players.find((pp) => pp.slot === s.slot);
-      if (!acc || !p || !s.connected) continue;
-      // The endless Adventure has no winner: a journey is measured by how far it got.
-      const outcome: MatchPerformance['outcome'] = g.mode === 'adventure' ? 'draw' :
-        result.outcome === 'victory' ? 'win' : result.outcome === 'defeat' ? 'loss' : result.outcome === 'draw' ? 'draw' : result.winnerIds.includes(p.id) ? 'win' : 'loss';
-      const t = this.tallyOf(p.id);
-      const report = store.recordMatch(
-        acc,
-        {
-          mode: g.mode,
-          outcome,
-          players: g.players.length,
-          kills: t.kills,
-          enemies: t.enemies,
-          died: !p.alive,
-          blocks: p.blocksDestroyed,
-          powerups: t.powerups,
-          bosses: [...this.bossesDown],
-          bossRushClear: g.mode === 'bossrush' && result.outcome === 'victory',
-          seconds,
-          depth: g.adventure?.depth ?? 0,
-          atlas: [...new Set((g.adventure?.journey ?? []).map((j) => `${j.biome}:${j.variant}`))],
-          bossFights: [...this.bossFights],
-          // Task 3: an expedition ended at a campfire pays its whole purse to everyone.
-          expeditionCoins: g.expedition?.ended ? g.expedition.coins : 0,
-          mimics: t.mimics,
-          elites: t.elites,
-        },
-        s.slot,
-      );
-      // Task 3: the expedition goes into the history (online, every player's own).
-      if (g.expedition) {
-        const ex = g.expedition;
-        store.logExpedition(acc, { at: Date.now(), best: ex.best, camps: ex.camps, returns: ex.returns, coins: (ex.banked ?? 0) + (ex.ended ? ex.coins : 0), ended: !!ex.ended });
-      }
-      // New level / cosmetics show up in the lobby too.
-      s.level = report.levelAfter;
-      s.loadout = report.account.loadout;
-      this.clients.find((c) => c.sessionId === s.owner)?.send('rewards', report);
-    }
+    // The endless Adventure has no winner: a journey is measured by how far it got.
+    const outcome: MatchPerformance['outcome'] = g.mode === 'adventure' || !result ? 'draw' :
+      result.outcome === 'victory' ? 'win' : result.outcome === 'defeat' ? 'loss' : result.outcome === 'draw' ? 'draw' : result.winnerIds.includes(p.id) ? 'win' : 'loss';
+    const t = this.tallyOf(p.id);
+    const ex = g.expedition;
+    const endedAtFire = !!ex?.ended && ended;
+    const report = store.recordMatch(
+      acc,
+      {
+        mode: g.mode,
+        outcome,
+        players: g.players.length,
+        kills: t.kills,
+        enemies: t.enemies,
+        died: !p.alive,
+        blocks: p.blocksDestroyed,
+        powerups: t.powerups,
+        bosses: [...this.bossesDown],
+        bossRushClear: g.mode === 'bossrush' && result?.outcome === 'victory',
+        seconds,
+        depth: g.adventure?.depth ?? 0,
+        atlas: [...new Set((g.adventure?.journey ?? []).map((j) => `${j.biome}:${j.variant}`))],
+        bossFights: [...this.bossFights],
+        mimics: t.mimics,
+        elites: t.elites,
+        // Task 3: an expedition ended at a campfire pays its whole purse to everyone (the vault already paid).
+        expeditionCoins: endedAtFire ? ex!.coins : 0,
+        camps: ex?.camps ?? 0,
+        contracts: ex?.contractsDone ?? 0,
+        kept: ex ? (ex.banked ?? 0) + (endedAtFire ? ex.coins : 0) : 0,
+        relics: [...(ex?.relics ?? [])],
+      },
+      s.slot,
+    );
+    // Task 3: the expedition goes into the history (online, every player's own).
+    if (ex) store.logExpedition(acc, { at: Date.now(), best: ex.best, camps: ex.camps, returns: ex.returns, coins: (ex.banked ?? 0) + (endedAtFire ? ex.coins : 0), ended: endedAtFire });
+    // New level / cosmetics show up in the lobby too.
+    s.level = report.levelAfter;
+    s.loadout = report.account.loadout;
+    this.clients.find((c) => c.sessionId === s.owner)?.send('rewards', report);
   }
 
   private backToLobby() {

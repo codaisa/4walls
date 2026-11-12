@@ -88,6 +88,8 @@ export const COSMETICS: Record<string, CosmeticDef> = Object.fromEntries(
     C({ id: 'title_forjado', slot: 'title', name: 'Forjado na Lava', desc: 'Medalha de ouro contra o Golem.', rarity: 'legendary', price: 0, achievement: 'golem_gold' }),
     C({ id: 'title_coracao', slot: 'title', name: 'Coração da Floresta', desc: 'Medalha de ouro contra o Guardião.', rarity: 'legendary', price: 0, achievement: 'guardian_gold' }),
     C({ id: 'title_mimico', slot: 'title', name: 'Domador de Mímicos', desc: 'Venceu 5 Baús Miméticos.', rarity: 'epic', price: 0, achievement: 'mimic_hunter' }),
+    C({ id: 'title_andarilho', slot: 'title', name: 'Andarilho', desc: 'Acendeu 5 acampamentos numa expedição.', rarity: 'epic', price: 0, achievement: 'camps5' }),
+    C({ id: 'title_arqueologo', slot: 'title', name: 'Arqueólogo', desc: 'Completou o códice de relíquias.', rarity: 'legendary', price: 0, achievement: 'codex8' }),
     C({ id: 'title_implacavel', slot: 'title', name: 'Implacável', desc: 'Venceu um chefe que já tinha voltado duas vezes.', rarity: 'epic', price: 0, achievement: 'deep_boss' }),
   ].map((d) => [d.id, d]),
 );
@@ -175,6 +177,12 @@ export interface PlayerStats {
   /** Baús Miméticos and Adventure elites beaten. */
   mimics: number;
   elites: number;
+  /** A4: the codex (relics ever found), most camps lit in one expedition, contracts fulfilled,
+   *  and the most coins kept when ending an expedition. */
+  codex: string[];
+  campsBest: number;
+  contracts: number;
+  bestKept: number;
 }
 
 export const EMPTY_STATS: PlayerStats = {
@@ -199,9 +207,13 @@ export const EMPTY_STATS: PlayerStats = {
   bestiary: {},
   mimics: 0,
   elites: 0,
+  codex: [],
+  campsBest: 0,
+  contracts: 0,
+  bestKept: 0,
 };
 
-export type AchievementId = 'first_win' | 'demolisher' | 'hunter' | 'veteran' | 'golem_slayer' | 'guardian_slayer' | 'boss_rush' | 'champion' | 'streak' | 'collector' | 'explorer' | 'cartographer' | 'golem_gold' | 'guardian_gold' | 'mimic_hunter' | 'elite_hunter' | 'deep_boss';
+export type AchievementId = 'first_win' | 'demolisher' | 'hunter' | 'veteran' | 'golem_slayer' | 'guardian_slayer' | 'boss_rush' | 'champion' | 'streak' | 'collector' | 'explorer' | 'cartographer' | 'golem_gold' | 'guardian_gold' | 'mimic_hunter' | 'elite_hunter' | 'deep_boss' | 'first_camp' | 'camps5' | 'vault1000' | 'contracts10' | 'codex8';
 
 export interface AchievementDef {
   id: AchievementId;
@@ -230,6 +242,11 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'guardian_gold', name: 'Coração da Floresta', desc: 'Medalha de ouro contra o Guardião.', icon: '🏅', coins: 400, progress: (s) => [(s.bestiary?.guardian?.medal ?? 0) >= 3 ? 1 : 0, 1] },
   { id: 'mimic_hunter', name: 'Domador de Mímicos', desc: 'Vença 5 Baús Miméticos.', icon: '🧰', coins: 250, progress: (s) => [s.mimics ?? 0, 5] },
   { id: 'elite_hunter', name: 'Caça-Coroas', desc: 'Derrote 20 inimigos de elite.', icon: '👑', coins: 250, progress: (s) => [s.elites ?? 0, 20] },
+  { id: 'first_camp', name: 'Primeira Fogueira', desc: 'Acenda a fogueira de um acampamento.', icon: '🔥', coins: 100, progress: (s) => [Math.min(1, s.campsBest ?? 0), 1] },
+  { id: 'camps5', name: 'Andarilho', desc: 'Acenda 5 acampamentos numa só expedição.', icon: '🏕️', coins: 400, progress: (s) => [s.campsBest ?? 0, 5] },
+  { id: 'vault1000', name: 'Cofre Cheio', desc: 'Encerre uma expedição com 1.000 moedas guardadas.', icon: '🔒', coins: 300, progress: (s) => [s.bestKept ?? 0, 1000] },
+  { id: 'contracts10', name: 'Palavra de Honra', desc: 'Cumpra 10 contratos do Rei Pelota.', icon: '📜', coins: 300, progress: (s) => [s.contracts ?? 0, 10] },
+  { id: 'codex8', name: 'Arqueólogo', desc: 'Complete o códice com as 8 relíquias.', icon: '🏺', coins: 600, progress: (s) => [s.codex?.length ?? 0, 8] },
   { id: 'deep_boss', name: 'Implacável', desc: 'Vença um chefe que já voltou duas vezes.', icon: '💀', coins: 500, progress: (s) => [Math.max(0, ...Object.values(s.bestiary ?? {}).map((b) => b?.best ?? 0)) >= 3 ? 1 : 0, 1] },
 ];
 
@@ -267,6 +284,11 @@ export interface MatchPerformance {
   elites?: number;
   /** Task 3: the expedition purse, paid when the expedition is ended at a campfire. */
   expeditionCoins?: number;
+  /** A4: camps lit, contracts fulfilled, coins kept (vault + carried at the end), relics found. */
+  camps?: number;
+  contracts?: number;
+  kept?: number;
+  relics?: string[];
 }
 
 export interface MatchReward {
@@ -292,6 +314,8 @@ export function matchReward(p: MatchPerformance): MatchReward {
   add('Chefões derrotados', p.bosses.length * 100);
   // B5 medals: bronze 50, silver 110, gold 200 XP per boss.
   add('Medalhas de chefe', (p.bossFights ?? []).reduce((n, f) => n + ([0, 50, 110, 200][f.tier] ?? 0), 0));
+  add('Acampamentos', Math.min(400, (p.camps ?? 0) * 40));
+  add('Contratos', Math.min(300, (p.contracts ?? 0) * 50));
   add('Mímicos e elites', Math.min(120, (p.mimics ?? 0) * 30 + (p.elites ?? 0) * 8));
   if (p.bossRushClear) add('Boss Rush completo', 150);
   // Endless Adventure: every region crossed pays, a bit more the deeper it was.
@@ -327,6 +351,10 @@ export function applyMatchToStats(s: PlayerStats, p: MatchPerformance): PlayerSt
     n.bestiary[f.boss] = { best: Math.max(was.best, f.level + 1), medal: Math.max(was.medal, f.tier) };
   }
   n.mimics = (s.mimics ?? 0) + (p.mimics ?? 0);
+  n.codex = [...new Set([...(s.codex ?? []), ...(p.relics ?? [])])].sort();
+  n.campsBest = Math.max(s.campsBest ?? 0, p.camps ?? 0);
+  n.contracts = (s.contracts ?? 0) + (p.contracts ?? 0);
+  n.bestKept = Math.max(s.bestKept ?? 0, p.kept ?? 0);
   n.elites = (s.elites ?? 0) + (p.elites ?? 0);
   const m = n.byMode[p.mode] ?? { matches: 0, wins: 0 };
   n.byMode[p.mode] = { matches: m.matches + 1, wins: m.wins + (p.outcome === 'win' ? 1 : 0) };

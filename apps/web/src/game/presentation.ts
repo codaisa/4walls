@@ -1,5 +1,5 @@
 import { activeBombCount, regionAt, type GameEvent, type GameState, anchorsLeft } from '@4walls/core';
-import { BOSSES, CHARACTERS, GAME_EVENTS, POWERUPS, secToTicks, type CharacterId, CAMP_ACTIONS } from '@4walls/shared';
+import { BOSSES, CHARACTERS, GAME_EVENTS, POWERUPS, secToTicks, type CharacterId, CAMP_ACTIONS, RELICS } from '@4walls/shared';
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 import { sfx } from '../audio/Sfx';
@@ -355,6 +355,19 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
     case 'expeditionEnded':
       sfx.victory();
       break;
+    case 'heartLost':
+      sfx.shield();
+      break;
+    case 'relicFound': {
+      sfx.secret();
+      const r = RELICS.find((x) => x.id === e.relic);
+      hud.set({ banner: { text: `${r?.icon ?? '🏺'} RELÍQUIA: ${(r?.name ?? '').toUpperCase()}!`, key: tick + 40 } });
+      break;
+    }
+    case 'relicSaved':
+      sfx.missionDone();
+      hud.set({ banner: { text: '❤️‍🔥 O CORAÇÃO DE MAGMA TE SALVOU!', key: tick + 41 } });
+      break;
     case 'campBought':
       sfx.pickup();
       break;
@@ -431,6 +444,8 @@ export class HudSync {
       range: p.range,
       speedLevel: p.speedLevel,
       shield: p.shield > 0,
+      ...(p.hearts !== undefined ? { hearts: p.hearts, maxHearts: p.maxHearts ?? 3 } : {}),
+      ...(p.feather ? { feathers: p.feather } : {}),
       kills: p.kills,
       character: ch.name,
       abilityName: ch.abilityName,
@@ -487,6 +502,7 @@ function adventureInfo(s: GameState): HudAdventure | null {
       !s.expedition.ended &&
       r.objective.kind === 'camp' &&
       adv.props.some((q) => q.kind === 'campfire' && q.region === r.id && q.state === 'lit'),
+    relics: [...(s.expedition?.relics ?? [])],
     contract: s.expedition?.contract
       ? { name: CAMP_ACTIONS.find((a) => a.id === `contract:${s.expedition!.contract!.kind}`)?.name ?? '', progress: s.expedition.contract.progress, goal: s.expedition.contract.goal }
       : null,

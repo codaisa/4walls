@@ -243,6 +243,31 @@ describe('account API + match rewards', () => {
     await a.leave(true);
   });
 
+  it('A4: leaving the endless Adventure books the match (XP, relics into the codex, history)', async () => {
+    const { body } = await api('/api/account', { method: 'POST', body: JSON.stringify({ name: 'Saidor' }) });
+    const auth = body.credential as string;
+    const acc = ArenaRoom.accounts!.get(body.account.id)!;
+    const client = new Client(`ws://localhost:${PORT}`);
+    const a = await client.create(ROOM_NAME, {});
+    let lobby: LobbyInfo | null = null;
+    a.onMessage('lobby', (m: LobbyInfo) => (lobby = m));
+    for (const t of ['start', 'snap', 'account', 'rewards']) a.onMessage(t, () => {});
+    a.send('join_slot', { localId: 'kb1', auth });
+    a.send('mode', { mode: 'adventure' });
+    await waitFor(() => (lobby as LobbyInfo | null)?.mode === 'adventure' && (lobby as LobbyInfo).slots.length === 1);
+    a.send('start', {});
+    const room = matchMaker.getLocalRoomById(a.roomId) as unknown as { game: import('@4walls/core').GameState | null };
+    const g = await waitFor(() => room.game?.phase === 'playing' && room.game);
+    g.expedition!.relics = ['lantern'];
+    await sleep(1500);
+    const matches = acc.stats.matches;
+    await a.leave(true);
+    await waitFor(() => acc.stats.matches === matches + 1);
+    expect(acc.stats.codex).toContain('lantern');
+    expect(acc.expeditions?.[0]).toMatchObject({ ended: false });
+    expect(acc.xp).toBeGreaterThan(0);
+  });
+
   it('the winner of an online match gets XP and the reward report; guests get nothing', async () => {
     const { body } = await api('/api/account', { method: 'POST', body: JSON.stringify({ name: 'Vencedor' }) });
     const auth = body.credential as string;

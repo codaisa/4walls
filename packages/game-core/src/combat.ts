@@ -15,6 +15,13 @@ export function hitPlayer(s: GameState, p: PlayerState, byId: string | null): vo
     s.events.push({ type: 'shieldBroken', playerId: p.id });
     return;
   }
+  // A4: in the Adventure a hit takes a heart; only the last one is a fall.
+  if (s.adventure && (p.hearts ?? 0) > 1) {
+    p.hearts = (p.hearts ?? 2) - 1;
+    p.invulnUntil = s.tick + secToTicks(2);
+    s.events.push({ type: 'heartLost', playerId: p.id, hearts: p.hearts, x: p.x, y: p.y });
+    return;
+  }
   // A3: a Feather of Return spends itself instead of the player.
   if ((p.feather ?? 0) > 0) {
     p.feather = (p.feather ?? 1) - 1;
@@ -23,6 +30,7 @@ export function hitPlayer(s: GameState, p: PlayerState, byId: string | null): vo
     return;
   }
   p.alive = false;
+  if (p.hearts !== undefined) p.hearts = 0;
   p.diedTick = s.tick;
   p.moving = false;
   p.passBombs = [];

@@ -1,6 +1,6 @@
 import { Cell, DIRS, DIR_VEC, OPPOSITE, RULES, TICK_DT, secToTicks, type Dir } from '@4walls/shared';
 import { spawnBomb } from './bombs';
-import { addCoins } from './expedition';
+import { addCoins, hasRelic } from './expedition';
 import { getCell } from './grid';
 import { kickIntervalTicks } from './movement';
 import { randInt, nextRandom } from './rng';
@@ -222,7 +222,7 @@ function mimicDefeated(s: GameState, e: EnemyState) {
 export function enemyDown(s: GameState, e: EnemyState) {
   if (e.kind === 'spark' && e.elite) splitSpark(s, e);
   if (e.kind === 'mimic') mimicDefeated(s, e);
-  if (e.elite) addCoins(s, 6, e.x, e.y);
+  if (e.elite) addCoins(s, hasRelic(s, 'broken_crown') ? 12 : 6, e.x, e.y);
   if (e.kind === 'mimic') addCoins(s, 20, e.x, e.y);
 }
 
@@ -240,7 +240,7 @@ export function wakeMimic(s: GameState, pr: { id: number; x: number; y: number; 
   });
   s.enemies.push(e);
   s.events.push({ type: 'mimicAwoke', enemyId: e.id, x: pr.x, y: pr.y, byId: opener?.id ?? null });
-  if (opener && s.tick >= opener.invulnUntil) {
+  if (opener && s.tick >= opener.invulnUntil && !hasRelic(s, 'mimic_eye')) {
     // The bite: it takes a shield; without one it's only a scare (the reveal is harmless).
     if (opener.shield > 0) {
       opener.shield--;

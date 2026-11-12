@@ -3,6 +3,7 @@ import { applyPowerup } from './combat';
 import { arcInfo, arcOfRegion, becomeHero, regionAt } from './adventure';
 import { nextRandom, pickWeighted, randInt } from './rng';
 import type { GameState, PlayerState } from './types';
+import { grantRelic } from './expedition';
 
 const RARE: PowerupType[] = ['shield', 'kick', 'remote', 'glove', 'ghost', 'boots', 'infernal', 'ice'];
 
@@ -47,6 +48,7 @@ export function campActionState(s: GameState, p: PlayerState, a: CampActionDef):
   if (a.service === 'scout' && (group('scout') || (ex.scoutTo ?? -1) > reg.id)) return { ok: false, price, reason: 'Arco já reconhecido' };
   if (a.service === 'contract' && (group('contract') || ex.contract)) return { ok: false, price, reason: ex.contract ? 'Já há um contrato' : 'Já escolhido aqui' };
   if (a.id === 'shop:feather' && (p.feather ?? 0) >= 2) return { ok: false, price, reason: 'Máximo 2' };
+  if (a.id === 'cook:heart' && (p.hearts ?? 0) > (p.maxHearts ?? 3)) return { ok: false, price, reason: 'Já está cheio' };
   if (ex.coins < price) return { ok: false, price, reason: 'Moedas insuficientes' };
   return { ok: true, price };
 }
@@ -83,7 +85,7 @@ export function tryCampAction(s: GameState, p: PlayerState, index: number) {
     case 'cook':
       if (what === 'shield') p.shield = Math.max(p.shield, 1);
       else if (what === 'speed') applyPowerup(s, p, 'speedUp');
-      else p.feather = (p.feather ?? 0) + 1;
+      else p.hearts = Math.min((p.maxHearts ?? 3) + 1, (p.hearts ?? 0) + 1);
       mark('cook');
       break;
     case 'scout':
@@ -102,7 +104,9 @@ export function tryCampAction(s: GameState, p: PlayerState, index: number) {
     case 'wheel': {
       mark('wheel');
       const roll = nextRandom(s);
-      if (roll < 0.45) {
+      if (roll < 0.08 && grantRelic(s, p.x, p.y)) {
+        s.events.push({ type: 'wheelSpun', playerId: p.id, result: 'rare' });
+      } else if (roll < 0.45) {
         const pu = RARE[randInt(s, RARE.length)];
         applyPowerup(s, p, pu);
         s.events.push({ type: 'wheelSpun', playerId: p.id, result: 'rare', powerup: pu });

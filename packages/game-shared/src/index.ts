@@ -478,7 +478,7 @@ export const CAMP_ACTIONS: CampActionDef[] = [
   CA({ id: 'smith:range', service: 'smith', name: 'Forjar pavio', desc: '+1 alcance (1 trabalho por acampamento)', icon: '🧨', price: 110 }),
   CA({ id: 'cook:shield', service: 'cook', name: 'Baião de dois', desc: 'Sai com escudo (1 refeição por acampamento)', icon: '🍲', price: 20 }),
   CA({ id: 'cook:speed', service: 'cook', name: 'Cuscuz arretado', desc: '+velocidade (1 refeição por acampamento)', icon: '🌽', price: 20 }),
-  CA({ id: 'cook:feather', service: 'cook', name: 'Carne de sol', desc: 'Uma vida extra (Pena do Retorno)', icon: '🥩', price: 35 }),
+  CA({ id: 'cook:heart', service: 'cook', name: 'Carne de sol', desc: '+1 coração (acima do máximo)', icon: '🥩', price: 35 }),
   CA({ id: 'scout', service: 'scout', name: 'Reconhecer o arco', desc: 'Revela no mapa as regiões até o próximo acampamento e quais baús são Mímicos', icon: '🔭', price: 40 }),
   CA({ id: 'contract:gold', service: 'contract', name: 'Contrato de ouro', desc: 'Vença o chefe do arco com medalha de ouro', icon: '🥇', price: 0 }),
   CA({ id: 'contract:chests', service: 'contract', name: 'Caça ao tesouro', desc: 'Abra 3 baús antes do próximo acampamento', icon: '🧰', price: 0 }),
@@ -547,6 +547,9 @@ export interface PlayerSnap {
   special: { kind: 'fire' | 'ice'; charges: number } | null;
   /** Feathers of Return: a lethal hit is shrugged off once per feather. */
   feather?: number;
+  /** A4: hearts (Adventure only). */
+  hearts?: number;
+  maxHearts?: number;
 }
 
 /** Task 3: an Adventure expedition's progress (what a campfire saves). */
@@ -568,7 +571,32 @@ export interface ExpeditionSave {
   used?: string[];
   scoutTo?: number;
   contract?: { kind: ContractKind; progress: number; goal: number; reward: number; until: number } | null;
+  /** A4: relics found (they last the whole expedition), arcs where the Magma Heart was spent,
+   *  bosses whose first gold medal already gave a relic, contracts fulfilled. */
+  relics?: string[];
+  magmaArcs?: number[];
+  goldRelics?: string[];
+  contractsDone?: number;
 }
+
+/** A4 — relics: rare finds that change the whole expedition (and fill the account's codex). */
+export interface RelicDef {
+  id: string;
+  name: string;
+  desc: string;
+  icon: string;
+}
+export const RELICS: RelicDef[] = [
+  { id: 'magma_heart', name: 'Coração de Magma', desc: 'A 1ª queda na lava ou no abismo de cada arco não mata.', icon: '❤️‍🔥' },
+  { id: 'double_fuse', name: 'Pavio Duplo', desc: 'A cada 5 bombas, uma sai com +1 de alcance.', icon: '🧨' },
+  { id: 'obsidian_boots', name: 'Bota de Obsidiana', desc: 'Pontes frágeis aguentam 1 s a mais.', icon: '🥾' },
+  { id: 'guardian_seed', name: 'Semente do Guardião', desc: 'Totens do Retorno recarregam sozinhos em 20 s.', icon: '🌱' },
+  { id: 'coin_magnet', name: 'Ímã de Moedas', desc: '+25% de moedas da expedição.', icon: '🧲' },
+  { id: 'mimic_eye', name: 'Olho do Mímico', desc: 'Baús Miméticos ficam marcados e não mordem.', icon: '👁️' },
+  { id: 'broken_crown', name: 'Coroa Partida', desc: 'Elites dão o dobro de moedas.', icon: '👑' },
+  { id: 'lantern', name: 'Lanterna', desc: 'À noite, o chefe fica bem mais visível.', icon: '🏮' },
+];
+export const RELIC_IDS = RELICS.map((r) => r.id);
 
 
 /** An expedition saved on an account (online: the host's) or on this device. */

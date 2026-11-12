@@ -1,7 +1,7 @@
 import { ADVENTURE, BOSSES, Cell, CHARACTER_IDS, CHARACTERS, DIR_VEC, DIRS, POWERUPS, RULES, secToTicks, type BiomeId, type BossId, type CharacterId, type PowerupType } from '@4walls/shared';
 import { spawnBoss } from './boss';
 import { ELITE_MAGMITE_HP, wakeMimic } from './enemies';
-import { EXPEDITION_LOSS, addCoins, applySnap, contractStep, snapPlayer } from './expedition';
+import { EXPEDITION_LOSS, HEARTS, addCoins, applySnap, contractStep, grantRelic, hasRelic, refillHearts, snapPlayer } from './expedition';
 import { addResident } from './camp';
 import { cellIndex, createGrid, getCell, inBounds, setCell } from './grid';
 import { nextRandom, pickWeighted, randInt } from './rng';
@@ -1024,7 +1024,8 @@ function wakeGuardian(s: GameState, reg: RegionState) {
   const players = Math.max(1, Math.min(4, s.players.filter((p) => !p.left).length));
   // The very first one is a gentle introduction; every comeback is tougher (capped).
   const levelMul = level === 0 ? 0.8 : Math.min(3, 1 + 0.3 * level);
-  const hp = Math.max(6, Math.round(BOSSES[kind].hp * BOSS_HP_BY_PLAYERS[players - 1] * levelMul));
+  // A4: heroes have three hearts in the Adventure, so its bosses get a little more health.
+  const hp = Math.max(6, Math.round(BOSSES[kind].hp * BOSS_HP_BY_PLAYERS[players - 1] * levelMul * 1.2));
   const c = chamberCenter(reg);
   const arena = { x0: reg.cx * CW + 1, y0: reg.cy * CH + 1, x1: reg.cx * CW + CW - 2, y1: reg.cy * CH + CH - 2 };
   spawnBoss(s, kind, { x: c.x, y: c.y, regionId: reg.id, level, hp, speedMul: Math.min(1.4, 1 + 0.06 * level), arena, ...(reg.variant !== 'normal' ? { mod: reg.variant } : {}) });
@@ -1301,6 +1302,7 @@ export function returnToCamp(s: GameState) {
       diedTick: -1,
       invulnUntil: s.tick + secToTicks(REVIVE_INVULN_SEC),
     });
+    p.hearts = p.maxHearts ?? HEARTS;
   }
   spawnAdventureEnemies(s);
   revealAround(s);
@@ -1345,6 +1347,7 @@ function updateCampfire(s: GameState, pr: PropState) {
     const c = ex.contract;
     ex.contract = null;
     if (c.kind === 'clean') {
+      ex.contractsDone = (ex.contractsDone ?? 0) + 1;
       addCoins(s, c.reward, pr.x, pr.y);
       s.events.push({ type: 'contractDone', kind: c.kind, reward: c.reward });
     } else s.events.push({ type: 'contractFailed', kind: c.kind });
@@ -1357,6 +1360,8 @@ function updateCampfire(s: GameState, pr: PropState) {
     ex.snapshot = s.players.filter((p) => !p.left).map((p) => (p.alive ? snapPlayer(p) : ex.snapshot.find((q) => q.slot === p.slot) ?? snapPlayer(p)));
   }
   s.events.push({ type: 'campLit', region: pr.region, x: pr.x, y: pr.y, again });
+  refillHearts(s);
+  s.events.push({ type: 'heartsRestored' });
 }
 
 function updateObjectives(s: GameState) {
@@ -1492,7 +1497,7 @@ function updateRiver(s: GameState) {
           pr.tick = s.tick;
           s.events.push({ type: 'bridgeCracking', propId: pr.id, x: pr.x, y: pr.y });
         }
-      } else if (pr.state === 'cracking' && s.tick - pr.tick >= FRAGILE_CRACK) {
+      } else if (pr.state === 'cracking' && s.tick - pr.tick >= FRAGILE_CRACK + (hasRelic(s, 'obsidian_boots') ? 60 : 0)) {
         pr.state = 'fallen';
         pr.tick = s.tick;
         setCell(s.grid, pr.x, pr.y, Cell.Lava);
@@ -1649,10 +1654,28 @@ function igniteGrass(s: GameState, g: PropState) {
 }
 
 /** Whatever stands on lava (not jumping over it) is lost: players, Magmitos, bombs, power-ups. */
+/** The arc of the region a player stands in (-1 outside). */
+function adventureArc(s: GameState, p: PlayerState) {
+  const rid = regionAt(s, p.x, p.y);
+  return s.adventure?.regions.find((r) => r.id === rid)?.arc ?? -1;
+}
+
 function updateLavaFalls(s: GameState) {
   const lava = (x: number, y: number) => isPit(getCell(s.grid, Math.round(x), Math.round(y)));
   for (const p of s.players) {
     if (!p.alive || airborne(p) || !lava(p.x, p.y)) continue;
+    // A4 (Coração de Magma): the first fall of each arc puts you back on solid ground.
+    const ex = s.expedition;
+    const arc = adventureArc(s, p);
+    if (ex && hasRelic(s, 'magma_heart') && arc >= 0 && !(ex.magmaArcs ?? []).includes(arc)) {
+      ex.magmaArcs = [...(ex.magmaArcs ?? []), arc];
+      const c = safeCellsNear(s, Math.round(p.x), Math.round(p.y), 1).find((q) => !lava(q.x, q.y));
+      if (c) {
+        Object.assign(p, { x: c.x, y: c.y, px: c.x, py: c.y, moving: false, maneuver: null, slideDir: null, invulnUntil: s.tick + secToTicks(2) });
+        s.events.push({ type: 'relicSaved', relic: 'magma_heart', playerId: p.id, x: c.x, y: c.y });
+        continue;
+      }
+    }
     // A fall ignores shields: nothing to stand on.
     p.alive = false;
     p.diedTick = s.tick;
@@ -1703,6 +1726,7 @@ function updateProps(s: GameState) {
       } else openChest(s, pr, opener?.id ?? null);
     } else if (pr.kind === 'key') updateKey(s, pr);
     else if (pr.kind === 'totem' && pr.state === 'idle') updateTotem(s, pr);
+    else if (pr.kind === 'totem' && pr.state === 'used' && hasRelic(s, 'guardian_seed') && s.tick - pr.tick >= secToTicks(20)) pr.state = 'idle';
     else if (pr.kind === 'campfire' && pr.state === 'unlit') updateCampfire(s, pr);
     else if (pr.kind === 'brazier' && pr.state === 'unlit') {
       const touched = DIRS.some((d) => flamesAt(s, pr.x + DIR_VEC[d].x, pr.y + DIR_VEC[d].y).length > 0);
@@ -1750,6 +1774,7 @@ function updateTotem(s: GameState, pr: PropState) {
     passBombs: [],
     diedTick: -1,
     invulnUntil: s.tick + secToTicks(Math.max(REVIVE_INVULN_SEC, RULES.invulnSec)),
+    hearts: s.expedition ? Math.max(1, (HEARTS) - 1) : undefined,
   });
   pr.state = 'used';
   pr.tick = s.tick;
@@ -1762,6 +1787,8 @@ function openChest(s: GameState, pr: PropState, byId: string | null) {
   s.events.push({ type: 'chestOpened', propId: pr.id, x: pr.x, y: pr.y, rare: !!pr.rare, byId });
   addCoins(s, (pr.hp === 2 ? 30 : pr.rare ? 15 : 5) + Math.floor(pr.region / 2), pr.x, pr.y);
   contractStep(s, 'chests', pr.region);
+  // A4: rare chests sometimes hold a relic (the Mimic's double chest more often).
+  if (s.expedition && (pr.hp === 2 ? nextRandom(s) < 0.3 : pr.rare ? nextRandom(s) < 0.1 : false)) grantRelic(s, pr.x, pr.y);
   const loot: PowerupType[] = [pickWeighted(s, Object.values(POWERUPS), (d) => d.weight).type];
   if (pr.rare) loot.push(RARE_LOOT[randInt(s, RARE_LOOT.length)]);
   // The Mimic's double chest: twice the loot, and always a rare piece.
@@ -1897,6 +1924,7 @@ function reviveAllies(s: GameState, g: GateState) {
       passBombs: [],
       diedTick: -1,
       invulnUntil: s.tick + secToTicks(Math.max(REVIVE_INVULN_SEC, RULES.invulnSec)),
+    hearts: s.expedition ? Math.max(1, (HEARTS) - 1) : undefined,
     });
     s.events.push({ type: 'playerRevived', playerId: p.id, x: c.x, y: c.y });
   });
