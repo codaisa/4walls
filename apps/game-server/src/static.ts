@@ -21,10 +21,14 @@ const TYPES: Record<string, string> = {
 
 type Next = (err?: unknown) => void;
 
+/** Vite output: a file straight under /assets with a content hash in its name. */
+const HASHED = /^\/assets\/[^/]+-[\w-]{8}\.(js|css|woff2?|png|svg|webp)$/;
+
 /**
  * Serves the built web client (apps/web/dist) from the game server, so production needs one
  * process and one origin: page, websocket and API share host and port (no CORS, no mixed content).
- * Hashed files under /assets are cached for a year; everything else is revalidated.
+ * Hashed build files (/assets/name-HASH.js) are cached for a year; everything else (art under
+ * /assets/<folder>, models, the page, the service worker) is revalidated with Last-Modified.
  * Unknown paths fall back to index.html (client-side routes like /loja or /online/room).
  */
 export function staticWeb(dir: string) {
@@ -43,11 +47,18 @@ export function staticWeb(dir: string) {
       stat = safeStat(file);
       if (!stat) return next();
     }
+    const modified = stat.mtime.toUTCString();
+    res.setHeader('Cache-Control', HASHED.test(path) ? 'public, max-age=31536000, immutable' : 'no-cache');
+    res.setHeader('Last-Modified', modified);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    const since = req.headers['if-modified-since'];
+    if (since && Date.parse(since) >= Math.floor(stat.mtimeMs / 1000) * 1000) {
+      res.statusCode = 304;
+      return res.end();
+    }
     res.statusCode = 200;
     res.setHeader('Content-Type', TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream');
     res.setHeader('Content-Length', stat.size);
-    res.setHeader('Cache-Control', path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
     if (req.method === 'HEAD') return res.end();
     createReadStream(file).pipe(res);
   };

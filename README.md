@@ -159,7 +159,9 @@ O jogo inteiro funciona no celular, **sempre deitado**. Em pé, aparece a tela "
 - **Na sala online:** dá para tocar em tudo direto: ‹ › para trocar o personagem, a bolinha de cor, **Estou pronto**, e o quadro da partida para escolher o modo.
 - **No lobby offline:** uma barra embaixo com D-pad, **A** (entrar/ok), **B** (voltar) e **Start**. Com ela o celular entra na vaga, troca personagem e cor, fica pronto e abre as opções da partida.
 - **Como dispositivo:** o toque é um dispositivo próprio, como um teclado ou controle. Um celular pode entrar numa sala online com jogadores de PC, inclusive junto com quem está no teclado e no controle do PC.
-- **Menu e desempenho:** o menu tem o botão **Tela cheia**, que no Android também trava a tela deitada. No celular o jogo reduz o pixel ratio e as sombras e desliga o antisserrilhado do pós-processamento.
+- **App instalável (PWA):** o botão **📲 Instalar app** do menu põe o 4Walls na tela inicial. Instalado, ele abre em tela cheia, deitado e sem a barra do navegador. No iPhone o botão explica o caminho: Compartilhar → Adicionar à Tela de Início. No navegador do Android, o primeiro toque já entra em tela cheia e trava a tela deitada.
+- **Câmera:** no celular a câmera segue o seu personagem de perto (cerca de 11×7 casas). Em Configurações → Câmera dá para escolher **Auto**, **Perto** ou **Arena toda**.
+- **Desempenho:** no celular o jogo reduz o pixel ratio e as sombras e desliga o antisserrilhado do pós-processamento.
 
 **Jogar pelo celular na mesma rede Wi-Fi do PC:**
 1. No PC, rode `pnpm dev`. O Vite já escuta na rede e o servidor do jogo usa a porta 2567.
@@ -179,8 +181,13 @@ Menu → **Multiplayer Online**:
 Na sala, cada pessoa **deste computador** entra com o próprio dispositivo, como no lobby local.
 Assim dá para ter, por exemplo, duas pessoas aqui e uma em outra casa na mesma partida. O
 anfitrião (👑) escolhe o modo e pode iniciar com Start. Com todos prontos, o servidor inicia em
-3 s. No fim, todos voltam à sala. Se a conexão cair, o cliente reconecta sozinho (até 20 s) e
-mantém o lugar.
+3 s. No fim, todos voltam à sala. Se a conexão cair (tela bloqueada, troca entre Wi-Fi e 4G), o
+cliente reconecta sozinho (até 45 s) e mantém o lugar.
+
+**Rede ruim.** O jogo foi feito para aguentar a internet do celular:
+- **Bombas e movimento:** os seus próprios movimentos e bombas aparecem na hora, por previsão local, e o servidor confirma depois.
+- **Outros jogadores:** são exibidos com um buffer de cerca de 66 ms, que absorve as rajadas de pacotes. Assim ninguém "teleporta".
+- **Fila de comandos:** se os seus comandos chegam acumulados ao servidor, ele os consome mais rápido até alcançar o atraso normal. Nenhum botão apertado se perde.
 
 ## Progressão, loja e ranking
 

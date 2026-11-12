@@ -1,12 +1,29 @@
-import { createGame, stepPlayerMovement, type GameEvent, type GameState } from '@4walls/core';
+import { activeBombCount, bombAt, cellOf, createGame, getCell, mineAt, stepPlayerMovement, type BombState, type GameEvent, type GameState } from '@4walls/core';
 import { applySnapshot, encodeInput, SNAPSHOT_EVERY_TICKS, type InputTuple, type Snapshot, type StartInfo } from '@4walls/protocol';
-import { TICK_DT, TICK_RATE, type Dir } from '@4walls/shared';
+import { Cell, RULES, secToTicks, TICK_DT, TICK_RATE, type Dir } from '@4walls/shared';
+import { sfx } from '../audio/Sfx';
 import { HudSync, presentEvent, type MatchView } from '../game/presentation';
 import { deviceLabel, devicesOfLocal, type DeviceId, type InputManager } from '../input/InputManager';
 import { useHud } from '../store/useHud';
 import { online } from './session';
 
 const SNAP_MS = (1000 / TICK_RATE) * SNAPSHOT_EVERY_TICKS;
+/**
+ * Jitter buffer: snapshots are played back at a steady 30/s, a couple of snapshots behind the
+ * newest one. Mobile networks deliver packets in bursts; without this, remote players stutter
+ * and teleport. Local players are predicted, so they don't feel this delay.
+ */
+const JITTER_SNAPS = 2;
+const MAX_BUFFERED_SNAPS = 8;
+/** A predicted bomb disappears if the server hasn't confirmed it within this time. */
+const PREDICTED_BOMB_MS = 900;
+
+interface PredictedBomb {
+  seq: number;
+  slot: number;
+  at: number;
+  bomb: BombState;
+}
 
 interface Pending {
   seq: number;
@@ -32,7 +49,13 @@ export class OnlineController implements MatchView {
   private localAlpha = 0;
   private seq = 0;
   private pending: Pending[] = [];
-  private lastSnapAt = performance.now();
+  private snapQueue: Snapshot[] = [];
+  private buffering = true;
+  /** ms of playback time accumulated since the last applied snapshot. */
+  private playAcc = 0;
+  private predictedBombs: PredictedBomb[] = [];
+  /** Cells where we already played the "bomb placed" sound for a predicted bomb. */
+  private soundedCells = new Map<string, number>();
   private resultTimer: number | null = null;
   private offSnap: (() => void) | null = null;
   private hud: HudSync;
@@ -53,8 +76,12 @@ export class OnlineController implements MatchView {
   }
 
   get tickF() {
-    const elapsed = ((performance.now() - this.lastSnapAt) / 1000) * TICK_RATE;
-    return this.state.tick + Math.min(elapsed, SNAPSHOT_EVERY_TICKS);
+    return this.state.tick + Math.min(this.playAcc / SNAP_MS, 1) * SNAPSHOT_EVERY_TICKS;
+  }
+
+  /** Local players of this device (the phone camera follows them). */
+  isLocal(playerId: string) {
+    return this.localIds.has(playerId);
   }
 
   alphaFor(playerId: string) {
@@ -68,7 +95,7 @@ export class OnlineController implements MatchView {
     this.input.resetLatches();
     useHud.getState().set({ paused: false, showResult: false, result: null, banner: null, missing: [] });
     this.hud.push(this.state, true);
-    this.offSnap = online.onSnapshot((s) => this.onSnapshot(s));
+    this.offSnap = online.onSnapshot((s) => this.enqueue(s));
     return () => this.offSnap?.();
   }
 
@@ -92,7 +119,40 @@ export class OnlineController implements MatchView {
       this.localTick();
     }
     this.localAlpha = this.acc / TICK_DT;
-    this.alpha = Math.min(1, (performance.now() - this.lastSnapAt) / SNAP_MS);
+    this.pump(Math.min(dt, 0.25) * 1000);
+    this.alpha = Math.min(1, this.playAcc / SNAP_MS);
+  }
+
+  private enqueue(snap: Snapshot) {
+    const q = this.snapQueue;
+    q.push(snap);
+    // Way behind (tab was in the background): fast-forward, keeping every event.
+    while (q.length > MAX_BUFFERED_SNAPS) this.onSnapshot(q.shift()!);
+    // The match end must never wait in the buffer.
+    if (snap.ph === 'ended' && this.state.phase !== 'ended') {
+      while (q.length) this.onSnapshot(q.shift()!);
+      this.playAcc = SNAP_MS;
+    }
+  }
+
+  /** Plays buffered snapshots at the server's rate, speeding up a little when the buffer grows. */
+  private pump(dtMs: number) {
+    const q = this.snapQueue;
+    if (this.buffering) {
+      if (q.length < JITTER_SNAPS && this.state.phase === 'playing') return;
+      this.buffering = false;
+      this.playAcc = SNAP_MS;
+    }
+    this.playAcc += dtMs * (q.length > JITTER_SNAPS + 1 ? 1.25 : 1);
+    while (this.playAcc >= SNAP_MS && q.length) {
+      this.playAcc -= SNAP_MS;
+      this.onSnapshot(q.shift()!);
+    }
+    if (this.playAcc >= SNAP_MS) {
+      // Starved: hold the last frame and rebuild the cushion before playing on.
+      this.playAcc = SNAP_MS;
+      if (this.state.phase === 'playing') this.buffering = true;
+    }
   }
 
   /** Sample + send local inputs, and predict our own players' movement. */
@@ -106,7 +166,10 @@ export class OnlineController implements MatchView {
       tuples.push(encodeInput(l.slot, inp));
       moves.set(l.slot, inp.move);
       const p = this.state.players.find((pp) => pp.slot === l.slot);
-      if (p) this.predict(p, inp.move);
+      if (p) {
+        this.predict(p, inp.move);
+        if (inp.bomb) this.predictBomb(l.slot, p);
+      }
     }
     online.send('input', { seq: this.seq, i: tuples });
     this.pending.push({ seq: this.seq, moves });
@@ -120,9 +183,59 @@ export class OnlineController implements MatchView {
     stepPlayerMovement(this.state, p, { move, bomb: false, ability: false });
   }
 
+  /**
+   * Shows our own bomb the moment the button is pressed instead of a network round trip later.
+   * Mirrors the core placement rules; the server's real bomb replaces it.
+   */
+  private predictBomb(slot: number, p: GameState['players'][number]) {
+    const s = this.state;
+    if (!p.alive || s.tick < p.frozenUntil) return;
+    const x = cellOf(p.x);
+    const y = cellOf(p.y);
+    if (getCell(s.grid, x, y) !== Cell.Floor || mineAt(s, x, y)) return;
+    if (bombAt(s, x, y)) return; // also covers the glove throw
+    if (activeBombCount(s, p.id) >= p.maxBombs) return;
+    const remote = p.hasRemote;
+    const bomb: BombState = {
+      id: -this.seq,
+      ownerId: p.id,
+      x,
+      y,
+      range: p.range,
+      placedTick: s.tick,
+      detonateTick: s.tick + secToTicks(remote ? RULES.remoteMaxSec : RULES.fuseSec),
+      kind: p.special && p.special.charges > 0 ? p.special.kind : 'normal',
+      remote,
+      extra: false,
+      slideDir: null,
+      nextSlideTick: 0,
+      fromX: x,
+      fromY: y,
+      movedTick: s.tick,
+      flightUntil: 0,
+    };
+    s.bombs.push(bomb);
+    p.passBombs.push(bomb.id);
+    this.predictedBombs.push({ seq: this.seq, slot, at: performance.now(), bomb });
+    this.soundedCells.set(`${x},${y}`, performance.now());
+    sfx.bombPlaced();
+  }
+
+  /** Re-adds predicted bombs the server hasn't processed yet (snapshots replace the bomb list). */
+  private keepPredictedBombs(snap: Snapshot) {
+    const now = performance.now();
+    this.predictedBombs = this.predictedBombs.filter((pb) => pb.seq > (snap.ack[pb.slot] ?? 0) && now - pb.at < PREDICTED_BOMB_MS);
+    for (const pb of this.predictedBombs) {
+      if (bombAt(this.state, pb.bomb.x, pb.bomb.y)) continue;
+      this.state.bombs.push(pb.bomb);
+      const p = this.state.players.find((pp) => pp.id === pb.bomb.ownerId);
+      if (p && !p.passBombs.includes(pb.bomb.id)) p.passBombs.push(pb.bomb.id);
+    }
+  }
+
   private onSnapshot(snap: Snapshot) {
     applySnapshot(this.state, snap);
-    this.lastSnapAt = performance.now();
+    this.keepPredictedBombs(snap);
 
     // Reconciliation: start from the server's position and replay inputs it hasn't processed yet.
     for (const l of this.locals) {
@@ -141,7 +254,18 @@ export class OnlineController implements MatchView {
     const minAck = Math.min(...this.locals.map((l) => snap.ack[l.slot] ?? 0));
     this.pending = this.pending.filter((pd) => pd.seq > minAck);
 
+    const now = performance.now();
     for (const e of snap.ev) {
+      // Our predicted bombs already played their sound.
+      if (e.type === 'bombPlaced' && this.localIds.has(e.ownerId)) {
+        const key = `${e.x},${e.y}`;
+        const at = this.soundedCells.get(key);
+        if (at !== undefined && now - at < 2000) {
+          this.soundedCells.delete(key);
+          for (const fn of this.listeners) fn(e, this.state);
+          continue;
+        }
+      }
       const t = presentEvent(e, snap.t, () => {});
       if (t !== null) this.resultTimer = t;
       for (const fn of this.listeners) fn(e, this.state);

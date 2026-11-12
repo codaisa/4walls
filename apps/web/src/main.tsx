@@ -12,6 +12,7 @@ import { MainMenu } from './screens/MainMenu';
 import { startUiInput } from './ui/uiInput';
 import { ensureAccount } from './store/useAccount';
 import './store/useSettings';
+import { startPwa } from './pwa';
 
 // Every other screen loads on demand: the home screen comes up without the game code.
 const named = <K extends string>(load: () => Promise<Record<K, React.ComponentType>>, name: K) => lazy(() => load().then((m) => ({ default: m[name] })));
@@ -25,6 +26,8 @@ const Ranking = named(() => import('./screens/Ranking'), 'Ranking');
 const Shop = named(() => import('./screens/Shop'), 'Shop');
 const Settings = named(() => import('./screens/Settings'), 'Settings');
 
+// Installable app + fullscreen on phones.
+startPwa();
 // Keyboard and gamepads drive every screen through one input loop.
 startUiInput();
 // The player's guest account (progression) loads in the background.

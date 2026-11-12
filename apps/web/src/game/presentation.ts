@@ -17,6 +17,8 @@ export interface MatchView {
   update(dt: number): void;
   /** Per-player interpolation override (locally predicted players in online play). */
   alphaFor?(playerId: string): number;
+  /** Players controlled on this device (online); undefined = everyone is local. */
+  isLocal?(playerId: string): boolean;
 }
 
 export const RESULT_DELAY_MS = 1400;

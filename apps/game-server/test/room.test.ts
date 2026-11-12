@@ -204,6 +204,25 @@ describe('online rooms', () => {
     await Promise.all([a.room.leave(), b.room.leave()]);
   });
 
+  it('a burst of inputs after a network hiccup is caught up quickly (no lasting input lag)', async () => {
+    const a = await createRoom();
+    const b = await joinRoom(a.lobby!.code);
+    a.room.send('join_slot', { localId: 'kb1' });
+    b.room.send('join_slot', { localId: 'kb1' });
+    await waitFor(() => a.lobby!.slots.length === 2);
+    a.room.send('start', {});
+    await waitFor(() => lastSnap(a)?.ph === 'playing', 6000);
+    // 8 inputs arrive at once (a phone network burst); the queue must drain well before 8 ticks.
+    for (let i = 1; i <= 8; i++) a.room.send('input', { seq: i, i: [[0, -1, 0]] });
+    const t0 = lastSnap(a).t;
+    const caught = await waitFor(() => a.snaps.find((s) => s.ack[0] === 8));
+    expect(caught.t - t0).toBeLessThanOrEqual(7);
+    // Button presses are never lost while catching up.
+    for (let i = 9; i <= 16; i++) a.room.send('input', { seq: i, i: [[0, -1, i === 9 ? 1 : 0]] });
+    await waitFor(() => a.snaps.some((s) => s.ev.some((e) => e.type === 'bombPlaced')), 3000);
+    await Promise.all([a.room.leave(), b.room.leave()]);
+  });
+
   it('ignores malformed input payloads', async () => {
     const a = await createRoom();
     const b = await joinRoom(a.lobby!.code);

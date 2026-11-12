@@ -31,6 +31,12 @@ const MIN_PLAYERS: Record<OnlineMode, number> = { versus: 1, solo: 1, adventure:
 const OWN_WORLD: OnlineMode[] = ['adventure', 'bossrush'];
 /** Pending inputs per slot; beyond this the oldest are dropped (protects against flooding / lag build-up). */
 const MAX_QUEUED_INPUTS = 8;
+/**
+ * Inputs buffered beyond this are latency, not protection against jitter: when a client's queue
+ * stays longer, the server consumes two inputs in one tick (buttons are never lost) until it
+ * catches up, so a burst after a network hiccup doesn't leave that player lagging for good.
+ */
+const TARGET_QUEUED_INPUTS = 3;
 /** Per-connection message budget per second (inputs arrive at ~60/s). */
 const MAX_MESSAGES_PER_SEC = 150;
 
@@ -317,7 +323,16 @@ export class ArenaRoom extends Room {
     if (!g) return;
     const inputs: InputMap = {};
     for (const p of g.players) {
-      const next = this.queues.get(p.slot)?.shift();
+      const q = this.queues.get(p.slot);
+      let next = q?.shift();
+      if (next && q && q.length >= TARGET_QUEUED_INPUTS) {
+        const later = q.shift()!;
+        later.bomb ||= next.bomb;
+        later.ability ||= next.ability;
+        later.roll ||= next.roll;
+        later.jump ||= next.jump;
+        next = later;
+      }
       if (next) {
         this.held.set(p.slot, next.move);
         this.acks[p.slot] = next.seq;

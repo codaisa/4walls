@@ -87,7 +87,15 @@ class OnlineSession {
     useOnline.setState({ status: 'connecting', error: null });
     try {
       this.client ??= new Client(serverUrl());
-      const room = await open(this.client);
+      let room: Room;
+      try {
+        room = await open(this.client);
+      } catch (first) {
+        // Phones switch between Wi-Fi and mobile data all the time: one quick retry.
+        console.warn('[4walls] online connect retry', first);
+        await new Promise((r) => setTimeout(r, 700));
+        room = await open(this.client);
+      }
       this.attach(room);
       return true;
     } catch (err) {
@@ -99,6 +107,9 @@ class OnlineSession {
 
   private attach(room: Room) {
     this.room = room;
+    // Mobile: drops happen any time (screen lock, app switch, network handover), even right
+    // after joining. Keep retrying quickly for as long as the server holds our seat.
+    Object.assign(room.reconnection, { minUptime: 0, maxRetries: 40, minDelay: 250, maxDelay: 1500, maxEnqueuedMessages: 4 });
     useOnline.setState({ status: 'connected', sessionId: room.sessionId, lobby: null, start: null });
     room.onMessage('lobby', (lobby: LobbyInfo) => {
       useOnline.setState({ lobby, clockOffset: lobby.serverNow - Date.now() });

@@ -26,7 +26,7 @@ export const MAX_ROOM_SLOTS = 4;
 export const SERVER_TICK_HZ = 60;
 export const SNAPSHOT_EVERY_TICKS = 2; // 30 snapshots/s
 /** Seconds a dropped connection may take to come back before its players are removed. */
-export const RECONNECT_SECONDS = 20;
+export const RECONNECT_SECONDS = 45;
 export const AUTO_START_MS = 3000;
 export const RESULTS_MS = 6000;
 

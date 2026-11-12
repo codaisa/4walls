@@ -2,7 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { damp, lerp, useGame } from './context';
-import { useSettings } from '../store/useSettings';
+import { closeCamera, useSettings } from '../store/useSettings';
 
 const ELEVATION = THREE.MathUtils.degToRad(60);
 const target = new THREE.Vector3();
@@ -17,6 +17,11 @@ const MIN_FRAME = 1;
 /** Adventure camera window (half extents, in cells) around the players. */
 const FOLLOW_HALF_W = 7.5;
 const FOLLOW_HALF_D = 5.5;
+/** Phone camera window: about 11×7 cells around your own player(s), so characters read clearly. */
+const CLOSE_HALF_W = 5.5;
+const CLOSE_HALF_D = 3.6;
+/** The close camera may look past the arena edge so a player in a corner isn't under the HUD. */
+const CLOSE_EDGE = 2.2;
 
 /**
  * Shared camera: frames every living player with adaptive zoom (local multiplayer friendly),
@@ -34,7 +39,10 @@ export function CameraRig() {
     const s = controller.state;
     const { w, h } = s.grid;
     const alive = s.players.filter((p) => p.alive);
-    const focus = alive.length ? alive : s.players;
+    const close = closeCamera(useSettings.getState().camera);
+    // Phone: follow this device's players (spectate the survivors once they are out).
+    const mine = close && controller.isLocal ? alive.filter((p) => controller.isLocal!(p.id)) : alive;
+    const focus = mine.length ? mine : alive.length ? alive : s.players;
 
     // Region of interest: bounding box of players, grown to at least ~85% of the arena.
     let minX = Infinity;
@@ -51,17 +59,20 @@ export function CameraRig() {
     }
     if (!focus.length) minX = maxX = minZ = maxZ = 0;
     // Adventure: follow the players with a fixed gameplay-sized window (grows if co-op players spread).
-    const follow = !!s.adventure;
+    const follow = !!s.adventure || close;
+    const fw = close ? CLOSE_HALF_W : FOLLOW_HALF_W;
+    const fd = close ? CLOSE_HALF_D : FOLLOW_HALF_D;
     const halfW = follow
-      ? Math.min(w / 2, Math.max((maxX - minX) / 2, FOLLOW_HALF_W))
+      ? Math.min(w / 2, Math.max((maxX - minX) / 2, fw))
       : Math.min(w / 2, Math.max((maxX - minX) / 2, (w / 2) * MIN_FRAME));
     const halfD = follow
-      ? Math.min(h / 2, Math.max((maxZ - minZ) / 2, FOLLOW_HALF_D))
+      ? Math.min(h / 2, Math.max((maxZ - minZ) / 2, fd))
       : Math.min(h / 2, Math.max((maxZ - minZ) / 2, (h / 2) * MIN_FRAME));
     let cx = follow ? (minX + maxX) / 2 : lerp((minX + maxX) / 2, 0, 0.6);
     let cz = follow ? (minZ + maxZ) / 2 : lerp((minZ + maxZ) / 2, 0, 0.6);
-    cx = THREE.MathUtils.clamp(cx, -w / 2 + halfW, w / 2 - halfW);
-    cz = THREE.MathUtils.clamp(cz, -h / 2 + halfD, h / 2 - halfD);
+    const edge = close ? CLOSE_EDGE : 0;
+    cx = THREE.MathUtils.clamp(cx, Math.min(0, -w / 2 + halfW - edge), Math.max(0, w / 2 - halfW + edge));
+    cz = THREE.MathUtils.clamp(cz, Math.min(0, -h / 2 + halfD - edge), Math.max(0, h / 2 - halfD + edge));
 
     // Solve the distance that fits the region's corners (floor and wall-top height) on screen.
     probe.fov = camera.fov;

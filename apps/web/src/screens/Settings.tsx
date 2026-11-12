@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { sfx, type Bus } from '../audio/Sfx';
 import { credential, restoreAccount, useAccount } from '../store/useAccount';
-import { graphicsPreset, useSettings, type Quality } from '../store/useSettings';
+import { closeCamera, graphicsPreset, useSettings, type CameraMode, type Quality } from '../store/useSettings';
 import { useMenuNav } from '../ui/useMenuNav';
 
 const QUALITIES: { id: Quality; label: string; hint: string }[] = [
@@ -10,6 +10,11 @@ const QUALITIES: { id: Quality; label: string; hint: string }[] = [
   { id: 'low', label: 'Baixo', hint: 'Sem sombras nem brilho · mais FPS' },
   { id: 'medium', label: 'Médio', hint: 'Sombras e brilho leves' },
   { id: 'high', label: 'Alto', hint: 'Sombras nítidas · antisserrilhado' },
+];
+const CAMERAS: { id: CameraMode; label: string }[] = [
+  { id: 'auto', label: 'Auto' },
+  { id: 'close', label: 'Perto' },
+  { id: 'arena', label: 'Arena toda' },
 ];
 const BUSES: { id: Bus; label: string }[] = [
   { id: 'music', label: 'Música' },
@@ -94,6 +99,21 @@ export function Settings() {
             ))}
             <h2 className="mt-2 text-xs font-bold uppercase tracking-widest text-amber-100/60">Conforto</h2>
             <Toggle label="Tremor da câmera" on={s.shake} onChange={(v) => s.set({ shake: v })} testId="toggle-shake" />
+            <div className="flex items-center gap-2 rounded-xl bg-black/25 px-3 py-1.5 text-sm font-bold">
+              <span className="flex-1">Câmera</span>
+              {CAMERAS.map((c) => (
+                <button
+                  key={c.id}
+                  data-nav
+                  onClick={() => (sfx.ui(), s.set({ camera: c.id }))}
+                  className={`rounded-lg border-2 px-2 py-0.5 text-xs transition ${s.camera === c.id ? 'border-amber-300 bg-amber-300/20' : 'border-white/15 bg-black/30 hover:bg-white/10'}`}
+                  data-testid={`camera-${c.id}`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-white/50">{closeCamera(s.camera) ? 'Segue o seu personagem de perto.' : 'Mostra a arena inteira.'}</p>
           </section>
 
           <section className="hud-panel flex flex-col gap-2 px-3 py-3 md:col-span-2 [@media(max-height:500px)]:col-span-2">

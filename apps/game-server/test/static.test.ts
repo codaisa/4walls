@@ -15,7 +15,9 @@ describe('production web serving', () => {
     dir = mkdtempSync(join(tmpdir(), '4walls-web-'));
     mkdirSync(join(dir, 'assets'));
     writeFileSync(join(dir, 'index.html'), '<!doctype html><title>4Walls</title>');
-    writeFileSync(join(dir, 'assets', 'app-123.js'), 'console.log(1)');
+    writeFileSync(join(dir, 'assets', 'app-Ab3_x9Zq.js'), 'console.log(1)');
+    mkdirSync(join(dir, 'assets', 'blocks'));
+    writeFileSync(join(dir, 'assets', 'blocks', 'crate.png'), 'png');
     writeFileSync(join(dir, '..', 'secret.txt'), 'nope');
     server = createServer({ webDir: dir });
     await server.listen(PORT);
@@ -31,9 +33,16 @@ describe('production web serving', () => {
     expect(page.status).toBe(200);
     expect(page.headers.get('content-type')).toContain('text/html');
     expect(page.headers.get('cache-control')).toBe('no-cache');
-    const js = await fetch(`${URL}/assets/app-123.js`);
+    const js = await fetch(`${URL}/assets/app-Ab3_x9Zq.js`);
     expect(js.headers.get('content-type')).toContain('text/javascript');
     expect(js.headers.get('cache-control')).toContain('immutable');
+  });
+
+  it('art without a content hash is revalidated (304 when unchanged), never frozen for a year', async () => {
+    const art = await fetch(`${URL}/assets/blocks/crate.png`);
+    expect(art.headers.get('cache-control')).toBe('no-cache');
+    const again = await fetch(`${URL}/assets/blocks/crate.png`, { headers: { 'If-Modified-Since': art.headers.get('last-modified')! } });
+    expect(again.status).toBe(304);
   });
 
   it('client-side routes get the app shell; missing files 404', async () => {

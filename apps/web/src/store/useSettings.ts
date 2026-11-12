@@ -3,17 +3,20 @@ import { sfx, type Bus } from '../audio/Sfx';
 import { isTouchDevice } from '../input/InputManager';
 
 export type Quality = 'auto' | 'low' | 'medium' | 'high';
+/** "auto": close follow camera on phones, whole arena elsewhere. */
+export type CameraMode = 'auto' | 'close' | 'arena';
 
 export interface Settings {
   quality: Quality;
   /** Camera shake on explosions / boss hits (some players get motion sick). */
   shake: boolean;
   showFps: boolean;
+  camera: CameraMode;
   volumes: Record<Bus, number>;
 }
 
 const KEY = '4walls.settings';
-const DEFAULTS: Settings = { quality: 'auto', shake: true, showFps: false, volumes: { music: 0.5, sfx: 0.8, ui: 0.7 } };
+const DEFAULTS: Settings = { quality: 'auto', shake: true, showFps: false, camera: 'auto', volumes: { music: 0.5, sfx: 0.8, ui: 0.7 } };
 
 function load(): Settings {
   try {
@@ -24,6 +27,7 @@ function load(): Settings {
       quality: (['auto', 'low', 'medium', 'high'] as Quality[]).includes(raw.quality as Quality) ? (raw.quality as Quality) : 'auto',
       shake: raw.shake !== false,
       showFps: raw.showFps === true,
+      camera: (['auto', 'close', 'arena'] as CameraMode[]).includes(raw.camera as CameraMode) ? (raw.camera as CameraMode) : 'auto',
       volumes: {
         music: vol(raw.volumes?.music, DEFAULTS.volumes.music),
         sfx: vol(raw.volumes?.sfx, DEFAULTS.volumes.sfx),
@@ -44,9 +48,9 @@ export const useSettings = create<SettingsState>((set, get) => ({
   ...load(),
   set: (p) => {
     set(p);
-    const { quality, shake, showFps, volumes } = get();
+    const { quality, shake, showFps, camera, volumes } = get();
     try {
-      localStorage.setItem(KEY, JSON.stringify({ quality, shake, showFps, volumes }));
+      localStorage.setItem(KEY, JSON.stringify({ quality, shake, showFps, camera, volumes }));
     } catch {
       /* private mode: settings last for this session */
     }
@@ -79,4 +83,13 @@ const PRESETS: Record<Exclude<Quality, 'auto'>, GraphicsPreset> = {
 /** The preset in effect ("auto": phones and tablets get medium, computers high). */
 export function graphicsPreset(q: Quality): GraphicsPreset {
   return PRESETS[q === 'auto' ? (isTouchDevice() ? 'medium' : 'high') : q];
+}
+
+/** Small landscape screens (phones): the whole arena would be tiny, so the camera follows you. */
+export function isCompactScreen() {
+  return Math.min(window.innerWidth, window.innerHeight) < 560 && isTouchDevice();
+}
+
+export function closeCamera(mode: CameraMode) {
+  return mode === 'close' || (mode === 'auto' && isCompactScreen());
 }
