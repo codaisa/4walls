@@ -17,6 +17,7 @@ import { isTouchDevice } from '../input/InputManager';
 import { TouchControls } from '../ui/TouchControls';
 import { useHud } from '../store/useHud';
 import { myLoadout } from '../store/useAccount';
+import { clearExpedition, loadExpedition, saveExpedition } from '../game/expeditionSave';
 
 interface MatchPlan {
   mode: LocalMode;
@@ -37,11 +38,18 @@ function quickSolo(): MatchPlan {
   };
 }
 
+/** Task 3: the seed and save of an expedition resumed on this device (else a new one). */
+function expeditionStart(resume: boolean, clear = false) {
+  const saved = resume ? loadExpedition() : null;
+  if (!resume && clear) clearExpedition();
+  return saved ? { seed: saved.seed, expedition: saved.save } : { seed: newSeed() };
+}
+
 /** Adventure quick start from the main menu: one player, fog-covered regions to unlock. */
-function quickAdventure(): MatchPlan {
+function quickAdventure(resume = false): MatchPlan {
   return {
     mode: 'adventure',
-    config: { mode: 'adventure', seed: newSeed(), ...arenaConfig('caldeira'), events: false, players: [{ id: 'p1', slot: 0, characterId: 'bombito', name: 'Você', loadout: myLoadout() }] },
+    config: { mode: 'adventure', ...expeditionStart(resume), ...arenaConfig('caldeira'), events: false, players: [{ id: 'p1', slot: 0, characterId: 'bombito', name: 'Você', loadout: myLoadout() }] },
     bindings: [{ slot: 0, devices: ['kb1', 'kb2', 'gp0', 'touch'] }],
   };
 }
@@ -57,13 +65,13 @@ function quickBossRush(): MatchPlan {
 
 /** Match built from the local lobby roster: one device per player. */
 function fromLobby(): MatchPlan | null {
-  const { mode, arena, players } = useMatchSetup.getState();
+  const { mode, arena, players, resume } = useMatchSetup.getState();
   if (players.length === 0) return null;
   return {
     mode,
     config: {
       mode,
-      seed: newSeed(),
+      ...(mode === 'adventure' ? expeditionStart(resume, true) : { seed: newSeed() }),
       ...arenaConfig(mode === 'adventure' || mode === 'bossrush' ? 'caldeira' : arena),
       ...(mode === 'adventure' ? { events: false } : {}),
       // The first player is the profile owner: they wear their cosmetics.
@@ -80,18 +88,20 @@ export function GameScreen() {
   const bossFlow = params.get('mode') === 'bossrush';
   const navigate = useNavigate();
   const makePlan = useCallback(
-    () => (fromLobbyFlow ? fromLobby() : null) ?? (adventureFlow ? quickAdventure() : bossFlow ? quickBossRush() : quickSolo()),
-    [fromLobbyFlow, adventureFlow, bossFlow],
+    () => (fromLobbyFlow ? fromLobby() : null) ?? (adventureFlow ? quickAdventure(params.get('resume') === '1') : bossFlow ? quickBossRush() : quickSolo()),
+    [fromLobbyFlow, adventureFlow, bossFlow, params],
   );
   const [plan, setPlan] = useState(makePlan);
   const [controller, setController] = useState(() => new GameController(plan.config, inputManager, plan.bindings));
 
   const restart = useCallback(() => {
     sfx.ui();
-    const next = makePlan();
+    // An Adventure restart picks up the saved expedition if there is one (never a fresh wipe).
+    if (adventureFlow || fromLobbyFlow) useMatchSetup.getState().setResume(true);
+    const next = adventureFlow && !fromLobbyFlow ? quickAdventure(true) : makePlan();
     setPlan(next);
     setController(new GameController(next.config, inputManager, next.bindings));
-  }, [makePlan]);
+  }, [makePlan, adventureFlow, fromLobbyFlow]);
 
   const exit = useCallback(() => {
     sfx.ui();
@@ -114,8 +124,16 @@ export function GameScreen() {
     };
     // Dev-only hook for automated browser tests and debugging.
     if (import.meta.env.DEV) (window as unknown as { __game?: GameController }).__game = controller;
+    // Task 3: every campfire saves the expedition on this device; ending it clears the save.
+    const offSave = controller.state.adventure
+      ? controller.on((e, s) => {
+          if (e.type === 'campLit') saveExpedition(s);
+          else if (e.type === 'expeditionEnded') clearExpedition();
+        })
+      : () => {};
     const unmount = controller.mount();
     return () => {
+      offSave();
       unmount();
       controller.dispose();
     };
@@ -124,7 +142,14 @@ export function GameScreen() {
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#1a0d10]">
       <GameScene key={controller.state.config.seed} controller={controller} />
-      <Hud mode={plan.mode} onResume={() => controller.setPaused(false)} onRestart={restart} onExit={exit} exitLabel={fromLobbyFlow ? 'Voltar ao lobby' : 'Menu principal'} />
+      <Hud
+        mode={plan.mode}
+        onResume={() => controller.setPaused(false)}
+        onRestart={restart}
+        onExit={exit}
+        exitLabel={fromLobbyFlow ? 'Voltar ao lobby' : 'Menu principal'}
+        onEndExpedition={plan.mode === 'adventure' ? () => controller.endExpedition() : undefined}
+      />
       <HeroReveal key={`reveal-${controller.state.config.seed}`} controller={controller} />
       {controller.state.adventure && (
         <>

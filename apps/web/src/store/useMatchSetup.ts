@@ -28,6 +28,9 @@ interface MatchSetupState {
   setMode: (m: LocalMode) => void;
   setArena: (a: ArenaId) => void;
   setPlayers: (p: LobbyPlayer[]) => void;
+  /** Adventure: resume the expedition saved on this device (when there is one). */
+  resume: boolean;
+  setResume: (r: boolean) => void;
 }
 
 /** Local lobby result, read by the game screen. Lives in memory only — no account or server. */
@@ -38,4 +41,6 @@ export const useMatchSetup = create<MatchSetupState>((set) => ({
   setMode: (mode) => set({ mode }),
   setArena: (arena) => set({ arena }),
   setPlayers: (players) => set({ players }),
+  resume: true,
+  setResume: (resume) => set({ resume }),
 }));

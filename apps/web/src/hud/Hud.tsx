@@ -17,9 +17,11 @@ interface HudProps {
   mode: ModeId;
   /** Shown on the result screen instead of "play again" (online). */
   resultNote?: string;
+  /** Task 3: end the expedition at a lit campfire. */
+  onEndExpedition?: () => void;
 }
 
-export function Hud({ onResume, onRestart, onExit, exitLabel, mode, resultNote }: HudProps) {
+export function Hud({ onResume, onRestart, onExit, exitLabel, mode, resultNote, onEndExpedition }: HudProps) {
   const { phase, countdown, timeLeft, players, enemiesAlive, enemiesTotal, paused, showResult, result, banner, missing } = useHud();
   const mm = Math.floor(timeLeft / 60);
   const ss = String(timeLeft % 60).padStart(2, '0');
@@ -54,6 +56,7 @@ export function Hud({ onResume, onRestart, onExit, exitLabel, mode, resultNote }
       </div>
 
       {(mode === 'bossrush' || mode === 'adventure') && <BossBar />}
+      {mode === 'adventure' && phase === 'playing' && onEndExpedition && <CampButton onEnd={onEndExpedition} />}
 
       {phase === 'countdown' && (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -84,7 +87,8 @@ export function Hud({ onResume, onRestart, onExit, exitLabel, mode, resultNote }
           <MenuButton onClick={onResume} primary disabled={missing.length > 0}>
             Continuar
           </MenuButton>
-          {onRestart && <MenuButton onClick={onRestart}>Reiniciar</MenuButton>}
+          {onRestart && mode !== 'adventure' && <MenuButton onClick={onRestart}>Reiniciar</MenuButton>}
+          {onEndExpedition && <PauseCampEnd onEnd={onEndExpedition} onResume={onResume} />}
           <MenuButton onClick={onExit}>{exitLabel}</MenuButton>
           <AudioToggles />
           {!TOUCH && <ControlsToggle />}
@@ -119,6 +123,57 @@ export function Hud({ onResume, onRestart, onExit, exitLabel, mode, resultNote }
         </Overlay>
       )}
     </div>
+  );
+}
+
+/**
+ * Task 3: at a lit campfire, end the expedition and keep everything carried. Two taps (the first
+ * one asks), so it never ends by accident.
+ */
+function CampButton({ onEnd }: { onEnd: () => void }) {
+  const near = useHud((s) => !!s.adventure?.campNear);
+  const coins = useHud((s) => s.adventure?.coins ?? 0);
+  const [ask, setAsk] = useState(false);
+  useEffect(() => {
+    if (!ask) return;
+    const t = window.setTimeout(() => setAsk(false), 6000);
+    return () => window.clearTimeout(t);
+  }, [ask]);
+  useEffect(() => {
+    if (!near) setAsk(false);
+  }, [near]);
+  if (!near) return null;
+  return (
+    <div className="pointer-events-auto absolute bottom-3 left-1/2 -translate-x-1/2 [@media(max-height:500px)]:bottom-1.5">
+      <button
+        className={`menu-btn !min-w-0 !px-4 !py-1.5 !text-base ${ask ? 'menu-btn-primary animate-pulse' : ''}`}
+        data-testid="camp-end"
+        onClick={() => {
+          sfx.ui();
+          if (ask) onEnd();
+          else setAsk(true);
+        }}
+      >
+        {ask ? `Encerrar e guardar 🪙 ${coins}?` : '🏕️ Encerrar expedição'}
+      </button>
+    </div>
+  );
+}
+
+/** The same choice in the pause menu (gamepad / keyboard). */
+function PauseCampEnd({ onEnd, onResume }: { onEnd: () => void; onResume: () => void }) {
+  const near = useHud((s) => !!s.adventure?.campNear);
+  const coins = useHud((s) => s.adventure?.coins ?? 0);
+  if (!near) return null;
+  return (
+    <MenuButton
+      onClick={() => {
+        onEnd();
+        onResume();
+      }}
+    >
+      🏕️ Encerrar expedição (🪙 {coins})
+    </MenuButton>
   );
 }
 
@@ -277,6 +332,8 @@ function AdventurePanel() {
   if (fighting && TOUCH) return null;
   const objective = a.gateOpen ? (
     <span className="text-violet-200">✦ Portão aberto: siga em frente</span>
+  ) : a.objective === 'camp' ? (
+    <span className="text-amber-200">🔥 Reúnam-se na fogueira</span>
   ) : a.objective === 'boss' ? (
     <span className="text-red-200">☠️ Derrote o guardião do arco</span>
   ) : a.objective === 'seals' ? (
@@ -296,7 +353,7 @@ function AdventurePanel() {
   return (
     <div className="hud-panel min-w-56 px-4 py-1.5 text-center [@media(max-height:500px)]:min-w-40 [@media(max-height:500px)]:px-3 [@media(max-height:500px)]:py-0.5" data-testid="adventure-panel">
       <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">
-        Região {a.index} · {a.chapter}
+        Região {a.index} · {a.chapter} · <span className="text-amber-200 opacity-100" data-testid="expedition-coins">🪙 {a.coins}</span>
       </div>
       <div className="font-display text-2xl leading-tight [@media(max-height:500px)]:text-base">{a.regionName}</div>
       <div className="flex items-center justify-center gap-2 text-sm font-bold [@media(max-height:500px)]:text-xs" data-testid="adventure-objective">
@@ -306,6 +363,11 @@ function AdventurePanel() {
         <div className={`text-[11px] font-bold ${a.braziers.lit === a.braziers.goal ? 'text-emerald-300' : 'text-orange-200/90'}`} data-testid="mission">
           🔥 Braseiros {a.braziers.lit}/{a.braziers.goal}
           {a.braziers.lit === a.braziers.goal ? ' · tesouro revelado!' : ' (opcional)'}
+        </div>
+      )}
+      {a.fallIn !== null && (
+        <div className="mt-0.5 animate-pulse text-[11px] font-black uppercase tracking-wider text-amber-200" data-testid="falling-back">
+          🏕️ Voltando ao acampamento em {a.fallIn}s
         </div>
       )}
       {a.closingIn !== null && (
@@ -423,6 +485,10 @@ function ResultTitle({ outcome, winner, reason, team }: { outcome: string; winne
   if (outcome === 'victory' && reason === 'bossesDefeated') {
     title = 'CHEFÕES DERROTADOS!';
     sub = 'Golem e Guardião caíram. A Caldeira e a Floresta estão livres.';
+  } else if (outcome === 'victory' && reason === 'expeditionEnded' && adventure) {
+    title = 'EXPEDIÇÃO ENCERRADA';
+    sub = `Vocês descansaram na região ${adventure.index} e guardaram 🪙 ${adventure.coins}.`;
+    color = '#ffcf6a';
   } else if (outcome === 'victory' && reason === 'allRegionsCleared') {
     title = 'AVENTURA CONCLUÍDA!';
     sub = 'Todas as regiões foram libertadas.';

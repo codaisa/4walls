@@ -37,6 +37,8 @@ export interface PlayerInput {
   roll?: boolean;
   /** Jump: hops over a bomb (or a gap) and dodges ground fire while airborne. */
   jump?: boolean;
+  /** Adventure: end the expedition at a lit campfire (keeps everything carried). */
+  campEnd?: boolean;
 }
 export const EMPTY_INPUT: PlayerInput = { move: null, bomb: false, ability: false };
 
@@ -484,6 +486,35 @@ export interface PlayerSlotConfig {
   loadout?: Loadout;
 }
 
+/** A hero as it was at the last campfire (restored when the group falls back to it). */
+export interface PlayerSnap {
+  slot: number;
+  characterId: string;
+  speed: number;
+  maxBombs: number;
+  range: number;
+  speedLevel: number;
+  shield: number;
+  canKick: boolean;
+  hasBoots: boolean;
+  hasRemote: boolean;
+  canThrow: boolean;
+  special: { kind: 'fire' | 'ice'; charges: number } | null;
+}
+
+/** Task 3: an Adventure expedition's progress (what a campfire saves). */
+export interface ExpeditionSave {
+  /** Region of the last campfire lit (0 = the start). */
+  camp: number;
+  /** Team purse carried (half is lost when the whole group falls). */
+  coins: number;
+  snapshot: PlayerSnap[];
+  /** Times the group fell back to a camp, camps lit, furthest region reached. */
+  returns: number;
+  camps: number;
+  best: number;
+}
+
 export interface GameConfig {
   mode: ModeId;
   seed: number;
@@ -500,4 +531,6 @@ export interface GameConfig {
   bosses?: BossId[];
   /** Boss Rush with the classic (pre-B5) Golem and Guardian (tests and regressions). */
   classicBosses?: boolean;
+  /** Adventure: resume an expedition from its last campfire. */
+  expedition?: ExpeditionSave;
 }

@@ -23,6 +23,13 @@ function complete(s: GameState, id: number) {
     for (const e of s.enemies) if (e.regionId === id) e.alive = false;
   } else if (r.objective.kind === 'seals' || r.objective.kind === 'purify') {
     for (const p of s.adventure!.props) if (p.region === id && (p.kind === 'seal' || p.kind === 'root')) p.state = 'broken';
+  } else if (r.objective.kind === 'camp') {
+    // Everyone gathers at the fire (it lights and saves on the next step).
+    const fire = s.adventure!.props.find((p) => p.region === id && p.kind === 'campfire')!;
+    for (const p of s.players.filter((pp) => pp.alive)) {
+      p.x = p.px = fire.x - 2;
+      p.y = p.py = fire.y;
+    }
   } else if (r.objective.kind === 'boss') {
     // The chamber's boss falls (its own fight is covered in boss tests).
     r.objective.progress = r.objective.goal;
@@ -99,11 +106,11 @@ describe('endless adventure: world', () => {
   });
 
   it('scripted introduction, then seeded names and objectives', () => {
-    expect([0, 1, 2, 3, 4, 5].map((i) => regionInfo(7, i).name)).toEqual(['Caldeira Rasa', 'Campos de Cinza', 'Rio de Magma', 'Ponte de Obsidiana', 'Câmara do Golem', 'Bosque Chamuscado']);
+    expect([0, 1, 2, 3, 4, 5, 6].map((i) => regionInfo(7, i).name)).toEqual(['Caldeira Rasa', 'Campos de Cinza', 'Rio de Magma', 'Ponte de Obsidiana', 'Câmara do Golem', 'Pouso da Fogueira', 'Bosque Chamuscado']);
     expect(regionInfo(7, 1).objective).toBe('key');
     const later = Array.from({ length: 40 }, (_, i) => regionInfo(7, 5 + i));
     expect(new Set(later.map((r) => r.name)).size).toBeGreaterThan(15);
-    expect(new Set(later.map((r) => r.objective))).toEqual(new Set(['clear', 'key', 'lever', 'seals', 'purify', 'boss']));
+    expect(new Set(later.map((r) => r.objective))).toEqual(new Set(['clear', 'key', 'lever', 'seals', 'purify', 'boss', 'camp']));
     expect(regionInfo(7, 12)).toEqual(regionInfo(7, 12));
   });
 
@@ -164,10 +171,14 @@ describe('endless adventure: the journey', () => {
     }
     expect(s.adventure!.depth).toBe(30);
     expect(s.grid.x0).toBeGreaterThan(0);
-    // Only a full wipe ends it.
+    // A full wipe no longer ends it: the group wakes at the last camp (Task 3).
     s.players[0].alive = false;
-    step(s, {});
-    expect(s.result).toMatchObject({ outcome: 'defeat', reason: 'allPlayersDown' });
+    for (let i = 0; i < 60 * 3; i++) step(s, {});
+    expect(s.result).toBeNull();
+    expect(s.players[0].alive).toBe(true);
+    expect(s.expedition!.camp).toBeGreaterThan(0);
+    expect(regionAt(s, s.players[0].x, s.players[0].y)).toBe(s.expedition!.camp);
+    expect(regionInfo(s.config.seed, s.expedition!.camp).objective).toBe('camp');
   });
 
   it('every generated region is solvable: exit, key, cage and chests are reachable from the arrival point', () => {
@@ -181,7 +192,7 @@ describe('endless adventure: the journey', () => {
         const gateNeighbor = DIRS.map((d) => ({ x: g.x + DIR_VEC[d].x, y: g.y + DIR_VEC[d].y })).some((c) => inBounds(s.grid, c.x, c.y) && seen.has(cellIndex(s.grid, c.x, c.y)) && regionAt(s, c.x, c.y) === id);
         expect(gateNeighbor, `seed ${seed} region ${id}: exit`).toBe(true);
         const isletOf = (pp: { x: number; y: number }) => DIRS.filter((d) => getCell(s.grid, pp.x + DIR_VEC[d].x, pp.y + DIR_VEC[d].y) === Cell.Lava).length >= 2;
-        for (const p of s.adventure!.props.filter((pp) => pp.region === id && !['brazier', 'lever', 'bridge', 'platform', 'seal', 'root', 'bramble', 'grass', 'totem'].includes(pp.kind) && !isletOf(pp))) {
+        for (const p of s.adventure!.props.filter((pp) => pp.region === id && !['brazier', 'lever', 'bridge', 'platform', 'seal', 'root', 'bramble', 'grass', 'totem', 'campfire'].includes(pp.kind) && !isletOf(pp))) {
           // Secret chests sit behind a cracked wall: open it for the check.
           for (const d of DIRS) {
             const x = p.x + DIR_VEC[d].x;
@@ -191,7 +202,7 @@ describe('endless adventure: the journey', () => {
           expect(reach(s, start).has(cellIndex(s.grid, p.x, p.y)), `seed ${seed} region ${id}: ${p.kind}`).toBe(true);
         }
         // Braziers and levers stand like pillars: one of their sides must be reachable.
-        for (const b of s.adventure!.props.filter((pp) => pp.region === id && ['brazier', 'lever', 'seal', 'root', 'totem'].includes(pp.kind))) {
+        for (const b of s.adventure!.props.filter((pp) => pp.region === id && ['brazier', 'lever', 'seal', 'root', 'totem', 'campfire'].includes(pp.kind))) {
           const side = DIRS.some((d) => {
             const x = b.x + DIR_VEC[d].x;
             const y = b.y + DIR_VEC[d].y;
@@ -532,11 +543,11 @@ describe('endless adventure: M4 obsidian and forest', () => {
   });
 
   it('"A corrupção": three corrupted roots; brambles grow back until the last root is purified', () => {
-    const s = reach(5);
-    expect(region(s, 5).objective.kind).toBe('purify');
-    const roots = props(s, 5, 'root');
+    const s = reach(6);
+    expect(region(s, 6).objective.kind).toBe('purify');
+    const roots = props(s, 6, 'root');
     expect(roots).toHaveLength(3);
-    const bramble = props(s, 5, 'bramble')[0];
+    const bramble = props(s, 6, 'bramble')[0];
     expect(bramble).toBeTruthy();
     for (const p of s.players) {
       p.x = p.px = roots[0].x;
@@ -565,8 +576,8 @@ describe('endless adventure: M4 obsidian and forest', () => {
   });
 
   it('dry grass catches fire, spreads tuft to tuft, kills, and burns out', () => {
-    const s = reach(5);
-    const tufts = props(s, 5, 'grass');
+    const s = reach(6);
+    const tufts = props(s, 6, 'grass');
     expect(tufts.length).toBeGreaterThanOrEqual(2);
     const a = tufts.find((t) => tufts.some((u) => Math.abs(u.x - t.x) + Math.abs(u.y - t.y) === 1))!;
     const b = tufts.find((u) => Math.abs(u.x - a.x) + Math.abs(u.y - a.y) === 1)!;
@@ -612,7 +623,7 @@ describe('endless adventure: M5 arcs, variants and shapes', () => {
       for (let k = 0; k < 30; k++) {
         const a = arcInfo(seed, k);
         expect(a.length).toBeGreaterThanOrEqual(5);
-        expect(a.length).toBeLessThanOrEqual(7);
+        expect(a.length).toBeLessThanOrEqual(k ? 8 : 5);
         expect(arcInfo(seed, k + 1).start).toBe(a.start + a.length);
         expect(a.biome).toBe(k % 2 ? 'forest' : 'volcanic');
         for (let i = a.start; i < a.start + a.length; i++) {
@@ -1116,7 +1127,7 @@ describe('endless adventure: B4 elites and the Mimic Chest', () => {
     for (let id = 0; id < 40; id++) {
       const info = regionInfo(seed, id);
       const el = elitesFor(seed, id);
-      if (info.arc < 1 || info.objective === 'boss' || id < 6) expect(el).toEqual([]);
+      if (info.arc < 1 || info.objective === 'boss' || info.objective === 'camp' || id < 7) expect(el).toEqual([]);
       else {
         expect(el.length).toBeGreaterThanOrEqual(1);
         expect(el.length).toBeLessThanOrEqual(2);
@@ -1295,5 +1306,146 @@ describe('endless adventure: B5 the boss comes back with the arc variant', () =>
     for (let i = 0; i < 120 && !s.boss; i++) step(s, {});
     expect(s.boss).toMatchObject({ regionId: id, mod: info.variant, reworked: true });
     expect(s.boss!.level).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('Task 3 · A1: camps, the expedition purse and falling back', () => {
+  const SEED = 3;
+  /** Walk a group up to region `id` (every region before it completed). */
+  const to = (id: number, players = 2) => {
+    const s = make(SEED, players);
+    for (let k = 0; k < id; k++) {
+      complete(s, k);
+      walkThrough(s, k);
+    }
+    return s;
+  };
+  const fire = (s: GameState, id: number) => s.adventure!.props.find((p) => p.region === id && p.kind === 'campfire')!;
+  const gather = (s: GameState, id: number) => {
+    const f = fire(s, id);
+    s.players.forEach((p, i) => {
+      if (!p.alive) return;
+      p.x = p.px = f.x + (i % 2 ? 2 : -2);
+      p.y = p.py = f.y;
+    });
+  };
+  const chunkCells = (s: GameState, id: number) => {
+    const r = s.adventure!.regions.find((x) => x.id === id)!;
+    const out: number[] = [];
+    for (let y = r.cy * ADVENTURE.chunkH; y < (r.cy + 1) * ADVENTURE.chunkH; y++)
+      for (let x = r.cx * ADVENTURE.chunkW; x < (r.cx + 1) * ADVENTURE.chunkW; x++) out.push(getCell(s.grid, x, y));
+    return out;
+  };
+
+  it('every arc after the first opens with a camp: a quiet clearing with a fire, the way on sealed', () => {
+    for (let k = 1; k < 8; k++) {
+      const a = arcInfo(SEED, k);
+      expect(regionInfo(SEED, a.start).objective).toBe('camp');
+      expect(regionInfo(SEED, a.start - 1).objective).toBe('boss');
+    }
+    expect(regionInfo(SEED, 5)).toMatchObject({ name: 'Pouso da Fogueira', objective: 'camp' });
+    const s = to(5);
+    expect(s.enemies.filter((e) => e.alive && e.regionId === 5)).toHaveLength(0);
+    expect(fire(s, 5).state).toBe('unlit');
+    expect(exitGate(s, 5).open).toBe(false);
+  });
+
+  it('the whole group at the fire lights it: saved, the way on opens and the fallen come back', () => {
+    const s = to(5);
+    s.players[1].alive = false;
+    s.players[0].maxBombs = 4;
+    gather(s, 5);
+    step(s, {});
+    const ev = s.events;
+    expect(ev.some((e) => e.type === 'campLit')).toBe(true);
+    expect(fire(s, 5).state).toBe('lit');
+    expect(s.expedition).toMatchObject({ camp: 5, camps: 1 });
+    expect(s.expedition!.snapshot.find((q) => q.slot === 0)!.maxBombs).toBe(4);
+    expect(exitGate(s, 5).open).toBe(true);
+    expect(s.players[1].alive).toBe(true);
+  });
+
+  it('regions crossed and chests fill the purse', () => {
+    const s = make(SEED, 1);
+    expect(s.expedition!.coins).toBe(0);
+    complete(s, 0);
+    expect(s.expedition!.coins).toBeGreaterThan(0);
+    const before = s.expedition!.coins;
+    const chest = s.adventure!.props.find((p) => p.kind === 'chest' && p.state === 'closed' && !p.mimic);
+    if (chest) {
+      s.players[0].x = s.players[0].px = chest.x;
+      s.players[0].y = s.players[0].py = chest.y;
+      step(s, {});
+      expect(s.expedition!.coins).toBeGreaterThan(before);
+    }
+  });
+
+  it('the whole group falls: a moment later they wake at the camp, same world, half the purse, heroes as saved', () => {
+    const s = to(5);
+    gather(s, 5);
+    step(s, {});
+    const saved = s.expedition!.snapshot.map((q) => ({ ...q }));
+    const campCells = chunkCells(s, 5);
+    complete(s, 5);
+    walkThrough(s, 5);
+    complete(s, 6);
+    walkThrough(s, 6);
+    s.expedition!.coins = 101;
+    for (const p of s.players) {
+      p.maxBombs = 8;
+      p.alive = false;
+    }
+    step(s, {});
+    expect(s.events.some((e) => e.type === 'groupFell')).toBe(true);
+    expect(s.result).toBeNull();
+    for (let i = 0; i < 60 * 3; i++) step(s, {});
+    expect(s.result).toBeNull();
+    expect(s.expedition).toMatchObject({ coins: 51, returns: 1, camp: 5 });
+    for (const p of s.players) {
+      expect(p.alive).toBe(true);
+      expect(regionAt(s, p.x, p.y)).toBe(5);
+      expect(p.maxBombs).toBe(saved.find((q) => q.slot === p.slot)!.maxBombs);
+    }
+    // Same camp, from the seed: the grid matches what it was (apart from the doorway sealed behind).
+    const now = chunkCells(s, 5);
+    const diff = now.filter((c, i) => c !== campCells[i]).length;
+    expect(diff).toBeLessThanOrEqual(2);
+    // They gather again and go on.
+    gather(s, 5);
+    step(s, {});
+    expect(fire(s, 5).state).toBe('lit');
+    expect(exitGate(s, 5).open).toBe(true);
+  });
+
+  it('ending the expedition at a lit fire keeps the purse (only next to the fire)', () => {
+    const s = to(5, 1);
+    gather(s, 5);
+    step(s, {});
+    s.expedition!.coins = 77;
+    const p = s.players[0];
+    p.x = p.px = fire(s, 5).x + 5;
+    step(s, { p1: { move: null, bomb: false, ability: false, campEnd: true } });
+    expect(s.result).toBeNull();
+    p.x = p.px = fire(s, 5).x - 2;
+    step(s, { p1: { move: null, bomb: false, ability: false, campEnd: true } });
+    expect(s.result).toMatchObject({ outcome: 'victory', reason: 'expeditionEnded' });
+    expect(s.expedition).toMatchObject({ ended: true, coins: 77 });
+  });
+
+  it('a saved expedition resumes at its camp: the same world, the purse and the heroes as saved', () => {
+    const a = to(5);
+    gather(a, 5);
+    step(a, {});
+    const save = { ...a.expedition!, coins: 40 };
+    save.snapshot = save.snapshot.map((q) => ({ ...q, range: 5 }));
+    const b = createGame({ ...a.config, expedition: save });
+    expect(b.adventure!.regions.map((r) => r.id)).toEqual([5, 6]);
+    expect(b.expedition).toMatchObject({ camp: 5, coins: 40 });
+    for (const p of b.players) {
+      expect(regionAt(b, p.x, p.y)).toBe(5);
+      expect(p.range).toBe(5);
+    }
+    // Region 6 is the very same island.
+    expect(chunkCells(b, 6)).toEqual(chunkCells(a, 6));
   });
 });

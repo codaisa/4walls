@@ -74,7 +74,7 @@ function OnlineMatch({ start, locals, mode, onLeave, reconnecting }: { start: St
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#1a0d10]">
       <GameScene controller={controller} />
-      <Hud mode={mode} onResume={() => controller.toggleMenu(false)} onExit={onLeave} exitLabel="Sair da sala" resultNote="Voltando à sala…" />
+      <Hud mode={mode} onResume={() => controller.toggleMenu(false)} onExit={onLeave} exitLabel="Sair da sala" resultNote="Voltando à sala…" onEndExpedition={mode === 'adventure' ? () => controller.endExpedition() : undefined} />
       <HeroReveal controller={controller} />
       {controller.state.adventure && (
         <>

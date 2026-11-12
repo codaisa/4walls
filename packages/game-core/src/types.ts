@@ -1,4 +1,4 @@
-import type { AbilityId, BiomeId, BombKind, BossId, Dir, GameConfig, GameEventId, ModeId, PlayerInput, PowerupType } from '@4walls/shared';
+import type { AbilityId, BiomeId, BombKind, BossId, Dir, GameConfig, GameEventId, ModeId, PlayerInput, PowerupType, ExpeditionSave } from '@4walls/shared';
 
 export interface Grid {
   w: number;
@@ -182,7 +182,7 @@ export interface EnemyState {
   speedMul?: number;
 }
 
-export type RegionObjectiveKind = 'clear' | 'key' | 'lever' | 'seals' | 'purify' | 'boss';
+export type RegionObjectiveKind = 'clear' | 'key' | 'lever' | 'seals' | 'purify' | 'boss' | 'camp';
 
 /** What opens a region's exit gate. */
 export interface RegionObjective {
@@ -236,7 +236,7 @@ export interface GateState {
   kind?: 'exit' | 'back';
 }
 
-export type PropKind = 'chest' | 'key' | 'brazier' | 'vent' | 'bridge' | 'platform' | 'geyser' | 'lever' | 'seal' | 'root' | 'bramble' | 'grass' | 'totem';
+export type PropKind = 'chest' | 'key' | 'brazier' | 'vent' | 'bridge' | 'platform' | 'geyser' | 'lever' | 'seal' | 'root' | 'bramble' | 'grass' | 'totem' | 'campfire';
 
 /**
  * Adventure props. Chest: opened by walking onto it or by a blast, drops loot (rare = secret).
@@ -489,16 +489,29 @@ export type GameEvent =
   | { type: 'bossDefeated'; boss: BossId; x: number; y: number; level?: number; tier?: number; goals?: BossGoals }
   /** B5: variant twists. */
   | { type: 'mistStrike'; x: number; y: number }
+  /** Task 3: camps and the expedition purse. */
+  | { type: 'campLit'; region: number; x: number; y: number; again: boolean }
+  | { type: 'coins'; amount: number; total: number; x: number; y: number }
+  | { type: 'groupFell'; atTick: number; camp: number }
+  | { type: 'campReturn'; region: number; lost: number }
+  | { type: 'expeditionEnded'; byId: string; coins: number }
   | { type: 'motesSummoned'; cells: { x: number; y: number }[] }
   | { type: 'gameOver'; result: GameResult };
 
 export interface GameResult {
   outcome: 'victory' | 'defeat' | 'winner' | 'draw';
   winnerIds: string[];
-  reason: 'lastStanding' | 'allEnemiesDown' | 'allPlayersDown' | 'timeUp' | 'allRegionsCleared' | 'bossesDefeated';
+  reason: 'lastStanding' | 'allEnemiesDown' | 'allPlayersDown' | 'timeUp' | 'allRegionsCleared' | 'bossesDefeated' | 'expeditionEnded';
 }
 
 export type Phase = 'countdown' | 'playing' | 'ended';
+
+export interface ExpeditionState extends ExpeditionSave {
+  /** The whole group is down: they wake at the last camp at this tick. */
+  fallAt?: number;
+  /** Ended at a campfire (the match is over, everything carried is kept). */
+  ended?: boolean;
+}
 
 export interface GameState {
   config: GameConfig;
@@ -519,6 +532,8 @@ export interface GameState {
   event: ArenaEventState | null;
   /** Present only in adventure mode. */
   adventure: AdventureState | null;
+  /** Task 3: the expedition (Adventure only): purse, last camp, the heroes as they were there. */
+  expedition?: ExpeditionState | null;
   /** Boss Rush: the boss currently in the arena (null between bosses). */
   boss: BossState | null;
   /** Boss Rush: bosses still to come, and how many were defeated. */

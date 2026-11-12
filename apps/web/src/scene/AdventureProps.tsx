@@ -28,7 +28,7 @@ export function AdventureProps() {
   return (
     <>
       {props.map((p) =>
-        p.kind === 'chest' ? <Chest key={p.id} id={p.id} /> : p.kind === 'key' ? <GateKey key={p.id} id={p.id} /> : p.kind === 'brazier' ? (
+        p.kind === 'chest' ? <Chest key={p.id} id={p.id} /> : p.kind === 'campfire' ? <Campfire key={p.id} id={p.id} /> : p.kind === 'key' ? <GateKey key={p.id} id={p.id} /> : p.kind === 'brazier' ? (
           <Brazier key={p.id} id={p.id} />
         ) : p.kind === 'vent' ? (
           <AshVent key={p.id} id={p.id} />
@@ -283,6 +283,72 @@ const coal = new THREE.MeshStandardMaterial({ color: '#1c1416', roughness: 0.9 }
 const fireMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 1.3, 0.25), toneMapped: false, transparent: true, opacity: 0.9, depthWrite: false });
 const emberGlow = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.5, 0.1), toneMapped: false });
 const ashMat = new THREE.MeshStandardMaterial({ color: '#6e6468', roughness: 1, transparent: true, opacity: 0.88, depthWrite: false });
+
+const logMat = new THREE.MeshStandardMaterial({ color: '#5b3a22', roughness: 0.9 });
+
+/** Task 3 — the camp's fire: stones and crossed logs; the group gathering lights it. */
+function Campfire({ id }: { id: number }) {
+  const { ox, oz } = useGame();
+  const get = useProp(id);
+  const p0 = get()!;
+  const fire = useRef<THREE.Group>(null!);
+  const light = useRef<THREE.PointLight>(null!);
+  const ring = useRef<THREE.Mesh>(null!);
+  const litAt = useRef<number | null>(p0.state === 'lit' ? -1 : null);
+  useFrame(({ clock }) => {
+    const p = get();
+    if (!p) return;
+    const t = clock.elapsedTime;
+    if (p.state === 'lit' && litAt.current === null) litAt.current = performance.now();
+    if (p.state !== 'lit') litAt.current = null;
+    const k = litAt.current === null ? 0 : litAt.current < 0 ? 1 : Math.min(1, (performance.now() - litAt.current) / 500);
+    fire.current.visible = k > 0;
+    const flick = 0.85 + 0.15 * Math.sin(t * 13 + id) + 0.1 * Math.sin(t * 29);
+    fire.current.scale.set(Math.max(0.0001, k), Math.max(0.0001, k * flick), Math.max(0.0001, k));
+    fire.current.rotation.y = t * 1.2;
+    light.current.intensity = 10 * k * flick;
+    // Unlit: a ring on the ground invites the group to gather.
+    ring.current.visible = k === 0;
+    if (k === 0) {
+      const q = (t * 0.8) % 1;
+      ring.current.scale.setScalar(1.2 + q * 2.4);
+      (ring.current.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - q);
+    }
+  });
+  return (
+    <group position={[p0.x + ox, 0, p0.y + oz]}>
+      {Array.from({ length: 9 }, (_, i) => (
+        <mesh key={i} position={[Math.cos((i / 9) * Math.PI * 2) * 0.42, 0.07, Math.sin((i / 9) * Math.PI * 2) * 0.42]} material={stone} castShadow>
+          <dodecahedronGeometry args={[0.11, 0]} />
+        </mesh>
+      ))}
+      {[0, 1, 2].map((i) => (
+        <mesh key={i} position={[0, 0.12, 0]} rotation={[0, (i / 3) * Math.PI, Math.PI / 2 - 0.25]} material={logMat} castShadow>
+          <cylinderGeometry args={[0.06, 0.07, 0.62, 6]} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.06, 0]} material={coal}>
+        <cylinderGeometry args={[0.28, 0.3, 0.05, 10]} />
+      </mesh>
+      <group ref={fire} position={[0, 0.15, 0]}>
+        <mesh position={[0, 0.38, 0]} material={fireMat}>
+          <coneGeometry args={[0.3, 0.85, 9, 1, true]} />
+        </mesh>
+        <mesh position={[0.1, 0.26, 0.06]} rotation={[0, 1, 0]} material={fireMat}>
+          <coneGeometry args={[0.18, 0.55, 7, 1, true]} />
+        </mesh>
+        <mesh position={[-0.1, 0.22, -0.05]} material={fireMat}>
+          <coneGeometry args={[0.16, 0.48, 7, 1, true]} />
+        </mesh>
+      </group>
+      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+        <ringGeometry args={[0.46, 0.54, 32]} />
+        <meshBasicMaterial color="#ffb347" transparent opacity={0.5} toneMapped={false} depthWrite={false} />
+      </mesh>
+      <pointLight ref={light} position={[0, 1.2, 0]} color="#ff9a3a" intensity={0} distance={7} />
+    </group>
+  );
+}
 
 /** Brazier (side mission): a stone bowl of coal; a blast next to it sets it roaring. */
 function Brazier({ id }: { id: number }) {

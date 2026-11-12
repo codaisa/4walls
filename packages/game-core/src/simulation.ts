@@ -1,6 +1,7 @@
 import { ARENAS, BOSS_ARENA, BOSS_RUSH, CHARACTERS, RULES, secToTicks, type CharacterId, type GameConfig } from '@4walls/shared';
 import { updateMines, useAbility } from './abilities';
-import { createAdventure, revealAround, spawnAdventureEnemies, updateAdventure } from './adventure';
+import { createAdventure, revealAround, spawnAdventureEnemies, tryEndExpedition, updateAdventure } from './adventure';
+import { applySnap, newExpedition, snapPlayer } from './expedition';
 import { scheduleFirstEvent, updateArenaEvents } from './arenaEvents';
 import { buildBossArena, spawnBoss, updateBoss } from './boss';
 import { tryPlaceBomb, updateBombs } from './bombs';
@@ -15,7 +16,7 @@ export function createGame(config: GameConfig): GameState {
   const arena = config.arenaId ? ARENAS[config.arenaId] : undefined;
   // Adventure builds its own (non-rectangular) world; arenas come from the arena definition.
   const rngHolder = { rng: config.seed | 0 };
-  const adv = config.mode === 'adventure' ? createAdventure(config.seed | 0) : null;
+  const adv = config.mode === 'adventure' ? createAdventure(config.seed | 0, config.expedition?.camp ?? 0) : null;
   const bossArena = config.mode === 'bossrush' ? buildBossArena(rngHolder) : null;
   const custom = adv ?? bossArena;
   const width = custom ? custom.grid.w : (arena?.width ?? config.width);
@@ -95,6 +96,11 @@ export function createGame(config: GameConfig): GameState {
     return p;
   });
   if (adv) {
+    // Task 3: a new expedition, or one resumed at its last campfire (heroes as they were there).
+    const save = cfg.expedition;
+    s.expedition = save ? { ...save, snapshot: save.snapshot.map((q) => ({ ...q })) } : newExpedition();
+    for (const p of s.players) applySnap(p, s.expedition.snapshot.find((q) => q.slot === p.slot));
+    if (!save) s.expedition.snapshot = s.players.map(snapPlayer);
     spawnAdventureEnemies(s);
     revealAround(s);
   } else if (bossArena) {
@@ -151,6 +157,7 @@ export function step(s: GameState, inputs: InputMap): void {
     const input = inputs[p.id];
     stepPlayerMovement(s, p, input);
     if (s.tick < p.frozenUntil) continue;
+    if (input?.campEnd) tryEndExpedition(s, p);
     if (input?.bomb) tryPlaceBomb(s, p);
     if (input?.ability) useAbility(s, p);
   }

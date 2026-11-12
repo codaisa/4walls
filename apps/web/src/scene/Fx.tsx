@@ -780,6 +780,23 @@ export function Fx() {
                 life: rnd(0.4, 0.7), size: rnd(0.2, 0.35), grow: 1.6, color: '#5a5048', alpha: 0.45, drag: 1.4,
               });
             break;
+          case 'coins':
+            for (let i = 0; i < Math.min(24, 6 + e.amount / 2); i++)
+              sparks.spawn({
+                x: e.x + ox + rnd(-0.3, 0.3), y: 0.5, z: e.y + oz + rnd(-0.3, 0.3),
+                vx: rnd(-1.5, 1.5), vy: rnd(3, 5.5), vz: rnd(-1.5, 1.5),
+                life: rnd(0.5, 0.9), size: rnd(0.06, 0.1), color: '#ffd23f', intensity: 3, gravity: 9, drag: 1,
+              });
+            break;
+          case 'campLit':
+            shocks.spawn({ x: e.x + ox, y: 0.05, z: e.y + oz, life: 0.8, size: 1, grow: 3.5, color: '#ffb347', alpha: 0.9 });
+            for (let i = 0; i < 30; i++)
+              sparks.spawn({
+                x: e.x + ox, y: 0.4, z: e.y + oz,
+                vx: rnd(-1.5, 1.5), vy: rnd(3, 6), vz: rnd(-1.5, 1.5),
+                life: rnd(0.7, 1.3), size: rnd(0.05, 0.1), color: '#ffa040', intensity: 4, gravity: 3, drag: 1,
+              });
+            break;
           case 'motesSummoned':
             for (const c of e.cells) {
               shocks.spawn({ x: c.x + ox, y: 0.05, z: c.y + oz, life: 0.6, size: 0.4, grow: 2, color: '#b04aff', alpha: 0.9 });

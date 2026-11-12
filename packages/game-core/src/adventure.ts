@@ -1,6 +1,7 @@
 import { ADVENTURE, BOSSES, Cell, CHARACTER_IDS, CHARACTERS, DIR_VEC, DIRS, POWERUPS, RULES, secToTicks, type BiomeId, type BossId, type CharacterId, type PowerupType } from '@4walls/shared';
 import { spawnBoss } from './boss';
 import { ELITE_MAGMITE_HP, wakeMimic } from './enemies';
+import { EXPEDITION_LOSS, addCoins, applySnap, snapPlayer } from './expedition';
 import { cellIndex, createGrid, getCell, inBounds, setCell } from './grid';
 import { nextRandom, pickWeighted, randInt } from './rng';
 import type { AdventureState, CageState, EnemyState, GameState, GateState, Grid, PlayerState, PropState, RegionDir, RegionObjectiveKind, RegionState, RegionVariant } from './types';
@@ -48,6 +49,7 @@ const SCRIPTED: { name: string; chapter: string; biome: BiomeId; objective: Regi
   { name: 'Rio de Magma', chapter: 'A travessia', biome: 'volcanic', objective: 'lever' },
   { name: 'Ponte de Obsidiana', chapter: 'O guardião', biome: 'transition', objective: 'seals' },
   { name: 'Câmara do Golem', chapter: 'O Golem desperta', biome: 'volcanic', objective: 'boss' },
+  { name: 'Pouso da Fogueira', chapter: 'O descanso', biome: 'forest', objective: 'camp' },
   { name: 'Bosque Chamuscado', chapter: 'A corrupção', biome: 'forest', objective: 'purify' },
 ];
 
@@ -72,7 +74,10 @@ const CHAPTERS: Record<RegionObjectiveKind, string[]> = {
   seals: ['O guardião', 'Os selos', 'A passagem selada', 'O abismo'],
   purify: ['A corrupção', 'Raízes podres', 'O bosque doente', 'A cura'],
   boss: ['O guardião desperta', 'O confronto', 'A prova do arco', 'O trono'],
+  camp: ['O descanso', 'A fogueira', 'O pouso', 'A pausa'],
 };
+/** Camps: the first region of every arc after the first (right after a Guardian Chamber). */
+const CAMP_NAMES = ['Pouso dos Viajantes', 'Clareira do Descanso', 'Refúgio das Brasas', 'Abrigo do Cipó', 'Acampamento da Lua', 'Fogueira dos Heróis', 'Pouso da Cinza'];
 /** Names of the Guardian Chambers, by the boss that lives there. */
 const CHAMBER_NAMES: Record<BossId, string[]> = {
   golem: ['Câmara do Golem', 'Forja do Golem', 'Trono de Magma', 'Coração da Caldeira', 'Salão de Basalto'],
@@ -110,7 +115,8 @@ export function arcInfo(seed: number, index: number): ArcInfo {
   arcStarts.set(seed, starts);
   // The first arc is the scripted introduction: 3 volcanic regions, the Obsidian Bridge and the
   // Golem's chamber. Later arcs: 3–5 lands, the transition and the chamber.
-  const lengthOf = (k: number) => (k === 0 ? 5 : 5 + randInt(subRng(seed, k, 11), 3));
+  // Every arc after the first opens with a camp (Task 3), so they are one region longer.
+  const lengthOf = (k: number) => (k === 0 ? 5 : 6 + randInt(subRng(seed, k, 11), 3));
   while (starts.length <= index + 1) starts.push(starts[starts.length - 1] + lengthOf(starts.length - 1));
   const biome = ARC_DOMINANT[index % 2];
   const lap = Math.floor(index / 2);
@@ -126,7 +132,7 @@ export function arcInfo(seed: number, index: number): ArcInfo {
 export function arcOfRegion(seed: number, id: number) {
   let k = 0;
   // Arcs are 5–7 long: start from a guess just under the answer and walk forward.
-  for (k = Math.max(0, Math.floor(id / 7) - 1); ; k++) {
+  for (k = Math.max(0, Math.floor(id / 8) - 1); ; k++) {
     const a = arcInfo(seed, k);
     if (id < a.start) {
       k = Math.max(0, k - 2);
@@ -151,6 +157,12 @@ export function regionInfo(seed: number, id: number) {
   const bossNext = pos === arc.length - 2;
   if (id < SCRIPTED.length) return { ...SCRIPTED[id], variant, arc: arc.index, arcEnd: last, arcPos: pos, bossNext };
   const r = subRng(seed, id, 3);
+  if (pos === 0 && arc.index >= 1) {
+    // Task 3: the camp right after the previous arc's chamber.
+    const name = CAMP_NAMES[randInt(r, CAMP_NAMES.length)];
+    const chapter = CHAPTERS.camp[randInt(r, CHAPTERS.camp.length)];
+    return { name, chapter, biome: arc.biome as BiomeId, objective: 'camp' as RegionObjectiveKind, variant, arc: arc.index, arcEnd: false, arcPos: pos, bossNext: false };
+  }
   if (last) {
     // The Guardian Chamber: the boss's own hall, in the arc's biome.
     const names = CHAMBER_NAMES[arcBoss(seed, arc.index).kind];
@@ -197,11 +209,12 @@ export function regionDifficulty(seed: number, id: number) {
   const d = difficulty(id);
   if (id < SCRIPTED.length) return d;
   const info = regionInfo(seed, id);
-  const delta = (info.arcPos === 0 ? -1 : 0) + (info.bossNext ? 1 : 0) + (info.variant === 'corrupted' ? 1 : 0);
+  // The first land of the arc (right after the camp) is the breather.
+  const delta = (info.arcPos === (info.arc >= 1 ? 1 : 0) ? -1 : 0) + (info.bossNext ? 1 : 0) + (info.variant === 'corrupted' ? 1 : 0);
   return { ...d, enemies: Math.max(2, Math.min(ADVENTURE.enemiesCap, d.enemies + delta)) };
 }
 
-export type RegionShape = 'island' | 'plaza' | 'river' | 'causeway' | 'ring' | 'twin' | 'longbridge' | 'arena';
+export type RegionShape = 'island' | 'plaza' | 'river' | 'causeway' | 'ring' | 'twin' | 'longbridge' | 'arena' | 'camp';
 
 /** Map mechanics of a region: shape, Fagulhas, ash vents, the braziers side mission. */
 export interface RegionMods {
@@ -227,10 +240,12 @@ export function regionMods(seed: number, id: number): RegionMods {
     { shape: 'island', sparks: 2, vents: 1, braziers: false },
     { shape: 'plaza', sparks: 2, vents: 1, braziers: true },
     { shape: 'arena', sparks: 0, vents: 0, braziers: false }, // the Golem's chamber
+    { shape: 'camp', sparks: 0, vents: 0, braziers: false }, // the first camp
     { shape: 'island', sparks: 1, vents: 0, braziers: false },
   ];
   const info = regionInfo(seed, id);
   if (info.objective === 'boss') return { shape: 'arena', sparks: 0, vents: 0, braziers: false, grass: 0 };
+  if (info.objective === 'camp') return { shape: 'camp', sparks: 0, vents: 0, braziers: false, grass: 0 };
   const river = info.objective === 'lever';
   const shapeFor = info.objective === 'seals' ? ('causeway' as const) : river ? ('river' as const) : null;
   const grass = info.biome === 'forest' ? 2 + (id > 8 ? 1 : 0) : 0;
@@ -308,6 +323,7 @@ interface Blueprint {
 function regionBlueprint(seed: number, adv: AdventureState, id: number): Blueprint {
   const info = regionInfo(seed, id);
   if (info.objective === 'boss') return chamberBlueprint(seed, adv, id, info);
+  if (info.objective === 'camp') return campBlueprint(seed, adv, id, info);
   const diff = regionDifficulty(seed, id);
   const r = subRng(seed, id, 2);
   const { cx, cy } = chunkOf(adv, id);
@@ -906,6 +922,83 @@ function chamberBlueprint(seed: number, adv: AdventureState, id: number, info: R
   return { state, cells, ox, oy, exitGate, spawns: [], cage: null, props, enemySpots: [], enemyCount: 0, enemySpeed: 1, sparks: 0, elites: [] };
 }
 
+/**
+ * Task 3 — a camp: a quiet clearing with a campfire in the middle. No enemies. The way on opens
+ * once the whole group has gathered at the fire, which saves the expedition.
+ */
+function campBlueprint(seed: number, adv: AdventureState, id: number, info: ReturnType<typeof regionInfo>): Blueprint {
+  const r = subRng(seed, id, 2);
+  const { cx, cy } = chunkOf(adv, id);
+  const ox = cx * CW;
+  const oy = cy * CH;
+  const cells = new Uint8Array(CW * CH).fill(Cell.Wall);
+  const at = (x: number, y: number) => (y - oy) * CW + (x - ox);
+  const set = (x: number, y: number, c: Cell) => {
+    if (x >= ox && y >= oy && x < ox + CW && y < oy + CH) cells[at(x, y)] = c;
+  };
+  const center = campfireOf({ cx, cy });
+  // An oval clearing.
+  for (let y = oy + 1; y < oy + CH - 1; y++)
+    for (let x = ox + 1; x < ox + CW - 1; x++) {
+      const dx = (x - center.x) / 6.6;
+      const dy = (y - center.y) / 5.6;
+      if (dx * dx + dy * dy <= 1) set(x, y, Cell.Floor);
+    }
+  const exitDir = adv.dirs[id];
+  const exit = edgeCell(ox, oy, exitDir);
+  const entry = id > 0 ? edgeCell(ox, oy, opposite(adv.dirs[id - 1])) : null;
+  // Paths from the doorways into the clearing.
+  for (const d of [entry, exit]) {
+    if (!d) continue;
+    let x = d.x;
+    let y = d.y;
+    while (cells[at(x, y)] !== Cell.Floor || (x === d.x && y === d.y)) {
+      set(x, y, Cell.Floor);
+      if (x === center.x && y === center.y) break;
+      if (x !== center.x) x += Math.sign(center.x - x);
+      else y += Math.sign(center.y - y);
+    }
+  }
+  set(exit.x, exit.y, Cell.Wall); // opens when the fire is lit
+  // A few trees around the edge for shade (never on the paths or by the fire).
+  for (let k = 0; k < 4; k++) {
+    const x = ox + 2 + randInt(r, CW - 4);
+    const y = oy + 2 + randInt(r, CH - 4);
+    if (Math.abs(x - center.x) + Math.abs(y - center.y) < 4) continue;
+    if ((entry && Math.abs(x - entry.x) + Math.abs(y - entry.y) < 4) || Math.abs(x - exit.x) + Math.abs(y - exit.y) < 4) continue;
+    if (cells[at(x, y)] === Cell.Floor && x !== center.x && y !== center.y) set(x, y, Cell.Wall);
+  }
+  set(center.x, center.y, Cell.Wall); // the fire stands like a pillar
+  const props: Omit<PropState, 'tick'>[] = [{ id: id * 64, kind: 'campfire', region: id, x: center.x, y: center.y, state: 'unlit' }];
+  const spawns = [
+    { x: center.x - 2, y: center.y },
+    { x: center.x + 2, y: center.y },
+    { x: center.x, y: center.y + 2 },
+    { x: center.x, y: center.y - 2 },
+  ];
+  for (const sp of spawns) set(sp.x, sp.y, Cell.Floor);
+  const state: RegionState = {
+    id,
+    name: info.name,
+    chapter: info.chapter,
+    biome: info.biome,
+    arc: info.arc,
+    variant: info.variant,
+    arcEnd: false,
+    cx,
+    cy,
+    objective: { kind: 'camp', progress: 0, goal: 1, done: false },
+    unlocked: id === 0,
+    cleared: false,
+    entry,
+  };
+  const exitGate: GateState = { id, x: exit.x, y: exit.y, axis: exitDir === 'E' ? 'h' : 'v', from: id, to: id + 1, open: false, openedTick: -1, kind: 'exit' };
+  return { state, cells, ox, oy, exitGate, spawns, cage: null, props, enemySpots: [], enemyCount: 0, enemySpeed: 1, sparks: 0, elites: [] };
+}
+
+/** The campfire in the middle of a camp. */
+export const campfireOf = (reg: { cx: number; cy: number }) => ({ x: reg.cx * CW + 7, y: reg.cy * CH + 7 });
+
 /** Where the chamber's boss sleeps (the hall's middle). */
 export const chamberCenter = (reg: { cx: number; cy: number }) => ({ x: reg.cx * CW + 7, y: reg.cy * CH + 7 });
 
@@ -990,7 +1083,7 @@ export function attachRegion(s: GameState, id: number, authority = true) {
  */
 export function elitesFor(seed: number, id: number): ('magmite' | 'spark')[] {
   const info = regionInfo(seed, id);
-  if (info.arc < 1 || info.objective === 'boss' || id < SCRIPTED.length) return [];
+  if (info.arc < 1 || info.objective === 'boss' || info.objective === 'camp' || id < SCRIPTED.length) return [];
   const r = subRng(seed, id, 22);
   const n = Math.min(2, 1 + (id >= 18 ? 1 : 0) + (info.variant === 'corrupted' ? 1 : 0));
   return Array.from({ length: n }, () => (nextRandom(r) < 0.5 ? 'magmite' : 'spark'));
@@ -1067,8 +1160,11 @@ export function syncAdventureWindow(s: GameState, ids: number[]) {
   for (const r of [...adv.regions]) if (!want.has(r.id)) detachRegion(s, r.id, false);
 }
 
-/** Initial state: regions 0 and 1 (the second one visible behind the first gate). */
-export function createAdventure(seed: number): { grid: Grid; adventure: AdventureState; spawns: Pt[] } {
+/**
+ * Initial state: regions `from` and `from + 1` (the second one visible behind the first gate).
+ * `from` > 0 resumes an expedition at a camp: the world is the same (it all comes from the seed).
+ */
+export function createAdventure(seed: number, from = 0): { grid: Grid; adventure: AdventureState; spawns: Pt[] } {
   const adventure: AdventureState = {
     chunkW: CW,
     chunkH: CH,
@@ -1085,10 +1181,19 @@ export function createAdventure(seed: number): { grid: Grid; adventure: Adventur
     windowKey: '',
   };
   const s = { config: { seed }, adventure, grid: null as unknown as Grid, tick: 0, events: [], enemies: [], bombs: [], flames: [], powerups: [], mines: [] } as unknown as GameState;
-  const bp = attachRegion(s, 0, false)!;
-  attachRegion(s, 1, false);
-  const first = regionInfo(seed, 0);
-  adventure.journey.push({ id: 0, name: first.name, biome: first.biome, variant: first.variant, arc: first.arc });
+  const bp = attachRegion(s, from, false)!;
+  attachRegion(s, from + 1, false);
+  adventure.depth = from;
+  adventure.regions.find((r) => r.id === from)!.unlocked = true;
+  // Nothing behind a resumed camp: its doorway is sealed like any region left behind.
+  const entry = adventure.regions.find((r) => r.id === from)!.entry;
+  if (from > 0 && entry) {
+    setCell(s.grid, entry.x, entry.y, Cell.Wall);
+    const prevDir = adventure.dirs[from - 1];
+    adventure.gates.push({ id: 1_000_000 + from, x: entry.x, y: entry.y, axis: prevDir === 'E' ? 'h' : 'v', from: from - 1, to: from, open: false, openedTick: -1, kind: 'back' });
+  }
+  const first = regionInfo(seed, from);
+  adventure.journey.push({ id: from, name: first.name, biome: first.biome, variant: first.variant, arc: first.arc });
   return { grid: s.grid, adventure, spawns: bp.spawns };
 }
 
@@ -1114,6 +1219,105 @@ export function updateAdventure(s: GameState) {
   updateProps(s);
   updateObjectives(s);
   updateProgress(s);
+  updateFall(s);
+}
+
+// ───────────────────────────── Task 3: the expedition ─────────────────────────────
+
+/** Seconds between the whole group falling and waking at the last camp. */
+export const FALL_SEC = 2.5;
+
+/** The whole group down: a moment later they wake at the last camp (half the purse lost). */
+function updateFall(s: GameState) {
+  const ex = s.expedition;
+  if (!ex || ex.ended) return;
+  const present = s.players.filter((p) => !p.left);
+  const down = present.length > 0 && present.every((p) => !p.alive);
+  if (!down) {
+    ex.fallAt = undefined;
+    return;
+  }
+  if (ex.fallAt === undefined) {
+    ex.fallAt = s.tick + secToTicks(FALL_SEC);
+    s.events.push({ type: 'groupFell', atTick: ex.fallAt, camp: ex.camp });
+    return;
+  }
+  if (s.tick >= ex.fallAt) returnToCamp(s);
+}
+
+/** Back to the last campfire: same world (same seed), the heroes as they were there. */
+export function returnToCamp(s: GameState) {
+  const ex = s.expedition!;
+  const lost = Math.floor(ex.coins * EXPEDITION_LOSS);
+  ex.coins -= lost;
+  ex.returns++;
+  ex.fallAt = undefined;
+  const journey = s.adventure!.journey;
+  const fresh = createAdventure(s.config.seed, ex.camp);
+  fresh.adventure.journey = journey;
+  s.adventure = fresh.adventure;
+  s.grid = fresh.grid;
+  s.enemies = [];
+  s.bombs = [];
+  s.flames = [];
+  s.powerups = [];
+  s.mines = [];
+  s.meteors = [];
+  s.boss = null;
+  for (const p of s.players) {
+    if (p.left) continue;
+    const sp = fresh.spawns[p.slot % Math.max(1, fresh.spawns.length)] ?? fresh.spawns[0];
+    applySnap(p, ex.snapshot.find((q) => q.slot === p.slot));
+    Object.assign(p, {
+      alive: true,
+      x: sp.x,
+      y: sp.y,
+      px: sp.x,
+      py: sp.y,
+      moving: false,
+      slideDir: null,
+      maneuver: null,
+      frozenUntil: 0,
+      ghostUntil: 0,
+      turboUntil: 0,
+      passBombs: [],
+      diedTick: -1,
+      invulnUntil: s.tick + secToTicks(REVIVE_INVULN_SEC),
+    });
+  }
+  spawnAdventureEnemies(s);
+  revealAround(s);
+  s.events.push({ type: 'campReturn', region: ex.camp, lost });
+}
+
+/** A player at a lit campfire ends the expedition: everything carried is kept. */
+export function tryEndExpedition(s: GameState, p: PlayerState) {
+  const ex = s.expedition;
+  if (!ex || ex.ended || !s.adventure) return false;
+  const fire = s.adventure.props.find((q) => q.kind === 'campfire' && q.state === 'lit' && Math.abs(q.x - p.x) + Math.abs(q.y - p.y) <= 3.2);
+  if (!fire) return false;
+  ex.ended = true;
+  s.events.push({ type: 'expeditionEnded', byId: p.id, coins: ex.coins });
+  return true;
+}
+
+/** The whole group gathered at a camp's fire: it lights, saves the expedition and opens the way. */
+function updateCampfire(s: GameState, pr: PropState) {
+  const ex = s.expedition;
+  const living = s.players.filter((p) => p.alive && !p.left);
+  if (!living.length) return;
+  if (!living.every((p) => regionAt(s, p.x, p.y) === pr.region && Math.abs(p.x - pr.x) + Math.abs(p.y - pr.y) <= 4.2)) return;
+  pr.state = 'lit';
+  pr.tick = s.tick;
+  let again = true;
+  if (ex) {
+    again = ex.camp === pr.region;
+    if (!again) ex.camps++;
+    ex.camp = pr.region;
+    // Fallen allies are brought back by the gate as usual; the save remembers the living ones.
+    ex.snapshot = s.players.filter((p) => !p.left).map((p) => (p.alive ? snapPlayer(p) : ex.snapshot.find((q) => q.slot === p.slot) ?? snapPlayer(p)));
+  }
+  s.events.push({ type: 'campLit', region: pr.region, x: pr.x, y: pr.y, again });
 }
 
 function updateObjectives(s: GameState) {
@@ -1127,6 +1331,7 @@ function updateObjectives(s: GameState) {
     else if (o.kind === 'lever') progress = adv.props.some((p) => p.kind === 'lever' && p.region === r.id && p.state === 'on') ? 1 : 0;
     else if (o.kind === 'seals') progress = adv.props.filter((p) => p.kind === 'seal' && p.region === r.id && p.state === 'broken').length;
     else if (o.kind === 'purify') progress = adv.props.filter((p) => p.kind === 'root' && p.region === r.id && p.state === 'broken').length;
+    else if (o.kind === 'camp') progress = adv.props.some((p) => p.kind === 'campfire' && p.region === r.id && p.state === 'lit') ? 1 : 0;
     else if (o.kind === 'boss') {
       // Set by the boss itself when it falls (boss.ts).
       if (o.progress < o.goal) continue;
@@ -1140,6 +1345,8 @@ function updateObjectives(s: GameState) {
     o.done = true;
     r.cleared = true;
     s.events.push({ type: 'regionCleared', region: r.id, arcEnd: r.arcEnd, bossNext: regionInfo(s.config.seed, r.id + 1).objective === 'boss' });
+    // Every region crossed pays the purse a little more the deeper it is (camps pay nothing).
+    if (o.kind !== 'camp') addCoins(s, 5 + Math.min(60, 2 * r.id), r.cx * CW + 7, r.cy * CH + 7);
     if (!adv.regions.some((x) => x.id === r.id + 1)) attachRegion(s, r.id + 1);
     const g = adv.gates.find((x) => x.kind !== 'back' && x.from === r.id);
     if (g && !g.open) {
@@ -1162,8 +1369,10 @@ function updateProgress(s: GameState) {
     const rid = regionAt(s, p.x, p.y);
     if (rid <= adv.depth) continue;
     adv.depth = rid;
+    if (s.expedition) s.expedition.best = Math.max(s.expedition.best, rid);
     const info = regionInfo(s.config.seed, rid);
-    adv.journey.push({ id: rid, name: info.name, biome: info.biome, variant: info.variant, arc: info.arc });
+    // After falling back to a camp the same regions come again: the journey lists them once.
+    if (!adv.journey.some((j) => j.id === rid)) adv.journey.push({ id: rid, name: info.name, biome: info.biome, variant: info.variant, arc: info.arc });
     s.events.push({ type: 'regionEntered', region: rid });
     attachRegion(s, rid + 1); // the next island shows up behind the new (closed) gate
     adv.closing = { region: rid, atTick: s.tick + secToTicks(GATE_CLOSE_SEC) };
@@ -1455,6 +1664,7 @@ function updateProps(s: GameState) {
       } else openChest(s, pr, opener?.id ?? null);
     } else if (pr.kind === 'key') updateKey(s, pr);
     else if (pr.kind === 'totem' && pr.state === 'idle') updateTotem(s, pr);
+    else if (pr.kind === 'campfire' && pr.state === 'unlit') updateCampfire(s, pr);
     else if (pr.kind === 'brazier' && pr.state === 'unlit') {
       const touched = DIRS.some((d) => flamesAt(s, pr.x + DIR_VEC[d].x, pr.y + DIR_VEC[d].y).length > 0);
       if (!touched) continue;
@@ -1511,6 +1721,7 @@ function openChest(s: GameState, pr: PropState, byId: string | null) {
   pr.state = 'open';
   pr.tick = s.tick;
   s.events.push({ type: 'chestOpened', propId: pr.id, x: pr.x, y: pr.y, rare: !!pr.rare, byId });
+  addCoins(s, (pr.hp === 2 ? 30 : pr.rare ? 15 : 5) + Math.floor(pr.region / 2), pr.x, pr.y);
   const loot: PowerupType[] = [pickWeighted(s, Object.values(POWERUPS), (d) => d.weight).type];
   if (pr.rare) loot.push(RARE_LOOT[randInt(s, RARE_LOOT.length)]);
   // The Mimic's double chest: twice the loot, and always a rare piece.

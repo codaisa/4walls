@@ -12,3 +12,4 @@ export * from './enemies';
 export * from './modes';
 export * from './simulation';
 export * from './boss';
+export * from './expedition';

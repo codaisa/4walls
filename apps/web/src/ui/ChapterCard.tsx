@@ -16,8 +16,10 @@ interface Card {
 
 export const VARIANT_BADGE: Record<RegionVariant, string> = { normal: '', night: '🌙 Noite', mist: '☁️ Névoa', corrupted: '🟣 Corrompida' };
 
-const objectiveText = (kind: 'clear' | 'key' | 'lever' | 'seals' | 'purify' | 'boss') =>
-  kind === 'boss'
+const objectiveText = (kind: 'clear' | 'key' | 'lever' | 'seals' | 'purify' | 'boss' | 'camp') =>
+  kind === 'camp'
+    ? '🔥 Reúnam-se na fogueira para salvar a expedição'
+    : kind === 'boss'
     ? '☠️ Derrote o guardião do arco'
     : kind === 'key'
     ? '🔑 Ache a chave e leve até o portão'

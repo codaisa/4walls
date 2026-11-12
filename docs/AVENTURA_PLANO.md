@@ -7,7 +7,7 @@ antes da próxima:
 |---|---|---|---|
 | 1 | **Mapa**: regiões viram fases, objetivos, mecânicas de ambiente, segredos, navegação, arcos | — | **Concluída** (M1–M5) |
 | 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | **Concluída** (B1–B5, seção 5) |
-| 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Plano pronto, aguardando aprovação (seção 6) |
+| 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Em andamento: A1 concluído (seção 6) |
 
 Ponto de partida (como está hoje):
 - 5 regiões-ilha num reticulado de blocos de 16×14 casas, ligadas por corredores e geradas por seed.
@@ -414,7 +414,7 @@ Pontos de atenção:
 
 ## 6. Tarefa 3 — Acampamentos e progressão (plano detalhado)
 
-> Status: **plano para aprovação**. Nada desta seção está implementado ainda.
+> Status: **aprovado** com as recomendações (corações no A4, perda de 50%, um acampamento por arco, save online na conta do anfitrião). **A1 concluído.**
 
 ### 6.1 A ideia em uma frase
 
@@ -572,8 +572,32 @@ Entram:
 | **A4 — Relíquias e corações** | 8 relíquias, códice no Perfil, conquistas novas e, se aprovado, os corações da Aventura (6.7), com uma passada de equilíbrio nos chefes e medalhas | Depende da decisão 6.7 |
 | **A5 — Arte e acabamento** | GLBs do acampamento, música, dicas de tutorial, cartão "ACAMPAMENTO", ajustes de celular | Fecha a Tarefa 3 |
 
-**Perguntas para aprovar antes do A1:**
-1. Corações (B, recomendado) ou golpe único (A)?
-2. Perder **50%** das moedas carregadas na derrota está bom?
-3. Um acampamento **por arco** (depois de cada chefe) está bom, ou quer mais perto (a cada 3 regiões)?
-4. O save online na conta do **anfitrião** (recomendado) ou cada jogador com o seu?
+**Como ficou o A1 (acampamento e checkpoint):**
+- **Onde:** todo arco depois do primeiro abre com um acampamento, logo depois da Câmara do Guardião. Por isso os arcos agora têm 6–8 regiões. O primeiro é o **Pouso da Fogueira** (região 6). O Bosque Chamuscado passou para a região 7.
+- **A clareira:** sem inimigos, com algumas árvores, a fogueira no meio (um anel dourado pulsa no chão chamando o grupo) e o portão de saída fechado.
+- **Fogueira:**
+  - quando todo o grupo vivo chega perto dela, ela acende ("ACAMPAMENTO! EXPEDIÇÃO SALVA");
+  - salva a "foto" dos heróis (herói, bombas, alcance, velocidade, escudo, chute, luva, especial);
+  - abre o portão e traz de volta quem tinha caído.
+- **Moedas da expedição (🪙 no painel do objetivo):**
+  - cada região vencida: 5 + 2 × número da região (até 65);
+  - baús: 5, 15 para o raro e 30 para o duplo do Mímico, mais metade do número da região;
+  - elites: 6; Mímico: 20;
+  - chefe: 30 por medalha + 15 por volta.
+- **Queda do grupo:**
+  - quando todos caem, aparece "O GRUPO CAIU…" e um aviso "Voltando ao acampamento em N s";
+  - 2,5 s depois todos acordam no último acampamento, no mesmo mundo, com os heróis como estavam na fogueira e metade das moedas ("DE VOLTA AO ACAMPAMENTO · −N 🪙");
+  - a Aventura não termina mais em derrota; antes do primeiro acampamento, volta à região 1.
+- **Encerrar:**
+  - perto de uma fogueira acesa, aparece o botão "🏕️ Encerrar expedição", que pede confirmação com um segundo toque;
+  - a mesma opção está no menu de pausa, para controle e teclado;
+  - termina com "EXPEDIÇÃO ENCERRADA" e as moedas carregadas; no online, elas vão para a conta de cada jogador.
+- **Save local:**
+  - toda fogueira grava a expedição no aparelho;
+  - no lobby local, a Aventura oferece "🏕️ Continuar" (acampamento, região e moedas) ou "Nova expedição";
+  - "Jogar de novo" continua do último acampamento;
+  - encerrar apaga o save.
+- **Online:** o snapshot leva a expedição, e o espelho refaz o mundo a partir do acampamento quando o grupo volta. O comando de encerrar vai junto com o input. O save no servidor (conta do anfitrião) é o A2.
+- **Fica para o A2+:** cofre (guardar sem encerrar), save online e "Continuar expedição" no lobby da sala, a fogueira simples na região 1, moradores e lojinha (A3).
+
+**Decisões aprovadas (12/11/2026):** corações (B, no A4), 50% de perda, um acampamento por arco, save online na conta do anfitrião.

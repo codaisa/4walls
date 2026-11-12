@@ -32,8 +32,9 @@ export const MODES: Record<ModeId, ModeRules> = {
     id: 'adventure',
     defaultEnemies: 0, // each region spawns its own (adventure.ts)
     checkEnd(s) {
-      // Endless: the journey only ends when the whole group is down.
-      if (alive(s).length === 0) return { outcome: 'defeat', winnerIds: [], reason: 'allPlayersDown' };
+      // Endless: an expedition ends at a campfire; a fallen group wakes at the last camp instead.
+      if (s.expedition?.ended) return { outcome: 'victory', winnerIds: s.players.filter((p) => !p.left).map((p) => p.id), reason: 'expeditionEnded' };
+      if (alive(s).length === 0 && !s.expedition) return { outcome: 'defeat', winnerIds: [], reason: 'allPlayersDown' };
       return null;
     },
   },

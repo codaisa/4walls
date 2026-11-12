@@ -19,6 +19,8 @@ export interface MatchView {
   alphaFor?(playerId: string): number;
   /** Players controlled on this device (online); undefined = everyone is local. */
   isLocal?(playerId: string): boolean;
+  /** Task 3: end the expedition at the campfire (sent with the next input). */
+  endExpedition?(): void;
 }
 
 export const RESULT_DELAY_MS = 1400;
@@ -26,6 +28,8 @@ export const RESULT_DELAY_MS = 1400;
 /** Sound + banner feedback for a gameplay event. Shared by local and online matches. */
 /** Tick of the last chamber cleared (its banner stays up over the gate's). */
 let arcDoneTick = -999;
+/** Tick the group last woke at a camp (its banner stays up over the fire's and the gate's). */
+let campReturnTick = -999;
 
 export function presentEvent(e: GameEvent, tick: number, onResultShown: () => void): number | null {
   const hud = useHud.getState();
@@ -105,7 +109,7 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
     case 'gateOpened':
       sfx.go();
       // The chamber's own banner ("arc complete") wins over the gate's.
-      if (tick - arcDoneTick > 2) hud.set({ banner: { text: 'PORTÃO ABERTO!', key: tick } });
+      if (tick - arcDoneTick > 2 && tick - campReturnTick > 90) hud.set({ banner: { text: 'PORTÃO ABERTO!', key: tick } });
       break;
     case 'gateClosed':
       sfx.alarm(1);
@@ -325,6 +329,26 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
         }, 1700);
       }
       break;
+    case 'campLit':
+      sfx.brazier();
+      sfx.missionDone();
+      if (tick - campReturnTick > 90) hud.set({ banner: { text: e.again ? 'FOGUEIRA ACESA!' : 'ACAMPAMENTO! EXPEDIÇÃO SALVA', key: tick + 31 } });
+      break;
+    case 'coins':
+      if (e.amount >= 10) sfx.pickup();
+      break;
+    case 'groupFell':
+      sfx.defeat();
+      hud.set({ banner: { text: 'O GRUPO CAIU…', key: tick + 32 } });
+      break;
+    case 'campReturn':
+      campReturnTick = tick;
+      sfx.missionDone();
+      hud.set({ banner: { text: e.lost ? `DE VOLTA AO ACAMPAMENTO · −${e.lost} 🪙` : 'DE VOLTA AO ACAMPAMENTO', key: tick + 33 } });
+      break;
+    case 'expeditionEnded':
+      sfx.victory();
+      break;
     case 'mistStrike':
       sfx.hiss();
       break;
@@ -423,6 +447,12 @@ function adventureInfo(s: GameState): HudAdventure | null {
     index: r.id + 1,
     depth: adv.depth + 1,
     objective: r.objective.kind,
+    coins: s.expedition?.coins ?? 0,
+    campNear:
+      !!s.expedition &&
+      !s.expedition.ended &&
+      s.players.some((p) => p.alive && adv.props.some((q) => q.kind === 'campfire' && q.state === 'lit' && Math.abs(q.x - p.x) + Math.abs(q.y - p.y) <= 3.2)),
+    fallIn: s.expedition?.fallAt !== undefined ? Math.max(0, Math.ceil((s.expedition.fallAt - s.tick) / 60)) : null,
     progress: r.objective.kind === 'clear' ? s.enemies.filter((e) => e.alive && e.regionId === r.id && e.kind !== 'mimic').length : r.objective.progress,
     goal: r.objective.goal,
     keyCarried: adv.props.some((p) => p.kind === 'key' && p.region === r.id && p.state === 'carried'),

@@ -265,6 +265,8 @@ export interface MatchPerformance {
   /** Baús Miméticos and elites this player finished off. */
   mimics?: number;
   elites?: number;
+  /** Task 3: the expedition purse, paid when the expedition is ended at a campfire. */
+  expeditionCoins?: number;
 }
 
 export interface MatchReward {
@@ -295,7 +297,7 @@ export function matchReward(p: MatchPerformance): MatchReward {
   // Endless Adventure: every region crossed pays, a bit more the deeper it was.
   if (p.depth) add('Regiões atravessadas', Math.min(1500, Math.round(25 * p.depth + 1.5 * p.depth * p.depth)));
   const xp = lines.reduce((n, l) => n + l.xp, 0);
-  const coins = Math.round(xp / 4) + (p.outcome === 'win' ? 20 : 0);
+  const coins = Math.round(xp / 4) + (p.outcome === 'win' ? 20 : 0) + Math.max(0, Math.round(p.expeditionCoins ?? 0));
   return { xp, coins, lines };
 }
 

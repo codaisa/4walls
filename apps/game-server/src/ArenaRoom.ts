@@ -47,6 +47,7 @@ interface QueuedInput {
   ability: boolean;
   roll: boolean;
   jump: boolean;
+  campEnd?: boolean;
 }
 
 /**
@@ -336,7 +337,7 @@ export class ArenaRoom extends Room {
       const q = this.queues.get(slot) ?? [];
       const lastSeq = q.length ? q[q.length - 1].seq : (this.acks[slot] ?? -1);
       if (batch.seq <= lastSeq) continue; // stale or replayed
-      q.push({ seq: batch.seq, move: input.move, bomb: input.bomb, ability: input.ability, roll: !!input.roll, jump: !!input.jump });
+      q.push({ seq: batch.seq, move: input.move, bomb: input.bomb, ability: input.ability, roll: !!input.roll, jump: !!input.jump, campEnd: !!input.campEnd });
       if (q.length > MAX_QUEUED_INPUTS) {
         // Keep button presses from dropped frames so they are never silently lost.
         const dropped = q.splice(0, q.length - MAX_QUEUED_INPUTS);
@@ -344,6 +345,7 @@ export class ArenaRoom extends Room {
         if (dropped.some((d) => d.ability)) q[0].ability = true;
         if (dropped.some((d) => d.roll)) q[0].roll = true;
         if (dropped.some((d) => d.jump)) q[0].jump = true;
+        if (dropped.some((d) => d.campEnd)) q[0].campEnd = true;
       }
       this.queues.set(slot, q);
     }
@@ -362,12 +364,13 @@ export class ArenaRoom extends Room {
         later.ability ||= next.ability;
         later.roll ||= next.roll;
         later.jump ||= next.jump;
+        later.campEnd ||= next.campEnd;
         next = later;
       }
       if (next) {
         this.held.set(p.slot, next.move);
         this.acks[p.slot] = next.seq;
-        inputs[p.id] = { move: next.move, bomb: next.bomb, ability: next.ability, roll: next.roll, jump: next.jump };
+        inputs[p.id] = { move: next.move, bomb: next.bomb, ability: next.ability, roll: next.roll, jump: next.jump, campEnd: next.campEnd };
       } else {
         // No fresh input this tick (network jitter): keep walking in the held direction.
         inputs[p.id] = { ...EMPTY_INPUT, move: this.held.get(p.slot) ?? null };
@@ -446,6 +449,8 @@ export class ArenaRoom extends Room {
           depth: g.adventure?.depth ?? 0,
           atlas: [...new Set((g.adventure?.journey ?? []).map((j) => `${j.biome}:${j.variant}`))],
           bossFights: [...this.bossFights],
+          // Task 3: an expedition ended at a campfire pays its whole purse to everyone.
+          expeditionCoins: g.expedition?.ended ? g.expedition.coins : 0,
           mimics: t.mimics,
           elites: t.elites,
         },

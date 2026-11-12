@@ -1,5 +1,6 @@
 import { Cell, DIRS, DIR_VEC, OPPOSITE, RULES, TICK_DT, secToTicks, type Dir } from '@4walls/shared';
 import { spawnBomb } from './bombs';
+import { addCoins } from './expedition';
 import { getCell } from './grid';
 import { kickIntervalTicks } from './movement';
 import { randInt, nextRandom } from './rng';
@@ -211,6 +212,8 @@ function mimicDefeated(s: GameState, e: EnemyState) {
 export function enemyDown(s: GameState, e: EnemyState) {
   if (e.kind === 'spark' && e.elite) splitSpark(s, e);
   if (e.kind === 'mimic') mimicDefeated(s, e);
+  if (e.elite) addCoins(s, 6, e.x, e.y);
+  if (e.kind === 'mimic') addCoins(s, 20, e.x, e.y);
 }
 
 /** A chest turns out to be a Mimic: it bites whoever opened it (a shield) and wakes. */

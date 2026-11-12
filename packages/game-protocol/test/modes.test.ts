@@ -43,6 +43,29 @@ describe('every mode online', () => {
     expect(mirror.adventure!.gates[0].openedTick).toBe(server.adventure!.gates[0].openedTick);
   });
 
+  it('adventure (Task 3): a resumed expedition and a fall back to camp reach the mirror', () => {
+    const save = { camp: 5, coins: 60, snapshot: [], returns: 0, camps: 1, best: 6 };
+    const server = createGame({ ...cfg('adventure'), expedition: save });
+    const mirror = createGame({ ...cfg('adventure'), expedition: save });
+    for (let i = 0; i < server.countdownTicks + 2; i++) step(server, {});
+    expect(mirror.adventure!.windowKey).toBe(server.adventure!.windowKey);
+    // Light the fire and walk on, then the group falls.
+    const fire = server.adventure!.props.find((p) => p.kind === 'campfire')!;
+    server.players[0].x = server.players[0].px = fire.x - 2;
+    server.players[0].y = server.players[0].py = fire.y;
+    step(server, {});
+    sync(server, mirror);
+    expect(mirror.adventure!.props.find((p) => p.kind === 'campfire')!.state).toBe('lit');
+    server.players[0].alive = false;
+    for (let i = 0; i < 60 * 3; i++) step(server, {});
+    expect(server.expedition).toMatchObject({ returns: 1, coins: 30 });
+    sync(server, mirror);
+    expect(mirror.expedition).toMatchObject({ returns: 1, coins: 30, camp: 5 });
+    expect(mirror.adventure!.windowKey).toBe(server.adventure!.windowKey);
+    expect(Array.from(mirror.grid.cells)).toEqual(Array.from(server.grid.cells));
+    expect(mirror.adventure!.props.find((p) => p.kind === 'campfire')!.state).toBe(server.adventure!.props.find((p) => p.kind === 'campfire')!.state);
+  });
+
   it('boss rush: the mirror tracks the boss state, health and queue', () => {
     const { server, mirror } = pair('bossrush');
     server.boss!.hp = 9;

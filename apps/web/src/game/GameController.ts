@@ -1,5 +1,5 @@
 import { createGame, step, type GameEvent, type GameState, type InputMap } from '@4walls/core';
-import { TICK_DT, type GameConfig } from '@4walls/shared';
+import { EMPTY_INPUT, TICK_DT, type GameConfig } from '@4walls/shared';
 import { sfx } from '../audio/Sfx';
 import { deviceLabel, type DeviceId, type InputManager, type UiEvent } from '../input/InputManager';
 import { useHud } from '../store/useHud';
@@ -75,6 +75,11 @@ export class GameController implements MatchView {
     useHud.getState().set({ paused: p });
   }
 
+  private campEnd = false;
+  endExpedition() {
+    this.campEnd = true;
+  }
+
   update(dt: number) {
     this.input.poll();
     if (this.input.consumePause() && this.state.phase !== 'ended') this.setPaused(!this.paused);
@@ -83,6 +88,11 @@ export class GameController implements MatchView {
     while (this.acc >= TICK_DT) {
       const inputs: InputMap = {};
       for (const p of this.state.players) inputs[p.id] = this.input.read(p.slot);
+      // Task 3: "end the expedition" from the camp panel, on behalf of the first player near the fire.
+      if (this.campEnd) {
+        this.campEnd = false;
+        for (const p of this.state.players) inputs[p.id] = { ...(inputs[p.id] ?? EMPTY_INPUT), campEnd: true };
+      }
       step(this.state, inputs);
       for (const e of this.state.events) {
         const timer = presentEvent(e, this.state.tick, () => {});

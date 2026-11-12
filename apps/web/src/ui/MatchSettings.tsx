@@ -1,7 +1,8 @@
 import { useRef } from 'react';
 import { ARENAS, ARENA_IDS, type ArenaId } from '@4walls/shared';
 import { sfx } from '../audio/Sfx';
-import { MODE_INFO, type LocalMode } from '../store/useMatchSetup';
+import { MODE_INFO, useMatchSetup, type LocalMode } from '../store/useMatchSetup';
+import { describeExpedition, loadExpedition } from '../game/expeditionSave';
 import { useMenuNav } from './useMenuNav';
 
 interface Props {
@@ -20,6 +21,9 @@ interface Props {
 export function MatchSettings({ mode, arena, canStart, onMode, onArena, onStart, onClose, modes = Object.keys(MODE_INFO) as LocalMode[] }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   useMenuNav(ref, { onBack: onClose });
+  const resume = useMatchSetup((s) => s.resume);
+  const setResume = useMatchSetup((s) => s.setResume);
+  const saved = mode === 'adventure' && modes.includes('adventure') ? loadExpedition() : null;
   const pick = (fn: () => void) => () => {
     sfx.ui();
     fn();
@@ -39,6 +43,23 @@ export function MatchSettings({ mode, arena, canStart, onMode, onArena, onStart,
             ))}
           </div>
         </div>
+        {saved && (
+          <div>
+            <div className="mb-1.5 text-xs font-bold uppercase tracking-widest text-amber-100/60">Expedição</div>
+            <div className="flex flex-wrap gap-2">
+              <button data-nav onClick={pick(() => setResume(true))} className={`choice ${resume ? 'choice-on' : ''}`} data-testid="resume-expedition">
+                <span className="font-display text-xl [@media(max-height:500px)]:text-lg">🏕️ Continuar</span>
+                <span className="text-xs opacity-75 [@media(max-height:500px)]:text-[10px]">
+                  {describeExpedition(saved)} · 🪙 {saved.save.coins}
+                </span>
+              </button>
+              <button data-nav onClick={pick(() => setResume(false))} className={`choice ${!resume ? 'choice-on' : ''}`}>
+                <span className="font-display text-xl [@media(max-height:500px)]:text-lg">✨ Nova expedição</span>
+                <span className="text-xs opacity-75 [@media(max-height:500px)]:text-[10px]">Apaga a salva ao começar</span>
+              </button>
+            </div>
+          </div>
+        )}
         {mode !== 'adventure' && mode !== 'bossrush' && (
         <div>
           <div className="mb-1.5 text-xs font-bold uppercase tracking-widest text-amber-100/60">Arena</div>

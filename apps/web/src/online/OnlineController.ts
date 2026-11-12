@@ -111,6 +111,11 @@ export class OnlineController implements MatchView {
     useHud.getState().set({ paused: open });
   }
 
+  private campEnd = false;
+  endExpedition() {
+    this.campEnd = true;
+  }
+
   update(dt: number) {
     this.input.poll();
     if (this.input.consumePause() && this.state.phase !== 'ended') this.toggleMenu();
@@ -164,7 +169,7 @@ export class OnlineController implements MatchView {
     const moves = new Map<number, Dir | null>();
     for (const l of this.locals) {
       const inp = this.input.read(l.slot);
-      tuples.push(encodeInput(l.slot, inp));
+      tuples.push(encodeInput(l.slot, this.campEnd ? { ...inp, campEnd: true } : inp));
       moves.set(l.slot, inp.move);
       const p = this.state.players.find((pp) => pp.slot === l.slot);
       if (p) {
@@ -172,6 +177,7 @@ export class OnlineController implements MatchView {
         if (inp.bomb) this.predictBomb(l.slot, p);
       }
     }
+    this.campEnd = false;
     online.send('input', { seq: this.seq, i: tuples });
     this.pending.push({ seq: this.seq, moves });
     if (this.pending.length > 120) this.pending.shift();

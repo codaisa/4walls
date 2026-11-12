@@ -3,7 +3,7 @@
 // Key rule: a connection is NOT a player. One connection may own several player slots
 // (couch co-op online); every input names the slot it drives and the server checks ownership.
 import { ARENA_IDS, CHARACTER_IDS, DIRS, type ArenaId, type BossId, type CharacterId, type Dir, type GameConfig, type Loadout, type ModeId, type PlayerInput } from '@4walls/shared';
-import { regionInfo, syncAdventureWindow } from '@4walls/core';
+import { createAdventure, regionInfo, syncAdventureWindow } from '@4walls/core';
 import type {
   ArenaEventState,
   BombState,
@@ -18,6 +18,7 @@ import type {
   Phase,
   PlayerState,
   PowerupState,
+  ExpeditionState,
 } from '@4walls/core';
 
 export const ROOM_NAME = 'arena';
@@ -81,8 +82,8 @@ export interface Messages {
   input: InputBatch;
 }
 
-/** [slot, dirIndex (-1 = none), bomb (0/1), ability (0/1), roll (0/1), jump (0/1)] */
-export type InputTuple = [number, number, number, number, number?, number?];
+/** [slot, dirIndex (-1 = none), bomb (0/1), ability (0/1), roll (0/1), jump (0/1), campEnd (0/1)] */
+export type InputTuple = [number, number, number, number, number?, number?, number?];
 export interface InputBatch {
   seq: number;
   i: InputTuple[];
@@ -95,6 +96,7 @@ export const encodeInput = (slot: number, inp: PlayerInput): InputTuple => [
   inp.ability ? 1 : 0,
   inp.roll ? 1 : 0,
   inp.jump ? 1 : 0,
+  inp.campEnd ? 1 : 0,
 ];
 
 /** Never trust a client payload: coerce anything malformed into a safe, empty input. */
@@ -112,11 +114,11 @@ export function parseInputBatch(raw: unknown): { seq: number; inputs: { slot: nu
   if (!Number.isSafeInteger(r.seq) || (r.seq as number) < 0 || !Array.isArray(r.i) || r.i.length > MAX_ROOM_SLOTS) return null;
   const inputs: { slot: number; input: PlayerInput }[] = [];
   for (const t of r.i) {
-    if (!Array.isArray(t) || t.length < 3 || t.length > 6) return null;
-    const [slot, d, b, a, r, j] = t;
+    if (!Array.isArray(t) || t.length < 3 || t.length > 7) return null;
+    const [slot, d, b, a, r, j, c] = t;
     if (!Number.isInteger(slot) || slot < 0 || slot >= MAX_ROOM_SLOTS) return null;
     if (!Number.isInteger(d) || d < -1 || d >= DIRS.length) return null;
-    inputs.push({ slot, input: { move: d >= 0 ? DIRS[d] : null, bomb: b === 1, ability: a === 1, roll: r === 1, jump: j === 1 } });
+    inputs.push({ slot, input: { move: d >= 0 ? DIRS[d] : null, bomb: b === 1, ability: a === 1, roll: r === 1, jump: j === 1, ...(c === 1 ? { campEnd: true } : {}) } });
   }
   return { seq: r.seq as number, inputs };
 }
@@ -204,6 +206,8 @@ export interface Snapshot {
   adv?: AdvSnap;
   /** Boss Rush / Adventure chambers: the boss in the arena, the queue, how many fell, when the next one enters. */
   bs?: Omit<BossState, 'px' | 'py'> | null;
+  /** Task 3: the expedition (purse, last camp, how many times the group fell back). */
+  ex?: ExpeditionState | null;
   bq?: BossId[];
   bd?: number;
   nb?: number;
@@ -252,6 +256,7 @@ export function encodeSnapshot(s: GameState, ack: Record<number, number>, ev: Ga
           },
         }
       : {}),
+    ...(s.expedition ? { ex: s.expedition } : {}),
     ...(s.mode === 'bossrush' || s.adventure
       ? {
           bs: s.boss ? (({ px: _px, py: _py, ...b }) => ({ ...b, x: r3(b.x), y: r3(b.y) }))(s.boss) : null,
@@ -271,6 +276,14 @@ export function applySnapshot(s: GameState, snap: Snapshot) {
   s.phase = snap.ph;
   s.phaseStartTick = snap.pst;
   s.timeLeftTicks = snap.tl;
+  // The group fell back to a camp: start the mirror's world over from that camp (same seed).
+  if (snap.ex && s.adventure && snap.ex.returns !== (s.expedition?.returns ?? 0)) {
+    const fresh = createAdventure(s.config.seed, snap.ex.camp);
+    fresh.adventure.journey = s.adventure.journey;
+    s.adventure = fresh.adventure;
+    s.grid = fresh.grid;
+  }
+  if (snap.ex) s.expedition = { ...snap.ex };
   // Endless Adventure: rebuild the same live regions as the server before copying the cells.
   if (snap.adv && s.adventure && snap.adv.w.join(',') !== s.adventure.windowKey) syncAdventureWindow(s, snap.adv.w);
   if (snap.g.length === s.grid.cells.length) for (let i = 0; i < snap.g.length; i++) s.grid.cells[i] = snap.g.charCodeAt(i) - 48;

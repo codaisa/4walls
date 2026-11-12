@@ -43,7 +43,12 @@ export interface HudAdventure {
   index: number;
   /** Deepest region reached (1-based). */
   depth: number;
-  objective: 'clear' | 'key' | 'lever' | 'seals' | 'purify' | 'boss';
+  objective: 'clear' | 'key' | 'lever' | 'seals' | 'purify' | 'boss' | 'camp';
+  /** Task 3: the expedition purse, and whether someone stands at a lit campfire (can end it). */
+  coins: number;
+  campNear: boolean;
+  /** Seconds until the fallen group wakes at the last camp (null when not falling). */
+  fallIn: number | null;
   progress: number;
   goal: number;
   /** Key objective: somebody carries the key. */
