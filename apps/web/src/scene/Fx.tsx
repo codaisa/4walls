@@ -242,6 +242,25 @@ export function Fx() {
               });
             break;
           }
+          case 'brazierLit': {
+            for (let i = 0; i < 30; i++)
+              sparks.spawn({
+                x: e.x + ox + rnd(-0.2, 0.2), y: rnd(0.6, 1.0), z: e.y + oz + rnd(-0.2, 0.2),
+                vx: rnd(-0.8, 0.8), vy: rnd(2, 5), vz: rnd(-0.8, 0.8),
+                life: rnd(0.5, 1.0), size: rnd(0.06, 0.12), color: i % 2 ? '#ffb030' : '#ff5a1f', intensity: 3, drag: 1.2,
+              });
+            break;
+          }
+          case 'missionDone': {
+            for (let i = 0; i < 40; i++)
+              sparks.spawn({
+                x: e.x + ox + rnd(-0.3, 0.3), y: rnd(0.1, 0.4), z: e.y + oz + rnd(-0.3, 0.3),
+                vx: rnd(-0.4, 0.4), vy: rnd(3, 7), vz: rnd(-0.4, 0.4),
+                life: rnd(0.7, 1.2), size: rnd(0.06, 0.12), color: i % 2 ? '#ffd23f' : '#3fd0ff', intensity: 3, drag: 1,
+              });
+            fx.shake = Math.min(1, fx.shake + 0.2);
+            break;
+          }
           case 'chestOpened': {
             // Coins and sparkles burst out of the chest.
             for (let i = 0; i < (e.rare ? 44 : 26); i++)

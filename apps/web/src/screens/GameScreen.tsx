@@ -8,6 +8,7 @@ import { HeroReveal } from '../ui/HeroReveal';
 import { AdventureMap } from '../ui/AdventureMap';
 import { ChapterCard } from '../ui/ChapterCard';
 import { EdgeArrows } from '../ui/EdgeArrows';
+import { TutorialHints } from '../ui/TutorialHints';
 import { inputManager } from '../input/instance';
 import { GameScene } from '../scene/GameScene';
 import { useMatchSetup, type LocalMode } from '../store/useMatchSetup';
@@ -129,6 +130,7 @@ export function GameScreen() {
         <>
           <ChapterCard key={`chapter-${controller.state.config.seed}`} controller={controller} />
           <EdgeArrows />
+          <TutorialHints key={`tips-${controller.state.config.seed}`} controller={controller} />
           <div className="hud-safe pointer-events-none z-30">
             <AdventureMap controller={controller} />
           </div>

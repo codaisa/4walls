@@ -260,6 +260,12 @@ function AdventurePanel() {
       <div className="flex items-center justify-center gap-2 text-sm font-bold [@media(max-height:500px)]:text-xs" data-testid="adventure-objective">
         {objective}
       </div>
+      {a.braziers && (
+        <div className={`text-[11px] font-bold ${a.braziers.lit === a.braziers.goal ? 'text-emerald-300' : 'text-orange-200/90'}`} data-testid="mission">
+          🔥 Braseiros {a.braziers.lit}/{a.braziers.goal}
+          {a.braziers.lit === a.braziers.goal ? ' · tesouro revelado!' : ' (opcional)'}
+        </div>
+      )}
       {a.closingIn !== null && (
         <div className="mt-0.5 animate-pulse text-[11px] font-black uppercase tracking-wider text-red-300" data-testid="gate-closing">
           ⛓ O portão de trás fecha em {a.closingIn}s

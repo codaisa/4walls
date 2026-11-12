@@ -190,6 +190,19 @@ class SfxEngine {
     this.burst(0.3, 3000, 600, 0.3, 2);
   }
 
+  /** Fagulha spots you: a rising sizzle (the warning before the charge). */
+  sparkAlert() {
+    this.burst(0.3, 6000, 2500, 0.18, 3);
+    this.tone(700, 0.35, { to: 1500, type: 'sawtooth', gain: 0.07 });
+  }
+  brazier() {
+    this.burst(0.6, 1600, 300, 0.4, 0.6);
+    this.tone(220, 0.3, { to: 330, type: 'triangle', gain: 0.12 });
+  }
+  missionDone() {
+    [523, 659, 784, 1046, 784, 1046, 1318].forEach((f, i) => this.tone(f, 0.18, { type: 'square', gain: 0.07, delay: i * 0.08, bus: 'ui' }));
+  }
+
   // ── Rescued heroes ──
   /** "Joins the fight!": a whoosh, a brass stab and (new hero) a fanfare. */
   heroReveal(isNew: boolean) {

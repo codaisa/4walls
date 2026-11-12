@@ -31,6 +31,71 @@ function chooseDir(s: GameState, e: EnemyState): Dir | null {
   return pool[randInt(s, pool.length)];
 }
 
+/**
+ * Fagulha: wanders like a Magmito until a player stands in a straight, clear line within sight.
+ * Then it stops and glows (the warning), charges along that line until it hits something, and rests.
+ */
+function updateSpark(s: GameState, e: EnemyState): boolean {
+  const mode = e.mode ?? 'wander';
+  const until = e.modeUntil ?? 0;
+  if (mode === 'alert') {
+    if (s.tick < until) return true;
+    e.mode = 'charge';
+    return true;
+  }
+  if (mode === 'rest') {
+    if (s.tick < until) return true;
+    e.mode = 'wander';
+    return false;
+  }
+  if (mode === 'charge' && e.dir) {
+    let budget = RULES.sparkChargeSpeed * TICK_DT * (e.speedMul ?? 1);
+    while (budget > 1e-6) {
+      if (e.x === e.tx && e.y === e.ty) {
+        const v = DIR_VEC[e.dir];
+        if (!passable(s, e.x + v.x, e.y + v.y)) {
+          e.mode = 'rest';
+          e.modeUntil = s.tick + Math.round(RULES.sparkRestSec / TICK_DT);
+          return true;
+        }
+        e.tx = e.x + v.x;
+        e.ty = e.y + v.y;
+      }
+      const dx = e.tx - e.x;
+      const dy = e.ty - e.y;
+      const d = Math.abs(dx) + Math.abs(dy);
+      const mv = Math.min(d, budget);
+      e.x += (dx / d) * mv;
+      e.y += (dy / d) * mv;
+      budget -= mv;
+      if (Math.abs(e.tx - e.x) + Math.abs(e.ty - e.y) < 1e-6) {
+        e.x = e.tx;
+        e.y = e.ty;
+      }
+    }
+    return true;
+  }
+  // Wandering: at cell centers, look down the four lines for a player.
+  if (e.x === e.tx && e.y === e.ty) {
+    for (const d of DIRS) {
+      const v = DIR_VEC[d];
+      for (let k = 1; k <= RULES.sparkSight; k++) {
+        const cx = e.x + v.x * k;
+        const cy = e.y + v.y * k;
+        if (!passable(s, cx, cy)) break;
+        if (s.players.some((p) => p.alive && Math.round(p.x) === cx && Math.round(p.y) === cy)) {
+          e.dir = d;
+          e.mode = 'alert';
+          e.modeUntil = s.tick + Math.round(RULES.sparkAlertSec / TICK_DT);
+          s.events.push({ type: 'sparkAlert', enemyId: e.id, x: e.x, y: e.y });
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 /** Magmites wander cell to cell: at each cell center they keep going or pick a new open direction. */
 export function updateEnemies(s: GameState) {
   const step = RULES.enemySpeed * TICK_DT;
@@ -38,7 +103,8 @@ export function updateEnemies(s: GameState) {
     e.px = e.x;
     e.py = e.y;
     if (!e.alive || s.tick < e.frozenUntil) continue;
-    let budget = step * (e.speedMul ?? 1);
+    if (e.kind === 'spark' && updateSpark(s, e)) continue;
+    let budget = (e.kind === 'spark' ? RULES.sparkSpeed * TICK_DT : step) * (e.speedMul ?? 1);
     while (budget > 1e-6) {
       if (e.x === e.tx && e.y === e.ty) {
         e.dir = chooseDir(s, e);

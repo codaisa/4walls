@@ -114,6 +114,11 @@ Limites desta versão:
   - **Regiões sem fim:** cada região é gerada na hora a partir da seed (bioma, formato, objetivo, nome). As 5 primeiras formam a introdução roteirizada; depois tudo é sorteado e a dificuldade sobe sem parar: mais Magmitos, mais rápidos e mais blocos, até um teto.
   - **Mundo em streaming:** só ficam vivas a região anterior, a atual e a próxima. Quando todos passam pelo portão, **o portão de trás se fecha** (em 15 s, quem ficar para trás é puxado) e a região antiga é descartada.
   - **Objetivos por região:** explodir todos os Magmitos, ou **achar a chave** e levá-la até o cadeado do portão. Quem carrega a chave anda 10% mais devagar; se morrer, a chave cai ali.
+  - **Fagulhas:** brasas rápidas que, ao ver você em linha reta (até 5 casas, sem obstáculo), **brilham e incham** por meio segundo e então **investem** pela linha até bater em algo. Saia da mira! Aparecem a partir da região 2 e ficam mais comuns com a profundidade.
+  - **Respiros de cinza:** grelhas no chão que, a cada 9 s, soltam uma nuvem que esconde o chão e as bombas por 4 s (o respiro avermelha 1 s antes).
+  - **Missão dos braseiros (opcional):** três braseiros apagados na borda da ilha; acenda os três com explosões ao lado e um **baú raro** surge do chão.
+  - **Praças:** algumas regiões têm canteiros em volta do centro, criando rotas alternativas e voltas para fugir.
+  - **Dicas de tutorial:** na primeira vez de cada coisa (bomba, fuga, power-up, cela, muro rachado, chave, Fagulha, braseiro, cinza, mapa) aparece uma dica curta, uma vez por aparelho, com os botões do controle em uso.
   - **Segredos e baús:** muros rachados com veios brilhantes escondem um baú raro; também há baús comuns. Abrem ao encostar ou com uma explosão.
   - Cada portão aberto **traz de volta os aliados caídos**.
   - **Prisioneiros em celas** (uma por região): resgate heróis brasileiros (veja *Heróis resgatáveis*).

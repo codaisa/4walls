@@ -89,6 +89,12 @@ export const RULES = {
   blockFill: 0.7,
   powerupChance: 0.38,
   enemySpeed: 1.9,
+  // Fagulha (Adventure): quick spark that charges in a straight line after a short warning.
+  sparkSpeed: 2.5,
+  sparkSight: 5,
+  sparkAlertSec: 0.45,
+  sparkChargeSpeed: 6.5,
+  sparkRestSec: 1.1,
   enemyContactDist: 0.62,
   // Phase 5 content
   kickSpeed: 9, // cells / second for a kicked bomb

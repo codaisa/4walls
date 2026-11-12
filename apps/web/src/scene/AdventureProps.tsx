@@ -26,7 +26,9 @@ export function AdventureProps() {
   const props = controller.state.adventure?.props ?? [];
   return (
     <>
-      {props.map((p) => (p.kind === 'chest' ? <Chest key={p.id} id={p.id} /> : <GateKey key={p.id} id={p.id} />))}
+      {props.map((p) =>
+        p.kind === 'chest' ? <Chest key={p.id} id={p.id} /> : p.kind === 'key' ? <GateKey key={p.id} id={p.id} /> : p.kind === 'brazier' ? <Brazier key={p.id} id={p.id} /> : <AshVent key={p.id} id={p.id} />,
+      )}
       <GateLocks />
     </>
   );
@@ -42,8 +44,10 @@ function Chest({ id }: { id: number }) {
   const { controller, ox, oz } = useGame();
   const get = useProp(id);
   const p0 = get()!;
+  const root = useRef<THREE.Group>(null!);
   const lid = useRef<THREE.Group>(null!);
   const ring = useRef<THREE.Mesh>(null!);
+  const revealedAt = useRef<number | null>(null);
   const shine = useRef<THREE.Mesh>(null!);
   const openedAt = useRef<number | null>(p0.state === 'open' ? -1 : null);
   useEffect(
@@ -58,6 +62,12 @@ function Chest({ id }: { id: number }) {
   useFrame(({ clock }) => {
     const p = get();
     if (!p) return;
+    // Mission reward: hidden until the braziers are lit, then it pops up out of the ground.
+    root.current.visible = p.state !== 'hidden';
+    if (p.state === 'hidden') return;
+    if (revealedAt.current === null) revealedAt.current = p.tick > 0 && controller.state.tick - p.tick < 30 ? performance.now() : -1;
+    const rk = revealedAt.current < 0 ? 1 : Math.min(1, (performance.now() - revealedAt.current) / 600);
+    root.current.scale.setScalar(Math.max(0.0001, rk < 1 ? rk * (1 + 0.3 * Math.sin(rk * Math.PI)) : 1));
     if (p.state === 'open' && openedAt.current === null) openedAt.current = -1;
     const t = clock.elapsedTime;
     const since = openedAt.current === null ? -1 : openedAt.current < 0 ? 9999 : performance.now() - openedAt.current;
@@ -78,7 +88,7 @@ function Chest({ id }: { id: number }) {
     }
   });
   return (
-    <group position={[p0.x + ox, 0, p0.y + oz]}>
+    <group ref={root} position={[p0.x + ox, 0, p0.y + oz]} visible={p0.state !== 'hidden'}>
       <mesh position={[0, 0.2, 0]} geometry={bodyGeo} material={rare ? woodDark : wood} castShadow receiveShadow />
       {[-0.24, 0.24].map((x) => (
         <mesh key={x} position={[x, 0.2, 0]} geometry={bandGeo} material={band} castShadow />
@@ -217,5 +227,114 @@ function GateLocks() {
         </group>
       ))}
     </>
+  );
+}
+
+const stone = new THREE.MeshStandardMaterial({ color: '#5a4e58', roughness: 0.85, flatShading: true });
+const coal = new THREE.MeshStandardMaterial({ color: '#1c1416', roughness: 0.9 });
+const fireMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 1.3, 0.25), toneMapped: false, transparent: true, opacity: 0.9, depthWrite: false });
+const emberGlow = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.5, 0.1), toneMapped: false });
+const ashMat = new THREE.MeshStandardMaterial({ color: '#6e6468', roughness: 1, transparent: true, opacity: 0.88, depthWrite: false });
+
+/** Brazier (side mission): a stone bowl of coal; a blast next to it sets it roaring. */
+function Brazier({ id }: { id: number }) {
+  const { ox, oz } = useGame();
+  const get = useProp(id);
+  const p0 = get()!;
+  const fire = useRef<THREE.Group>(null!);
+  const light = useRef<THREE.PointLight>(null!);
+  const smolder = useRef<THREE.Mesh>(null!);
+  const litAt = useRef<number | null>(p0.state === 'lit' ? -1 : null);
+  useFrame(({ clock }) => {
+    const p = get();
+    if (!p) return;
+    const t = clock.elapsedTime;
+    if (p.state === 'lit' && litAt.current === null) litAt.current = performance.now();
+    const k = litAt.current === null ? 0 : litAt.current < 0 ? 1 : Math.min(1, (performance.now() - litAt.current) / 400);
+    fire.current.visible = k > 0;
+    const flick = 0.85 + 0.15 * Math.sin(t * 17 + id) + 0.1 * Math.sin(t * 31);
+    fire.current.scale.set(Math.max(0.0001, k), Math.max(0.0001, k * flick * (k < 1 ? 1.6 - 0.6 * k : 1)), Math.max(0.0001, k));
+    fire.current.rotation.y = t * 1.5;
+    light.current.intensity = 6 * k * flick;
+    smolder.current.visible = k === 0;
+  });
+  return (
+    <group position={[p0.x + ox, 0, p0.y + oz]}>
+      <mesh position={[0, 0.22, 0]} material={stone} castShadow receiveShadow>
+        <cylinderGeometry args={[0.2, 0.28, 0.44, 8]} />
+      </mesh>
+      <mesh position={[0, 0.5, 0]} material={stone} castShadow>
+        <cylinderGeometry args={[0.38, 0.24, 0.16, 10, 1, true]} />
+      </mesh>
+      <mesh position={[0, 0.5, 0]} material={coal}>
+        <cylinderGeometry args={[0.32, 0.32, 0.06, 10]} />
+      </mesh>
+      {/* Unlit: a faint glow between the coals hints that it can burn */}
+      <mesh ref={smolder} position={[0, 0.54, 0]} material={emberGlow}>
+        <sphereGeometry args={[0.06, 8, 6]} />
+      </mesh>
+      <group ref={fire} position={[0, 0.55, 0]}>
+        <mesh position={[0, 0.25, 0]} material={fireMat}>
+          <coneGeometry args={[0.26, 0.6, 9, 1, true]} />
+        </mesh>
+        <mesh position={[0.08, 0.18, 0.05]} rotation={[0, 1, 0]} material={fireMat}>
+          <coneGeometry args={[0.15, 0.42, 7, 1, true]} />
+        </mesh>
+        <mesh position={[-0.08, 0.15, -0.04]} material={fireMat}>
+          <coneGeometry args={[0.13, 0.36, 7, 1, true]} />
+        </mesh>
+      </group>
+      <pointLight ref={light} position={[0, 1, 0]} color="#ff8a2a" intensity={0} distance={5} />
+    </group>
+  );
+}
+
+const PUFF_PERIOD = 540; // ticks between puffs (9 s)
+const PUFF_LEN = 240; // ticks the cloud lasts (4 s)
+
+/**
+ * Ash vent: a cracked grate that breathes out a thick ash cloud every few seconds, hiding the
+ * floor (and the bombs on it) around it. Timing comes from the tick, so everyone sees it alike.
+ */
+function AshVent({ id }: { id: number }) {
+  const { controller, ox, oz } = useGame();
+  const get = useProp(id);
+  const p0 = get()!;
+  const cloud = useRef<THREE.Group>(null!);
+  const glow = useRef<THREE.Mesh>(null!);
+  const puffs = useMemo(
+    () => Array.from({ length: 14 }, (_, i) => ({ a: (i / 14) * Math.PI * 2 + i, r: 0.3 + (i % 4) * 0.33, y: 0.3 + (i % 3) * 0.35, s: 0.55 + (i % 5) * 0.12 })),
+    [],
+  );
+  useFrame(({ clock }) => {
+    const ph = (controller.tickF + id * 97) % PUFF_PERIOD;
+    const warn = ph > PUFF_PERIOD - 60; // a second of rumbling before it blows
+    const on = ph < PUFF_LEN;
+    const k = on ? Math.min(1, ph / 20) * Math.min(1, (PUFF_LEN - ph) / 50) : 0;
+    cloud.current.visible = k > 0.01;
+    cloud.current.scale.setScalar(0.6 + 0.4 * k);
+    cloud.current.rotation.y = clock.elapsedTime * 0.2;
+    (glow.current.material as THREE.MeshBasicMaterial).color.setRGB(warn ? 2.4 : 0.9, warn ? 0.8 : 0.3, 0.05);
+  });
+  return (
+    <group position={[p0.x + ox, 0, p0.y + oz]}>
+      <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]} material={coal}>
+        <circleGeometry args={[0.4, 10]} />
+      </mesh>
+      <mesh position={[0, 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]} material={stone}>
+        <ringGeometry args={[0.32, 0.46, 10]} />
+      </mesh>
+      <mesh ref={glow} position={[0, 0.045, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.22, 10]} />
+        <meshBasicMaterial color={new THREE.Color(0.9, 0.3, 0.05)} toneMapped={false} />
+      </mesh>
+      <group ref={cloud} visible={false}>
+        {puffs.map((q, i) => (
+          <mesh key={i} position={[Math.cos(q.a) * q.r, q.y, Math.sin(q.a) * q.r]} scale={q.s} material={ashMat}>
+            <icosahedronGeometry args={[0.6, 1]} />
+          </mesh>
+        ))}
+      </group>
+    </group>
   );
 }

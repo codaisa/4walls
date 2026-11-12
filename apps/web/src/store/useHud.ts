@@ -48,6 +48,8 @@ export interface HudAdventure {
   goal: number;
   /** Key objective: somebody carries the key. */
   keyCarried: boolean;
+  /** Side mission in this region (null if none). */
+  braziers: { lit: number; goal: number } | null;
   gateOpen: boolean;
   /** Seconds until the gate behind closes (null when nothing is closing). */
   closingIn: number | null;

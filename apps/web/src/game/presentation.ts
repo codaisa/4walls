@@ -115,6 +115,17 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
     case 'keyDropped':
       sfx.keyDrop();
       break;
+    case 'sparkAlert':
+      sfx.sparkAlert();
+      break;
+    case 'brazierLit':
+      sfx.brazier();
+      if (e.lit < e.goal) hud.set({ banner: { text: `BRASEIRO ${e.lit}/${e.goal}`, key: tick + 6 } });
+      break;
+    case 'missionDone':
+      sfx.missionDone();
+      hud.set({ banner: { text: 'TESOURO REVELADO!', key: tick + 7 } });
+      break;
     case 'keyDelivered':
       sfx.unlockGate();
       break;
@@ -259,6 +270,10 @@ function adventureInfo(s: GameState): HudAdventure | null {
     progress: r.objective.kind === 'clear' ? s.enemies.filter((e) => e.alive && e.regionId === r.id).length : r.objective.progress,
     goal: r.objective.goal,
     keyCarried: adv.props.some((p) => p.kind === 'key' && p.region === r.id && p.state === 'carried'),
+    braziers: (() => {
+      const all = adv.props.filter((p) => p.kind === 'brazier' && p.region === r.id);
+      return all.length ? { lit: all.filter((p) => p.state === 'lit').length, goal: all.length } : null;
+    })(),
     gateOpen: r.cleared,
     closingIn,
   };

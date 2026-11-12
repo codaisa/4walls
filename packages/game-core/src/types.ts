@@ -147,7 +147,10 @@ export interface ArenaEventState {
 export interface EnemyState {
   id: number;
   /** magmite = wandering lava blob; sprout = Guardião's summoned seedling. */
-  kind: 'magmite' | 'sprout';
+  kind: 'magmite' | 'sprout' | 'spark';
+  /** Fagulha behavior: wander → alert (telegraph) → charge in a line → rest. */
+  mode?: 'wander' | 'alert' | 'charge' | 'rest';
+  modeUntil?: number;
   x: number;
   y: number;
   px: number;
@@ -210,7 +213,7 @@ export interface GateState {
   kind?: 'exit' | 'back';
 }
 
-export type PropKind = 'chest' | 'key';
+export type PropKind = 'chest' | 'key' | 'brazier' | 'vent';
 
 /**
  * Adventure props. Chest: opened by walking onto it or by a blast, drops loot (rare = secret).
@@ -223,8 +226,8 @@ export interface PropState {
   region: number;
   x: number;
   y: number;
-  /** chest: closed | open; key: idle | carried | used */
-  state: 'closed' | 'open' | 'idle' | 'carried' | 'used';
+  /** chest: closed | open | hidden (mission reward); key: idle | carried | used; brazier: unlit | lit; vent: idle */
+  state: 'closed' | 'open' | 'idle' | 'carried' | 'used' | 'hidden' | 'unlit' | 'lit';
   rare?: boolean;
   carrierId?: string | null;
   /** Where a key returns if it is lost. */
@@ -350,6 +353,9 @@ export type GameEvent =
   | { type: 'keyDropped'; propId: number; x: number; y: number }
   | { type: 'keyDelivered'; propId: number; playerId: string; region: number }
   | { type: 'secretFound'; x: number; y: number; byId: string }
+  | { type: 'sparkAlert'; enemyId: number; x: number; y: number }
+  | { type: 'brazierLit'; propId: number; x: number; y: number; region: number; lit: number; goal: number }
+  | { type: 'missionDone'; region: number; x: number; y: number }
   /** A rescued hero joins: `revived` = a fallen ally came back as them, otherwise the rescuer turned into them. */
   | { type: 'heroJoined'; playerId: string; byId: string; characterId: string; previousId: string; revived: boolean; x: number; y: number }
   | { type: 'bossSpawned'; boss: BossId; index: number; total: number }

@@ -97,6 +97,35 @@ export function difficulty(depth: number) {
   };
 }
 
+/** Map mechanics of a region: shape, Fagulhas, ash vents, the braziers side mission. */
+export interface RegionMods {
+  shape: 'island' | 'plaza';
+  sparks: number;
+  vents: number;
+  braziers: boolean;
+}
+
+export function regionMods(seed: number, id: number): RegionMods {
+  const enemies = difficulty(id).enemies;
+  const scripted: (RegionMods | undefined)[] = [
+    { shape: 'island', sparks: 0, vents: 0, braziers: false }, // O despertar: just the basics
+    { shape: 'plaza', sparks: 2, vents: 2, braziers: true }, // A infestação: everything new at once
+    { shape: 'island', sparks: 2, vents: 1, braziers: false },
+    { shape: 'plaza', sparks: 2, vents: 1, braziers: true },
+    { shape: 'island', sparks: 1, vents: 0, braziers: false },
+  ];
+  if (scripted[id]) return { ...scripted[id]!, sparks: Math.min(scripted[id]!.sparks, enemies - 1) };
+  const r = subRng(seed, id, 5);
+  const biome = regionInfo(seed, id).biome;
+  return {
+    shape: nextRandom(r) < 0.35 ? 'plaza' : 'island',
+    // Fagulhas take a growing share of the Magmitos as the journey goes on.
+    sparks: Math.min(enemies - 1, Math.floor(enemies * Math.min(0.5, 0.15 + 0.03 * (id - 5)))),
+    vents: biome === 'forest' ? 0 : nextRandom(r) < 0.55 ? 1 + randInt(r, 2) : 0,
+    braziers: nextRandom(r) < 0.4,
+  };
+}
+
 // ───────────────────────────── lattice ─────────────────────────────
 
 /** Grows the direction chain so that dirs[upTo] exists. Never two vertical steps in a row. */
@@ -144,6 +173,7 @@ interface Blueprint {
   enemySpots: Pt[];
   enemyCount: number;
   enemySpeed: number;
+  sparks: number;
 }
 
 /** Builds region `id` deterministically from the seed (chain must reach id + 1). */
@@ -173,6 +203,19 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
       const rr = 1 + 0.17 * Math.sin(3 * t + p1) + 0.1 * Math.sin(5 * t + p2);
       if (dx * dx + dy * dy <= rr * rr) set(x, y, mod2(x) === 0 && mod2(y) === 0 ? Cell.Wall : Cell.Floor);
     }
+
+  const mods = regionMods(seed, id);
+  if (mods.shape === 'plaza') {
+    const cx0 = ox + 7;
+    const cy0 = oy + 7;
+    for (let y = cy0 - 3; y <= cy0 + 3; y++)
+      for (let x = cx0 - 4; x <= cx0 + 4; x++) {
+        const dx = Math.abs(x - cx0);
+        const dy = Math.abs(y - cy0);
+        // Beds two cells away from the crossroads, leaving a ring path around each one.
+        if (dx >= 2 && dx <= 3 && dy >= 1 && dy <= 2) set(x, y, Cell.Wall);
+      }
+  }
 
   // 2. Corridors from the center to the entry edge and to the exit edge (odd row/column).
   const center = { x: ox + 7, y: oy + 7 };
@@ -291,7 +334,69 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
     }
   }
 
-  // 9. Where Magmitos may start: open floor, away from the arrival point, gates, cage and props.
+  // 9. Ash vents: grates in the floor that puff blinding ash clouds now and then (walkable).
+  for (let v = 0; v < mods.vents; v++) {
+    const spots = candidates((x, y) => get(x, y) === Cell.Floor && free(x, y));
+    if (!spots.length) break;
+    const c = spots[randInt(r, spots.length)];
+    taken.push(c);
+    props.push({ id: propId(), kind: 'vent', region: id, x: c.x, y: c.y, state: 'idle' });
+  }
+
+  // 10. Side mission: three braziers on the island's rim; lighting all of them (blasts next to
+  // them) reveals a rare chest.
+  if (mods.braziers) {
+    const rim = candidates(
+      (x, y) => get(x, y) === Cell.Floor && free(x, y) && DIRS.some((d) => get(x + DIR_VEC[d].x, y + DIR_VEC[d].y) === Cell.Wall && !(mod2(x + DIR_VEC[d].x) === 0 && mod2(y + DIR_VEC[d].y) === 0)),
+    );
+    // A brazier becomes a pillar: it may never cut the island in two.
+    const reachableCount = () => {
+      const seen = new Set<number>([at(start.x, start.y)]);
+      const q: Pt[] = [start];
+      while (q.length) {
+        const c = q.shift()!;
+        for (const d of DIRS) {
+          const nx = c.x + DIR_VEC[d].x;
+          const ny = c.y + DIR_VEC[d].y;
+          if (!inChunk(nx, ny) || get(nx, ny) === Cell.Wall || seen.has(at(nx, ny))) continue;
+          seen.add(at(nx, ny));
+          q.push({ x: nx, y: ny });
+        }
+      }
+      return seen.size;
+    };
+    // Removing one reachable cell may only lose that cell (never cut off anything behind it).
+    let base = reachableCount();
+    const keepsConnected = (c: Pt) => {
+      const before = get(c.x, c.y);
+      set(c.x, c.y, Cell.Wall);
+      const ok = reachableCount() === base - 1;
+      set(c.x, c.y, before as Cell);
+      return ok;
+    };
+    const picked: Pt[] = [];
+    for (let tries = 0; tries < 60 && picked.length < 3 && rim.length; tries++) {
+      const c = rim[randInt(r, rim.length)];
+      if (!picked.every((q) => Math.abs(q.x - c.x) + Math.abs(q.y - c.y) >= 6) || !keepsConnected(c)) continue;
+      picked.push(c);
+      set(c.x, c.y, Cell.Wall); // reserve now so the next one is checked against it
+      base -= 1;
+    }
+    const reward = candidates((x, y) => get(x, y) === Cell.Floor && free(x, y) && picked.every((q) => Math.abs(q.x - x) + Math.abs(q.y - y) > 2));
+    if (picked.length !== 3 || !reward.length) for (const c of picked) set(c.x, c.y, Cell.Floor);
+    if (picked.length === 3 && reward.length) {
+      for (const c of picked) {
+        // The brazier stands on its cell like a pillar; a blast on any side lights it.
+        taken.push(c);
+        props.push({ id: propId(), kind: 'brazier', region: id, x: c.x, y: c.y, state: 'unlit' });
+      }
+      const ch = reward[randInt(r, reward.length)];
+      taken.push(ch);
+      props.push({ id: propId(), kind: 'chest', region: id, x: ch.x, y: ch.y, state: 'hidden', rare: true });
+    }
+  }
+
+  // 11. Where Magmitos may start: open floor, away from the arrival point, gates, cage and props.
   const enemySpots = candidates((x, y) => get(x, y) === Cell.Floor && !near(start, x, y, 5) && free(x, y));
   for (let i = enemySpots.length - 1; i > 0; i--) {
     const j = randInt(r, i + 1);
@@ -311,7 +416,7 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
     entry,
   };
   const exitGate: GateState = { id, x: exit.x, y: exit.y, axis: exitDir === 'E' ? 'h' : 'v', from: id, to: id + 1, open: false, openedTick: -1, kind: 'exit' };
-  return { state, cells, ox, oy, exitGate, spawns, cage, props, enemySpots, enemyCount: diff.enemies, enemySpeed: diff.enemySpeed };
+  return { state, cells, ox, oy, exitGate, spawns, cage, props, enemySpots, enemyCount: diff.enemies, enemySpeed: diff.enemySpeed, sparks: mods.sparks };
 }
 
 // ───────────────────────────── the live window ─────────────────────────────
@@ -368,16 +473,40 @@ export function attachRegion(s: GameState, id: number, authority = true) {
   if (bp.cage) adv.cages.push({ id, x: bp.cage.x, y: bp.cage.y, region: id, state: 'locked' });
   for (const p of bp.props) adv.props.push({ ...p, tick: s.tick });
   if (authority) {
-    for (let k = 0; k < bp.enemyCount && k < bp.enemySpots.length; k++) {
-      const c = bp.enemySpots[k];
-      const e: EnemyState = { id: newId(s), kind: 'magmite', x: c.x, y: c.y, px: c.x, py: c.y, dir: null, tx: c.x, ty: c.y, alive: true, diedTick: -1, frozenUntil: 0, regionId: id, speedMul: bp.enemySpeed };
-      s.enemies.push(e);
-    }
-    // A clear objective counts the Magmitos actually placed.
-    if (bp.state.objective.kind === 'clear') adv.regions.find((x) => x.id === id)!.objective.goal = Math.min(bp.enemyCount, bp.enemySpots.length);
+    populate(s, bp);
     s.events.push({ type: 'regionAttached', region: id });
   }
   return bp;
+}
+
+/** Puts the region's enemies in place (the first spots get Fagulhas) and sets the clear goal. */
+function populate(s: GameState, bp: Blueprint) {
+  const id = bp.state.id;
+  const n = Math.min(bp.enemyCount, bp.enemySpots.length);
+  for (let k = 0; k < n; k++) {
+    const c = bp.enemySpots[k];
+    const spark = k < bp.sparks;
+    const e: EnemyState = {
+      id: newId(s),
+      kind: spark ? 'spark' : 'magmite',
+      x: c.x,
+      y: c.y,
+      px: c.x,
+      py: c.y,
+      dir: null,
+      tx: c.x,
+      ty: c.y,
+      alive: true,
+      diedTick: -1,
+      frozenUntil: 0,
+      regionId: id,
+      speedMul: bp.enemySpeed,
+      ...(spark ? { mode: 'wander' as const, modeUntil: 0 } : {}),
+    };
+    s.enemies.push(e);
+  }
+  const reg = s.adventure!.regions.find((x) => x.id === id);
+  if (reg && reg.objective.kind === 'clear') reg.objective.goal = n;
 }
 
 /** Drops region `id` and everything in it; the next region's entry seals for good. */
@@ -446,15 +575,7 @@ export function spawnAdventureEnemies(s: GameState) {
   const adv = s.adventure!;
   const ids = adv.regions.map((r) => r.id);
   // Re-attach with authority: same geometry (deterministic), plus enemies.
-  for (const id of ids) {
-    const reg = adv.regions.find((r) => r.id === id)!;
-    const bp = regionBlueprint(s.config.seed, adv, id);
-    for (let k = 0; k < bp.enemyCount && k < bp.enemySpots.length; k++) {
-      const c = bp.enemySpots[k];
-      s.enemies.push({ id: newId(s), kind: 'magmite', x: c.x, y: c.y, px: c.x, py: c.y, dir: null, tx: c.x, ty: c.y, alive: true, diedTick: -1, frozenUntil: 0, regionId: id, speedMul: bp.enemySpeed });
-    }
-    if (reg.objective.kind === 'clear') reg.objective.goal = Math.min(bp.enemyCount, bp.enemySpots.length);
-  }
+  for (const id of ids) populate(s, regionBlueprint(s.config.seed, adv, id));
 }
 
 // ───────────────────────────── per-tick rules ─────────────────────────────
@@ -553,6 +674,23 @@ function updateProps(s: GameState) {
       const burned = flamesAt(s, pr.x, pr.y).length > 0;
       if (opener || burned) openChest(s, pr, opener?.id ?? null);
     } else if (pr.kind === 'key') updateKey(s, pr);
+    else if (pr.kind === 'brazier' && pr.state === 'unlit') {
+      const touched = DIRS.some((d) => flamesAt(s, pr.x + DIR_VEC[d].x, pr.y + DIR_VEC[d].y).length > 0);
+      if (!touched) continue;
+      pr.state = 'lit';
+      pr.tick = s.tick;
+      const all = adv.props.filter((q) => q.kind === 'brazier' && q.region === pr.region);
+      const lit = all.filter((q) => q.state === 'lit').length;
+      s.events.push({ type: 'brazierLit', propId: pr.id, x: pr.x, y: pr.y, region: pr.region, lit, goal: all.length });
+      if (lit === all.length) {
+        const chest = adv.props.find((q) => q.kind === 'chest' && q.region === pr.region && q.state === 'hidden');
+        if (chest) {
+          chest.state = 'closed';
+          chest.tick = s.tick;
+          s.events.push({ type: 'missionDone', region: pr.region, x: chest.x, y: chest.y });
+        }
+      }
+    }
   }
 }
 

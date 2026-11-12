@@ -42,8 +42,10 @@ export function Arena({ theme }: { theme: ArenaTheme }) {
     const gateSet = new Set(adventure?.gates.map((g) => k(g.x, g.y)) ?? []);
     // Cage cells are crates in the rules but drawn by <Cages />.
     const cageSet = new Set(adventure?.cages.map((c) => k(c.x, c.y)) ?? []);
+    // Braziers stand on wall cells in the rules but are drawn by <AdventureProps />.
+    const propSet = new Set(adventure?.props.filter((p) => p.kind === 'brazier').map((p) => k(p.x, p.y)) ?? []);
     // getCell is Wall outside the grid window; cracked walls get a floor tile (they can be blown open).
-    const solid = (x: number, y: number) => getCell(grid, x, y) === Cell.Wall && !gateSet.has(k(x, y));
+    const solid = (x: number, y: number) => getCell(grid, x, y) === Cell.Wall && !gateSet.has(k(x, y)) && !propSet.has(k(x, y));
     const walkable = (x: number, y: number) => !solid(x, y);
     const near8 = (x: number, y: number, pred: (x: number, y: number) => boolean) => {
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && pred(x + dx, y + dy)) return true;

@@ -8,6 +8,7 @@ import { HeroReveal } from '../ui/HeroReveal';
 import { AdventureMap } from '../ui/AdventureMap';
 import { ChapterCard } from '../ui/ChapterCard';
 import { EdgeArrows } from '../ui/EdgeArrows';
+import { TutorialHints } from '../ui/TutorialHints';
 import { deviceLabel, devicesOfLocal, type DeviceId, type UiEvent } from '../input/InputManager';
 import { ME, useProfile } from '../store/useProfile';
 import { ONLINE_MODES } from '@4walls/protocol';
@@ -79,6 +80,7 @@ function OnlineMatch({ start, locals, mode, onLeave, reconnecting }: { start: St
         <>
           <ChapterCard key={`chapter-${controller.state.config.seed}`} controller={controller} />
           <EdgeArrows />
+          <TutorialHints key={`tips-${controller.state.config.seed}`} controller={controller} />
           <div className="hud-safe pointer-events-none z-30">
             <AdventureMap controller={controller} />
           </div>

@@ -70,6 +70,7 @@ function drawMap(ctx: CanvasRenderingContext2D, s: GameState, W: number, H: numb
       ctx.fillRect(px(p.x) + cell * 0.1, py(p.y) + cell * 0.2, cell * 0.8, cell * 0.6);
     }
     if (p.kind === 'key' && p.state !== 'used') dot(p.x, p.y, Math.max(2, cell * 0.55), '#ffd23f', '#fff4c2');
+    if (p.kind === 'brazier' && seenAt(p.x, p.y)) dot(p.x, p.y, Math.max(2, cell * 0.45), p.state === 'lit' ? '#ff8a2a' : '#5a3a2a', '#ffb070');
   }
   for (const c of adv.cages) if (c.state !== 'rescued' && seenAt(c.x, c.y)) dot(c.x, c.y, Math.max(2, cell * 0.5), '#7fd6ff', '#0b2a44');
   for (const p of s.players) {

@@ -1,6 +1,6 @@
 import { ADVENTURE, Cell, DIR_VEC, DIRS } from '@4walls/shared';
 import { describe, expect, it } from 'vitest';
-import { cellIndex, createGame, difficulty, getCell, inBounds, regionAt, regionInfo, setCell, step, syncAdventureWindow, type GameState } from '../src';
+import { cellIndex, createGame, difficulty, getCell, inBounds, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
 
 const make = (seed = 11, players = 1) => {
   const s = createGame({
@@ -125,6 +125,7 @@ describe('endless adventure: the journey', () => {
     const s = make(5, 2);
     complete(s, 0);
     const [p1, p2] = s.players;
+    s.enemies = []; // nothing should interfere with the gate timing
     p1.x = p1.px = region(s, 1).entry!.x;
     p1.y = p1.py = region(s, 1).entry!.y;
     step(s, {});
@@ -163,7 +164,7 @@ describe('endless adventure: the journey', () => {
         const g = exitGate(s, id);
         const gateNeighbor = DIRS.map((d) => ({ x: g.x + DIR_VEC[d].x, y: g.y + DIR_VEC[d].y })).some((c) => inBounds(s.grid, c.x, c.y) && seen.has(cellIndex(s.grid, c.x, c.y)) && regionAt(s, c.x, c.y) === id);
         expect(gateNeighbor, `seed ${seed} region ${id}: exit`).toBe(true);
-        for (const p of s.adventure!.props.filter((pp) => pp.region === id)) {
+        for (const p of s.adventure!.props.filter((pp) => pp.region === id && pp.kind !== 'brazier')) {
           // Secret chests sit behind a cracked wall: open it for the check.
           for (const d of DIRS) {
             const x = p.x + DIR_VEC[d].x;
@@ -171,6 +172,15 @@ describe('endless adventure: the journey', () => {
             if (getCell(s.grid, x, y) === Cell.Cracked) setCell(s.grid, x, y, Cell.Floor);
           }
           expect(reach(s, start).has(cellIndex(s.grid, p.x, p.y)), `seed ${seed} region ${id}: ${p.kind}`).toBe(true);
+        }
+        // Braziers stand like pillars: one of their sides must be reachable to light them.
+        for (const b of s.adventure!.props.filter((pp) => pp.region === id && pp.kind === 'brazier')) {
+          const side = DIRS.some((d) => {
+            const x = b.x + DIR_VEC[d].x;
+            const y = b.y + DIR_VEC[d].y;
+            return inBounds(s.grid, x, y) && seen.has(cellIndex(s.grid, x, y));
+          });
+          expect(side, `seed ${seed} region ${id}: brazier`).toBe(true);
         }
         const cage = s.adventure!.cages.find((c) => c.region === id);
         if (cage) expect(seen.has(cellIndex(s.grid, cage.x, cage.y)), `seed ${seed} region ${id}: cage`).toBe(true);
@@ -238,5 +248,91 @@ describe('endless adventure: props', () => {
       expect(s.powerups.length + s.events.filter((e) => e.type === 'powerupCollected').length).toBeGreaterThanOrEqual(2);
     }
     expect(found).toBe(true);
+  });
+});
+
+describe('endless adventure: M2 mechanics', () => {
+  const atRegion1 = (seed = 3) => {
+    const s = make(seed, 1);
+    complete(s, 0);
+    walkThrough(s, 0);
+    return s;
+  };
+
+  it('"A infestação" brings Fagulhas, ash vents, the braziers mission and a plaza with loops', () => {
+    const s = atRegion1();
+    const props = s.adventure!.props.filter((p) => p.region === 1);
+    expect(s.enemies.filter((e) => e.regionId === 1 && e.kind === 'spark')).toHaveLength(2);
+    expect(props.filter((p) => p.kind === 'vent')).toHaveLength(2);
+    expect(props.filter((p) => p.kind === 'brazier')).toHaveLength(3);
+    expect(props.find((p) => p.kind === 'chest' && p.state === 'hidden')).toBeTruthy();
+    expect(regionMods(3, 1).shape).toBe('plaza');
+  });
+
+  it('the scripted braziers mission shows up in region 2 for (almost) every seed', () => {
+    let ok = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const s = make(seed, 1);
+      if (s.adventure!.props.filter((p) => p.region === 1 && p.kind === 'brazier').length === 3) ok++;
+    }
+    expect(ok).toBeGreaterThanOrEqual(38);
+  });
+
+  it('later regions draw mechanics from the seed, with more Fagulhas the deeper you go', () => {
+    const deep = Array.from({ length: 60 }, (_, i) => regionMods(21, 5 + i));
+    expect(deep.some((m) => m.shape === 'plaza')).toBe(true);
+    expect(deep.some((m) => m.braziers)).toBe(true);
+    expect(deep.some((m) => m.vents > 0)).toBe(true);
+    expect(regionMods(21, 60).sparks).toBeGreaterThanOrEqual(regionMods(21, 6).sparks);
+    expect(regionMods(21, 9)).toEqual(regionMods(21, 9));
+  });
+
+  it('a Fagulha spots a player in a clear line, warns, charges until blocked, then rests', () => {
+    const s = make(4, 1);
+    // A clean corridor: clear a row and put a Fagulha at one end, the player at the other.
+    const p = s.players[0];
+    const y = Math.round(p.y);
+    const x0 = Math.round(p.x);
+    for (let x = x0 - 4; x <= x0; x++) setCell(s.grid, x, y, Cell.Floor);
+    setCell(s.grid, x0 - 5, y, Cell.Wall);
+    s.enemies = [{ id: 999, kind: 'spark', x: x0 - 4, y, px: x0 - 4, py: y, dir: null, tx: x0 - 4, ty: y, alive: true, diedTick: -1, frozenUntil: 0, regionId: 0, mode: 'wander', modeUntil: 0 }];
+    const f = s.enemies[0];
+    p.invulnUntil = 1e9; // watch the charge without dying
+    step(s, {});
+    expect(f.mode).toBe('alert');
+    expect(f.dir).toBe('right');
+    expect(s.events.some((e) => e.type === 'sparkAlert')).toBe(true);
+    const at = f.x;
+    for (let i = 0; i < 40; i++) step(s, {});
+    expect(f.mode).toBe('charge');
+    expect(f.x).toBeGreaterThan(at + 1);
+    for (let i = 0; i < 120 && f.mode === 'charge'; i++) step(s, {});
+    expect(f.mode).toBe('rest');
+  });
+
+  it('a Fagulha does not see through crates', () => {
+    const s = make(4, 1);
+    const p = s.players[0];
+    const y = Math.round(p.y);
+    const x0 = Math.round(p.x);
+    for (let x = x0 - 4; x <= x0; x++) setCell(s.grid, x, y, Cell.Floor);
+    setCell(s.grid, x0 - 2, y, Cell.Block);
+    s.enemies = [{ id: 999, kind: 'spark', x: x0 - 4, y, px: x0 - 4, py: y, dir: null, tx: x0 - 4, ty: y, alive: true, diedTick: -1, frozenUntil: 0, regionId: 0, mode: 'wander', modeUntil: 0 }];
+    step(s, {});
+    expect(s.enemies[0].mode).not.toBe('alert');
+  });
+
+  it('three braziers lit by blasts next to them reveal the rare chest', () => {
+    const s = atRegion1();
+    const braziers = s.adventure!.props.filter((p) => p.region === 1 && p.kind === 'brazier');
+    const chest = s.adventure!.props.find((p) => p.region === 1 && p.kind === 'chest' && p.state === 'hidden')!;
+    for (const b of braziers) {
+      const side = DIRS.map((d) => ({ x: b.x + DIR_VEC[d].x, y: b.y + DIR_VEC[d].y })).find((c) => getCell(s.grid, c.x, c.y) !== Cell.Wall)!;
+      s.flames.push({ x: side.x, y: side.y, part: 'center', dir: null, bombId: -1, ownerId: 'p1', bornTick: s.tick, untilTick: s.tick + 30, kind: 'normal' });
+      step(s, {});
+      expect(b.state).toBe('lit');
+    }
+    expect(chest.state).toBe('closed');
+    expect(s.events.some((e) => e.type === 'missionDone')).toBe(true);
   });
 });

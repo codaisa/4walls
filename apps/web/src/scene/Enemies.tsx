@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import { DIR_VEC } from '@4walls/shared';
 import { damp, lerp, useGame } from './context';
 
-const POOL = 16;
+/** Enough for the endless Adventure's live window (up to three regions of Magmitos and Fagulhas). */
+const POOL = 40;
 
 /** Magmites: hopping blobs of cooled crust over a pulsing molten core. */
 export function Enemies() {
@@ -15,6 +16,9 @@ export function Enemies() {
   const deathT = useRef<number[]>(Array(POOL).fill(0));
   const magmite = useRef<(THREE.Group | null)[]>([]);
   const sprout = useRef<(THREE.Group | null)[]>([]);
+  const spark = useRef<(THREE.Group | null)[]>([]);
+  const sparkCore = useRef<(THREE.Mesh | null)[]>([]);
+  const sparkFlame = useRef<(THREE.Mesh | null)[]>([]);
 
   const m = useMemo(
     () => ({
@@ -27,6 +31,11 @@ export function Enemies() {
       bulb: new THREE.MeshPhysicalMaterial({ color: '#5fcf3a', emissive: '#1f6a10', emissiveIntensity: 0.35, roughness: 0.4, clearcoat: 0.7 }),
       leaf: new THREE.MeshStandardMaterial({ color: '#8cf04a', roughness: 0.5, side: THREE.DoubleSide }),
       root: new THREE.MeshStandardMaterial({ color: '#6b4a2b', roughness: 0.9 }),
+      // Fagulha: a hot ember with a flickering flame crown.
+      ember: new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.6, 0.4), toneMapped: false }),
+      emberAlert: new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 0.6, 0.3), toneMapped: false }),
+      flame: new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 0.8, 0.1), toneMapped: false, transparent: true, opacity: 0.75, depthWrite: false }),
+      shell: new THREE.MeshStandardMaterial({ color: '#2a1410', roughness: 0.8, flatShading: true }),
     }),
     [],
   );
@@ -55,9 +64,31 @@ export function Enemies() {
       }
       g.rotation.y = yaw.current[i];
       const isSprout = e.kind === 'sprout';
+      const isSpark = e.kind === 'spark';
       const mg = magmite.current[i];
       const sp = sprout.current[i];
-      if (mg) mg.visible = !isSprout;
+      const sk = spark.current[i];
+      if (mg) mg.visible = !isSprout && !isSpark;
+      if (sk) {
+        sk.visible = isSpark;
+        if (isSpark) {
+          const core = sparkCore.current[i];
+          const flame = sparkFlame.current[i];
+          const alert = e.mode === 'alert';
+          const charge = e.mode === 'charge';
+          // Warning: it swells and flashes red; charging: it stretches along its run.
+          if (core) {
+            core.material = alert && Math.floor(t * 14) % 2 === 0 ? m.emberAlert : m.ember;
+            const sw = alert ? 1.25 + Math.sin(t * 40) * 0.08 : 1;
+            core.scale.set(sw, sw, charge ? 1.7 : sw);
+          }
+          if (flame) {
+            flame.scale.set(1, 0.8 + Math.sin(t * 22 + i) * 0.25 + (alert ? 0.5 : 0), 1);
+            flame.rotation.y = t * 6;
+          }
+          sk.position.x = alert ? Math.sin(t * 60) * 0.03 : 0;
+        }
+      }
       if (sp) {
         sp.visible = isSprout;
         // Leaves flutter.
@@ -109,6 +140,25 @@ export function Enemies() {
               {[0, 1, 2].map((k) => (
                 <mesh key={k} position={[Math.cos((k / 3) * Math.PI * 2) * 0.15, 0.04, Math.sin((k / 3) * Math.PI * 2) * 0.15]} rotation={[Math.PI / 2, 0, (k / 3) * Math.PI * 2]} material={m.root}>
                   <coneGeometry args={[0.04, 0.18, 5]} />
+                </mesh>
+              ))}
+            </group>
+            {/* Fagulha */}
+            <group ref={(g) => void (spark.current[i] = g)} visible={false}>
+              <mesh ref={(r) => void (sparkCore.current[i] = r)} position={[0, 0.32, 0]} material={m.ember}>
+                <icosahedronGeometry args={[0.17, 1]} />
+              </mesh>
+              {[0, 1, 2, 3, 4].map((k) => (
+                <mesh key={k} position={[Math.cos((k / 5) * Math.PI * 2) * 0.13, 0.28 + (k % 2) * 0.06, Math.sin((k / 5) * Math.PI * 2) * 0.13]} material={m.shell} castShadow>
+                  <dodecahedronGeometry args={[0.07, 0]} />
+                </mesh>
+              ))}
+              <mesh ref={(r) => void (sparkFlame.current[i] = r)} position={[0, 0.55, 0]} material={m.flame}>
+                <coneGeometry args={[0.12, 0.34, 7, 1, true]} />
+              </mesh>
+              {[-1, 1].map((side) => (
+                <mesh key={side} position={[side * 0.065, 0.36, 0.15]} material={m.pupil}>
+                  <sphereGeometry args={[0.03, 8, 6]} />
                 </mesh>
               ))}
             </group>
