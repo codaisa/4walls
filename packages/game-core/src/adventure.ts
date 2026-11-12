@@ -1,5 +1,6 @@
 import { ADVENTURE, BOSSES, Cell, CHARACTER_IDS, CHARACTERS, DIR_VEC, DIRS, POWERUPS, RULES, secToTicks, type BiomeId, type BossId, type CharacterId, type PowerupType } from '@4walls/shared';
 import { spawnBoss } from './boss';
+import { ELITE_MAGMITE_HP, wakeMimic } from './enemies';
 import { cellIndex, createGrid, getCell, inBounds, setCell } from './grid';
 import { nextRandom, pickWeighted, randInt } from './rng';
 import type { AdventureState, CageState, EnemyState, GameState, GateState, Grid, PlayerState, PropState, RegionDir, RegionObjectiveKind, RegionState, RegionVariant } from './types';
@@ -299,6 +300,8 @@ interface Blueprint {
   enemyCount: number;
   enemySpeed: number;
   sparks: number;
+  /** B4: elites among the region's enemies (the last spots). */
+  elites: ('magmite' | 'spark')[];
 }
 
 /** Builds region `id` deterministically from the seed (chain must reach id + 1). */
@@ -792,7 +795,12 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
     entry,
   };
   const exitGate: GateState = { id, x: exit.x, y: exit.y, axis: exitDir === 'E' ? 'h' : 'v', from: id, to: id + 1, open: false, openedTick: -1, kind: 'exit' };
-  return { state, cells, ox, oy, exitGate, spawns, cage, props, enemySpots, enemyCount: diff.enemies, enemySpeed: diff.enemySpeed, sparks: mods.sparks };
+  // B4: from the second arc on, one chest in some regions is a Mimic (more under the corruption).
+  // Its own random stream, so the rest of the region stays as it was.
+  const mr = subRng(seed, id, 21);
+  const chests = props.filter((p) => p.kind === 'chest');
+  if (info.arc >= 1 && chests.length && nextRandom(mr) < (info.variant === 'corrupted' ? 0.55 : 0.22)) chests[randInt(mr, chests.length)].mimic = true;
+  return { state, cells, ox, oy, exitGate, spawns, cage, props, enemySpots, enemyCount: diff.enemies, enemySpeed: diff.enemySpeed, sparks: mods.sparks, elites: elitesFor(seed, id) };
 }
 
 /** Pillars of the chamber, relative to the chunk (symmetric around the hall's middle). */
@@ -895,7 +903,7 @@ function chamberBlueprint(seed: number, adv: AdventureState, id: number, info: R
     entry,
   };
   const exitGate: GateState = { id, x: exit.x, y: exit.y, axis: exitDir === 'E' ? 'h' : 'v', from: id, to: id + 1, open: false, openedTick: -1, kind: 'exit' };
-  return { state, cells, ox, oy, exitGate, spawns: [], cage: null, props, enemySpots: [], enemyCount: 0, enemySpeed: 1, sparks: 0 };
+  return { state, cells, ox, oy, exitGate, spawns: [], cage: null, props, enemySpots: [], enemyCount: 0, enemySpeed: 1, sparks: 0, elites: [] };
 }
 
 /** Where the chamber's boss sleeps (the hall's middle). */
@@ -976,13 +984,27 @@ export function attachRegion(s: GameState, id: number, authority = true) {
   return bp;
 }
 
-/** Puts the region's enemies in place (the first spots get Fagulhas) and sets the clear goal. */
+/**
+ * B4 elites: none in the first arc; then one per region, two deep in the journey or under the
+ * corruption (never three). Each is a big Magmito (3 HP) or a Fagulha that splits when it dies.
+ */
+export function elitesFor(seed: number, id: number): ('magmite' | 'spark')[] {
+  const info = regionInfo(seed, id);
+  if (info.arc < 1 || info.objective === 'boss' || id < SCRIPTED.length) return [];
+  const r = subRng(seed, id, 22);
+  const n = Math.min(2, 1 + (id >= 18 ? 1 : 0) + (info.variant === 'corrupted' ? 1 : 0));
+  return Array.from({ length: n }, () => (nextRandom(r) < 0.5 ? 'magmite' : 'spark'));
+}
+
+/** Puts the region's enemies in place (the first spots get Fagulhas, the last ones elites) and sets the clear goal. */
 function populate(s: GameState, bp: Blueprint) {
   const id = bp.state.id;
   const n = Math.min(bp.enemyCount, bp.enemySpots.length);
+  const elites = bp.elites.slice(0, Math.max(0, n - 1));
   for (let k = 0; k < n; k++) {
     const c = bp.enemySpots[k];
-    const spark = k < bp.sparks;
+    const ek = n - 1 - k < elites.length ? elites[n - 1 - k] : null;
+    const spark = ek ? ek === 'spark' : k < bp.sparks;
     const e: EnemyState = {
       id: newId(s),
       kind: spark ? 'spark' : 'magmite',
@@ -997,8 +1019,9 @@ function populate(s: GameState, bp: Blueprint) {
       diedTick: -1,
       frozenUntil: 0,
       regionId: id,
-      speedMul: bp.enemySpeed,
+      speedMul: ek === 'magmite' ? bp.enemySpeed * 0.85 : bp.enemySpeed,
       ...(spark ? { mode: 'wander' as const, modeUntil: 0 } : {}),
+      ...(ek ? { elite: true, ...(ek === 'magmite' ? { hp: ELITE_MAGMITE_HP } : {}) } : {}),
     };
     s.enemies.push(e);
   }
@@ -1099,7 +1122,7 @@ function updateObjectives(s: GameState) {
     if (r.cleared || !r.unlocked) continue;
     const o = r.objective;
     let progress = o.progress;
-    if (o.kind === 'clear') progress = Math.max(0, o.goal - s.enemies.filter((e) => e.alive && e.regionId === r.id).length);
+    if (o.kind === 'clear') progress = Math.max(0, o.goal - s.enemies.filter((e) => e.alive && e.regionId === r.id && e.kind !== 'mimic').length);
     else if (o.kind === 'key') progress = adv.props.some((p) => p.kind === 'key' && p.region === r.id && p.state === 'used') ? 1 : 0;
     else if (o.kind === 'lever') progress = adv.props.some((p) => p.kind === 'lever' && p.region === r.id && p.state === 'on') ? 1 : 0;
     else if (o.kind === 'seals') progress = adv.props.filter((p) => p.kind === 'seal' && p.region === r.id && p.state === 'broken').length;
@@ -1421,8 +1444,15 @@ function updateProps(s: GameState) {
   for (const pr of adv.props) {
     if (pr.kind === 'chest' && pr.state === 'closed') {
       const opener = s.players.find((p) => p.alive && Math.round(p.x) === pr.x && Math.round(p.y) === pr.y);
-      const burned = flamesAt(s, pr.x, pr.y).length > 0;
-      if (opener || burned) openChest(s, pr, opener?.id ?? null);
+      // The Mimic's double chest only opens by hand (the blast that beat it lands right on it).
+      const burned = pr.hp !== 2 && flamesAt(s, pr.x, pr.y).length > 0;
+      if (!opener && !burned) continue;
+      // B4: the Mimic (only the first time: beaten, it leaves the real, double chest).
+      if (pr.mimic && pr.hp === undefined) {
+        pr.state = 'used';
+        pr.tick = s.tick;
+        wakeMimic(s, pr, opener ?? null, regionDifficulty(s.config.seed, pr.region).enemySpeed);
+      } else openChest(s, pr, opener?.id ?? null);
     } else if (pr.kind === 'key') updateKey(s, pr);
     else if (pr.kind === 'totem' && pr.state === 'idle') updateTotem(s, pr);
     else if (pr.kind === 'brazier' && pr.state === 'unlit') {
@@ -1483,6 +1513,8 @@ function openChest(s: GameState, pr: PropState, byId: string | null) {
   s.events.push({ type: 'chestOpened', propId: pr.id, x: pr.x, y: pr.y, rare: !!pr.rare, byId });
   const loot: PowerupType[] = [pickWeighted(s, Object.values(POWERUPS), (d) => d.weight).type];
   if (pr.rare) loot.push(RARE_LOOT[randInt(s, RARE_LOOT.length)]);
+  // The Mimic's double chest: twice the loot, and always a rare piece.
+  if (pr.hp === 2) loot.push(pickWeighted(s, Object.values(POWERUPS), (d) => d.weight).type, RARE_LOOT[randInt(s, RARE_LOOT.length)], ...(pr.rare ? [RARE_LOOT[randInt(s, RARE_LOOT.length)]] : []));
   const spots = [{ x: pr.x, y: pr.y }, ...DIRS.map((d) => ({ x: pr.x + DIR_VEC[d].x, y: pr.y + DIR_VEC[d].y }))].filter(
     (c) => getCell(s.grid, c.x, c.y) === Cell.Floor && !bombAt(s, c.x, c.y) && !powerupAt(s, c.x, c.y),
   );

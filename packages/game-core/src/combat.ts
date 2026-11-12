@@ -1,5 +1,6 @@
 import { CHARACTERS, RULES, secToTicks, type CharacterId, type PowerupType } from '@4walls/shared';
 import type { GameState, PlayerState } from './types';
+import { enemyDown, harmless } from './enemies';
 import { cellOf, flamesAt, isEvading, isFrozen } from './world';
 
 /**
@@ -42,18 +43,26 @@ export function applyDamage(s: GameState) {
   }
   for (const e of s.enemies) {
     if (!e.alive) continue;
+    // A Mimic in mid-leap is out of reach (and can't bite).
+    if (e.mode === 'leap') continue;
     const fs = flamesAt(s, cellOf(e.x), cellOf(e.y));
     const lethal = fs.find((f) => f.kind !== 'ice');
-    if (lethal) {
+    // Elites and the Mimic take several blasts, shrugging one off for a moment after each.
+    if (lethal && e.hp !== undefined && e.hp > 1 && s.tick >= (e.hurtUntil ?? 0)) {
+      e.hp--;
+      e.hurtUntil = s.tick + secToTicks(0.6);
+      s.events.push({ type: 'enemyHurt', enemyId: e.id, hp: e.hp, x: e.x, y: e.y });
+    } else if (lethal && s.tick >= (e.hurtUntil ?? 0)) {
       e.alive = false;
       e.diedTick = s.tick;
       const owner = s.players.find((p) => p.id === lethal.ownerId);
       if (owner) owner.kills++;
       s.events.push({ type: 'enemyDied', enemyId: e.id, byId: lethal.ownerId, x: e.x, y: e.y });
+      enemyDown(s, e);
       continue;
     }
-    if (fs.length && s.tick >= e.frozenUntil) e.frozenUntil = s.tick + secToTicks(RULES.enemyFreezeSec);
-    if (s.tick < e.frozenUntil) continue; // frozen enemies are harmless
+    if (!lethal && fs.length && s.tick >= e.frozenUntil) e.frozenUntil = s.tick + secToTicks(RULES.enemyFreezeSec);
+    if (s.tick < e.frozenUntil || harmless(e)) continue; // frozen enemies are harmless
     for (const p of s.players) {
       if (p.alive && Math.abs(p.x - e.x) < RULES.enemyContactDist && Math.abs(p.y - e.y) < RULES.enemyContactDist) {
         hitPlayer(s, p, null);

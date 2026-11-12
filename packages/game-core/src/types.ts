@@ -147,10 +147,24 @@ export interface ArenaEventState {
 export interface EnemyState {
   id: number;
   /** magmite = wandering lava blob; sprout = Guardião's summoned seedling. */
-  kind: 'magmite' | 'sprout' | 'spark';
-  /** Fagulha behavior: wander → alert (telegraph) → charge in a line → rest. */
-  mode?: 'wander' | 'alert' | 'charge' | 'rest';
+  kind: 'magmite' | 'sprout' | 'spark' | 'mimic';
+  /**
+   * Fagulha: wander → alert (telegraph) → charge in a line → rest.
+   * Mimic: reveal → hunt ⇄ crouch → leap, hunt → chew → hunt (spitting the bomb back).
+   */
+  mode?: 'wander' | 'alert' | 'charge' | 'rest' | 'reveal' | 'hunt' | 'crouch' | 'leap' | 'chew';
   modeUntil?: number;
+  /** Adventure elite (arc 2 on): a big Magmito with 3 HP, or a Fagulha that splits in two. */
+  elite?: boolean;
+  /** Hits left (elites and the Mimic); undefined = dies to any blast. */
+  hp?: number;
+  /** Shrugging off a blast until this tick (after losing 1 HP). */
+  hurtUntil?: number;
+  /** Mimic: its chest prop, bombs in its mouth, the leap in flight and when it may leap again. */
+  propId?: number;
+  swallowed?: number;
+  leap?: { fx: number; fy: number; tx: number; ty: number; t0: number; t1: number };
+  nextLeapTick?: number;
   x: number;
   y: number;
   px: number;
@@ -243,6 +257,8 @@ export interface PropState {
   /** platform: the river cells it shuttles across, from the near bank to the far one. */
   track?: { x: number; y: number }[];
   rare?: boolean;
+  /** chest: a Mimic in disguise (B4). Beaten, it leaves a double chest (hp = 2). */
+  mimic?: boolean;
   carrierId?: string | null;
   /** Where a key returns if it is lost. */
   homeX?: number;
@@ -393,6 +409,16 @@ export type GameEvent =
   | { type: 'keyDelivered'; propId: number; playerId: string; region: number }
   | { type: 'secretFound'; x: number; y: number; byId: string }
   | { type: 'sparkAlert'; enemyId: number; x: number; y: number }
+  /** B4: an elite or the Mimic lost 1 HP (hp left). */
+  | { type: 'enemyHurt'; enemyId: number; hp: number; x: number; y: number }
+  | { type: 'eliteSplit'; enemyId: number; x: number; y: number }
+  | { type: 'mimicAwoke'; enemyId: number; x: number; y: number; byId: string | null }
+  | { type: 'mimicBite'; playerId: string; x: number; y: number }
+  | { type: 'mimicCrouch'; enemyId: number; x: number; y: number; tx: number; ty: number }
+  | { type: 'mimicLand'; enemyId: number; x: number; y: number }
+  | { type: 'mimicSwallow'; enemyId: number; x: number; y: number }
+  | { type: 'mimicSpit'; enemyId: number; x: number; y: number }
+  | { type: 'mimicDefeated'; enemyId: number; x: number; y: number }
   | { type: 'brazierLit'; propId: number; x: number; y: number; region: number; lit: number; goal: number }
   | { type: 'missionDone'; region: number; x: number; y: number }
   | { type: 'bridgeCracking'; propId: number; x: number; y: number }

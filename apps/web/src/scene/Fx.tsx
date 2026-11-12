@@ -735,6 +735,60 @@ export function Fx() {
             fx.shake = 1;
             break;
           }
+          case 'enemyHurt':
+            for (let i = 0; i < 14; i++)
+              sparks.spawn({
+                x: e.x + ox, y: 0.5, z: e.y + oz,
+                vx: rnd(-3, 3), vy: rnd(1, 4), vz: rnd(-3, 3),
+                life: rnd(0.3, 0.6), size: rnd(0.05, 0.1), color: '#ffe08a', intensity: 3, gravity: 9, drag: 1,
+              });
+            shocks.spawn({ x: e.x + ox, y: 0.05, z: e.y + oz, life: 0.35, size: 0.6, grow: 1.6, color: '#ffd23f', alpha: 0.8 });
+            break;
+          case 'eliteSplit':
+            shocks.spawn({ x: e.x + ox, y: 0.05, z: e.y + oz, life: 0.5, size: 0.8, grow: 2.4, color: '#c77dff', alpha: 0.9 });
+            for (let i = 0; i < 26; i++)
+              sparks.spawn({
+                x: e.x + ox, y: 0.4, z: e.y + oz,
+                vx: rnd(-4, 4), vy: rnd(1, 4), vz: rnd(-4, 4),
+                life: rnd(0.4, 0.8), size: rnd(0.05, 0.11), color: '#d9a1ff', intensity: 3.5, gravity: 7, drag: 1,
+              });
+            break;
+          case 'mimicAwoke':
+            fx.shake = Math.min(1, fx.shake + 0.4);
+            shocks.spawn({ x: e.x + ox, y: 0.05, z: e.y + oz, life: 0.6, size: 0.8, grow: 2.6, color: '#ff4a3a', alpha: 0.85 });
+            for (let i = 0; i < 18; i++)
+              solids.spawn({
+                x: e.x + ox + rnd(-0.3, 0.3), y: 0.4, z: e.y + oz + rnd(-0.3, 0.3),
+                vx: rnd(-3, 3), vy: rnd(3, 6), vz: rnd(-3, 3),
+                life: rnd(0.7, 1.2), size: rnd(0.06, 0.13), color: '#7a4a26', gravity: 16, drag: 0.4, bounce: true,
+              });
+            break;
+          case 'mimicLand':
+            fx.shake = Math.min(1, fx.shake + 0.35);
+            shocks.spawn({ x: e.x + ox, y: 0.05, z: e.y + oz, life: 0.5, size: 0.7, grow: 2.2, color: '#c9a27a', alpha: 0.8 });
+            for (let i = 0; i < 10; i++)
+              smoke.spawn({
+                x: e.x + ox + rnd(-0.5, 0.5), y: 0.15, z: e.y + oz + rnd(-0.5, 0.5), vy: rnd(0.2, 0.6),
+                life: rnd(0.6, 1), size: rnd(0.35, 0.55), grow: 1.8, color: '#9a8a76', alpha: 0.4, drag: 1.4,
+              });
+            break;
+          case 'mimicSwallow':
+          case 'mimicSpit':
+            for (let i = 0; i < 8; i++)
+              smoke.spawn({
+                x: e.x + ox + rnd(-0.2, 0.2), y: 0.4, z: e.y + oz + rnd(-0.2, 0.2), vy: rnd(0.3, 0.8),
+                life: rnd(0.4, 0.7), size: rnd(0.2, 0.35), grow: 1.6, color: '#5a5048', alpha: 0.45, drag: 1.4,
+              });
+            break;
+          case 'mimicDefeated':
+            shocks.spawn({ x: e.x + ox, y: 0.05, z: e.y + oz, life: 0.8, size: 1, grow: 3, color: '#ffd23f', alpha: 0.95 });
+            for (let i = 0; i < 40; i++)
+              sparks.spawn({
+                x: e.x + ox, y: 0.5, z: e.y + oz,
+                vx: rnd(-4, 4), vy: rnd(2, 7), vz: rnd(-4, 4),
+                life: rnd(0.6, 1.2), size: rnd(0.06, 0.12), color: '#ffd23f', intensity: 4, gravity: 9, drag: 1,
+              });
+            break;
           case 'enemyDied':
             for (let i = 0; i < 24; i++)
               sparks.spawn({

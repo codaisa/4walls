@@ -6,7 +6,7 @@ antes da próxima:
 | # | Tarefa | Depende de | Status |
 |---|---|---|---|
 | 1 | **Mapa**: regiões viram fases, objetivos, mecânicas de ambiente, segredos, navegação, arcos | — | **Concluída** (M1–M5) |
-| 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | Em andamento: B1, B2 e B3 concluídos (seção 5) |
+| 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | Em andamento: B1 a B4 concluídos (seção 5) |
 | 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Esboço (seção 6) |
 
 Ponto de partida (como está hoje):
@@ -376,6 +376,19 @@ O `boss.ts` de hoje é uma máquina de estados (andar → preparar → atacar �
 - **Último fôlego aos 35%:** ataques mais frequentes. O evento de fase agora diz qual é a última, então a faixa "ÚLTIMO FÔLEGO!" vale para os dois chefes.
 - **Fim:** os espinheiros (e qualquer raiz que sobrar) murcham de vez, abrindo o salão.
 - **Boss Rush:** continua com o Guardião clássico até o B5.
+
+
+**Como ficou o B4 (elites e o Baú Mimético):**
+- **Elites:** a partir do segundo arco, cada região comum tem 1 elite (2 a partir da região 18 ou sob a corrupção, nunca mais). Elas ocupam vagas dos inimigos normais e usam a coroa dourada para serem reconhecidas.
+  - **Magmito grande:** maior, um pouco mais lento, aguenta 3 explosões. Depois de cada uma fica 0,6 s imune e pisca, e bolinhas vermelhas sobre a cabeça mostram a vida.
+  - **Fagulha grande (violeta):** morre com uma explosão, mas se divide em duas Fagulhas pequenas que nascem atordoadas por um instante. A meta de "exploda todos" sobe junto.
+- **Baú Mimético:** a partir do segundo arco, um dos baús da região pode ser um Mímico (22% de chance, 55% sob a corrupção). A tampa às vezes treme sozinha, como dica para quem presta atenção.
+  - **Ao abrir:** ele morde e tira o escudo de quem abriu (sem escudo, é só o susto). Fica 1,1 s se revelando, sem causar dano. Uma explosão no baú também o acorda, sem mordida.
+  - **Caçada:** persegue o jogador mais perto. De tempos em tempos se agacha (0,6 s de aviso, com um anel vermelho onde vai cair) e pula por cima de tudo. No ar não leva dano nem morde.
+  - **Bombas:** engole bombas que estejam ao lado ou no caminho, mastiga e cospe de volta rolando na direção do jogador, com pavio curto.
+  - **Vida:** 4 explosões. Vencido, deixa um **baú duplo** dourado onde caiu, que só abre com a mão e dá 3 itens (um raro garantido). Não conta para a meta de "exploda todos".
+- **Dicas e avisos:** dicas novas para elites e para o Mímico; faixas "É UM BAÚ MIMÉTICO!" e "MÍMICO VENCIDO! BAÚ DUPLO!".
+- **Fica para depois:** o modelo do Mímico é feito de peças simples (sem GLB), como os outros inimigos.
 
 
 Pontos de atenção:

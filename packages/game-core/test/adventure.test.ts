@@ -1,6 +1,6 @@
 import { ADVENTURE, BOSSES, Cell, DIR_VEC, DIRS } from '@4walls/shared';
 import { describe, expect, it } from 'vitest';
-import { ALL_PLATES, arcBoss, bodySide, lavaRing, leapCells, spawnBoss, arcInfo, arcOfRegion, chamberCenter, isPit, cellIndex, createGame, difficulty, geyserPhase, regionDifficulty, spawnBomb, getCell, inBounds, platformPos, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
+import { ELITE_MAGMITE_HP, MIMIC_HP, elitesFor, makeEnemy, ALL_PLATES, arcBoss, bodySide, lavaRing, leapCells, spawnBoss, arcInfo, arcOfRegion, chamberCenter, isPit, cellIndex, createGame, difficulty, geyserPhase, regionDifficulty, spawnBomb, getCell, inBounds, platformPos, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
 
 const make = (seed = 11, players = 1) => {
   const s = createGame({
@@ -1070,5 +1070,209 @@ describe('endless adventure: B3 the reworked Guardian', () => {
       expect(p.state).toBe('cut');
       expect(getCell(s.grid, p.x, p.y)).not.toBe(Cell.Block);
     }
+  });
+});
+
+describe('endless adventure: B4 elites and the Mimic Chest', () => {
+  /** A quiet start: region 0 with no Magmitos and an untouchable player. */
+  const quiet = () => {
+    const s = make(5);
+    s.enemies = [];
+    const p = s.players[0];
+    p.invulnUntil = 1e9;
+    return { s, p };
+  };
+  /** An open floor cell with open floor on both sides along x (and nothing on it). */
+  const openRow = (s: GameState, len = 5) => {
+    const g = s.grid;
+    for (let y = g.y0 + 1; y < g.y0 + g.h - 1; y++)
+      for (let x = g.x0 + 1; x < g.x0 + g.w - len; x++) {
+        let ok = true;
+        for (let k = 0; k < len && ok; k++) ok = getCell(g, x + k, y) === Cell.Floor && regionAt(s, x + k, y) === 0 && !s.adventure!.props.some((q) => q.x === x + k && q.y === y);
+        if (ok) return { x, y };
+      }
+    throw new Error('no open row');
+  };
+  const blast = (s: GameState, x: number, y: number, id = 900) =>
+    s.flames.push({ x, y, part: 'center', dir: null, bombId: id, ownerId: 'p1', bornTick: s.tick, untilTick: s.tick + 3, kind: 'normal' });
+  const run = (s: GameState, n: number) => {
+    const out: GameState['events'] = [];
+    for (let i = 0; i < n; i++) {
+      step(s, {});
+      out.push(...s.events);
+    }
+    return out;
+  };
+  const mimicChest = (s: GameState, x: number, y: number) => {
+    const pr = { id: 7777, kind: 'chest' as const, region: 0, x, y, state: 'closed' as const, mimic: true, tick: 0 };
+    s.adventure!.props.push(pr);
+    return s.adventure!.props[s.adventure!.props.length - 1];
+  };
+
+  it('elites only appear from the second arc on, one or two per region, never in a chamber', () => {
+    const seed = 9;
+    let seen = 0;
+    for (let id = 0; id < 40; id++) {
+      const info = regionInfo(seed, id);
+      const el = elitesFor(seed, id);
+      if (info.arc < 1 || info.objective === 'boss' || id < 6) expect(el).toEqual([]);
+      else {
+        expect(el.length).toBeGreaterThanOrEqual(1);
+        expect(el.length).toBeLessThanOrEqual(2);
+        seen += el.length;
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+
+  it('an elite Magmito takes three separate blasts', () => {
+    const { s } = quiet();
+    const c = openRow(s);
+    const e = makeEnemy(s, 'magmite', c.x + 4, c.y, 0, { elite: true, hp: ELITE_MAGMITE_HP, frozenUntil: 1e9 });
+    s.enemies.push(e);
+    const hurt: number[] = [];
+    for (let k = 0; k < 3; k++) {
+      blast(s, e.x, e.y, 900 + k);
+      const ev = run(s, 50);
+      for (const x of ev) if (x.type === 'enemyHurt') hurt.push(x.hp);
+      if (k < 2) expect(e.alive).toBe(true);
+    }
+    expect(hurt).toEqual([2, 1]);
+    expect(e.alive).toBe(false);
+  });
+
+  it('an elite Fagulha splits in two when it dies (and the clear goal counts them)', () => {
+    const { s } = quiet();
+    const c = openRow(s);
+    region(s, 0).objective.goal = 1;
+    const e = makeEnemy(s, 'spark', c.x + 2, c.y, 0, { elite: true, mode: 'rest', modeUntil: 1e9 });
+    s.enemies.push(e);
+    blast(s, e.x, e.y);
+    const ev = run(s, 1);
+    expect(ev.some((x) => x.type === 'eliteSplit')).toBe(true);
+    const kids = s.enemies.filter((x) => x.alive && x.kind === 'spark');
+    expect(kids).toHaveLength(2);
+    expect(kids.every((k) => !k.elite)).toBe(true);
+    expect(region(s, 0).objective.goal).toBe(3);
+    // The splitting blast spared them.
+    run(s, 10);
+    expect(s.enemies.filter((x) => x.alive && x.kind === 'spark')).toHaveLength(2);
+  });
+
+  it('some chests are Mimics from the second arc on, never in the first', () => {
+    let mimics = 0;
+    for (const seed of [1, 2, 3, 4]) {
+      const s = make(seed);
+      for (let id = 0; id < 26; id++) {
+        syncAdventureWindow(s, [id, id + 1]);
+        for (const p of s.adventure!.props) if (p.kind === 'chest' && p.mimic) {
+          expect(regionInfo(seed, p.region).arc).toBeGreaterThanOrEqual(1);
+          mimics++;
+        }
+        s.adventure!.props = s.adventure!.props.filter((p) => !p.mimic);
+      }
+    }
+    expect(mimics).toBeGreaterThan(0);
+  });
+
+  it('opening a Mimic: it bites a shield off, wakes harmless for a moment, then hunts', () => {
+    const { s, p } = quiet();
+    const c = openRow(s);
+    const pr = mimicChest(s, c.x + 2, c.y);
+    p.invulnUntil = 0;
+    p.shield = 1;
+    p.x = p.px = pr.x;
+    p.y = p.py = pr.y;
+    const ev = run(s, 1);
+    expect(ev.some((x) => x.type === 'mimicAwoke')).toBe(true);
+    expect(ev.some((x) => x.type === 'mimicBite')).toBe(true);
+    expect(p.shield).toBe(0);
+    expect(pr.state).toBe('used');
+    expect(ev.some((x) => x.type === 'chestOpened')).toBe(false);
+    const m = s.enemies.find((x) => x.kind === 'mimic')!;
+    expect(m).toMatchObject({ hp: MIMIC_HP, mode: 'reveal', propId: pr.id });
+    // Standing on it during the reveal is safe…
+    run(s, 30);
+    expect(p.alive).toBe(true);
+    p.invulnUntil = 1e9;
+    run(s, 60);
+    expect(m.mode).not.toBe('reveal');
+  });
+
+  it('it swallows a bomb and spits it back rolling toward the player', () => {
+    const { s, p } = quiet();
+    const c = openRow(s, 7);
+    const pr = mimicChest(s, c.x + 3, c.y);
+    blast(s, pr.x, pr.y); // a blast wakes it too (no bite)
+    run(s, 1);
+    const m = s.enemies.find((x) => x.kind === 'mimic')!;
+    m.nextLeapTick = 1e9;
+    p.x = p.px = c.x + 6;
+    p.y = p.py = c.y;
+    for (let i = 0; i < 120 && m.mode === 'reveal'; i++) step(s, {});
+    // A bomb in its path, between it and the player.
+    const b = spawnBomb(s, { ownerId: 'p1', x: Math.round(m.x) + 2, y: Math.round(m.y), range: 2 });
+    b.detonateTick = s.tick + 1000;
+    const ev = run(s, 200);
+    expect(ev.some((x) => x.type === 'mimicSwallow')).toBe(true);
+    expect(ev.some((x) => x.type === 'mimicSpit')).toBe(true);
+    expect(s.bombs.some((x) => x.id === b.id)).toBe(false);
+  });
+
+  it('it crouches, then leaps onto the player out of reach of blasts', () => {
+    const { s, p } = quiet();
+    const c = openRow(s, 6);
+    const pr = mimicChest(s, c.x, c.y);
+    blast(s, pr.x, pr.y);
+    run(s, 1);
+    const m = s.enemies.find((x) => x.kind === 'mimic')!;
+    p.x = p.px = c.x + 5;
+    p.y = p.py = c.y;
+    for (let i = 0; i < 120 && m.mode === 'reveal'; i++) step(s, {});
+    m.hurtUntil = 0;
+    m.nextLeapTick = 0;
+    let crouch: { tx: number; ty: number } | null = null;
+    for (let i = 0; i < 400 && !crouch; i++) {
+      step(s, {});
+      const e = s.events.find((x) => x.type === 'mimicCrouch');
+      if (e && e.type === 'mimicCrouch') crouch = e;
+      p.x = p.px = c.x + 5; // hold still
+    }
+    expect(crouch).not.toBeNull();
+    for (let i = 0; i < 60 && m.mode !== 'leap'; i++) step(s, {});
+    expect(m.mode).toBe('leap');
+    const hp = m.hp;
+    blast(s, Math.round(m.x), Math.round(m.y));
+    const ev = run(s, 60);
+    expect(m.hp).toBe(hp);
+    const land = ev.find((x) => x.type === 'mimicLand');
+    expect(land).toMatchObject({ x: crouch!.tx, y: crouch!.ty });
+  });
+
+  it('beaten, it leaves a double chest where it fell', () => {
+    const { s, p } = quiet();
+    const c = openRow(s);
+    const pr = mimicChest(s, c.x + 2, c.y);
+    blast(s, pr.x, pr.y);
+    run(s, 1);
+    const m = s.enemies.find((x) => x.kind === 'mimic')!;
+    m.mode = 'hunt';
+    m.nextLeapTick = 1e9;
+    m.hp = 1;
+    m.hurtUntil = 0;
+    m.frozenUntil = 1e9;
+    blast(s, Math.round(m.x), Math.round(m.y));
+    const ev = run(s, 1);
+    expect(m.alive).toBe(false);
+    expect(ev.some((x) => x.type === 'mimicDefeated')).toBe(true);
+    expect(pr).toMatchObject({ state: 'closed', hp: 2 });
+    run(s, 10);
+    const before = s.powerups.length;
+    p.x = p.px = pr.x;
+    p.y = p.py = pr.y;
+    const opened = run(s, 1);
+    expect(opened.some((x) => x.type === 'chestOpened')).toBe(true);
+    expect(s.enemies.filter((x) => x.kind === 'mimic')).toHaveLength(1);
+    expect(s.powerups.length + (opened.filter((x) => x.type === 'powerupCollected').length) - before).toBeGreaterThanOrEqual(3);
   });
 });

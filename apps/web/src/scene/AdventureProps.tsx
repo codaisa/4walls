@@ -72,6 +72,7 @@ function Chest({ id }: { id: number }) {
   const ring = useRef<THREE.Mesh>(null!);
   const revealedAt = useRef<number | null>(null);
   const shine = useRef<THREE.Mesh>(null!);
+  const crown = useRef<THREE.Group>(null!);
   const openedAt = useRef<number | null>(p0.state === 'open' ? -1 : null);
   useEffect(
     () =>
@@ -86,17 +87,30 @@ function Chest({ id }: { id: number }) {
     const p = get();
     if (!p) return;
     // Mission reward: hidden until the braziers are lit, then it pops up out of the ground.
-    root.current.visible = p.state !== 'hidden';
-    if (p.state === 'hidden') return;
+    // A Mimic's chest is gone ('used') while the beast is loose, and comes back double.
+    const gone = p.state === 'hidden' || p.state === 'used';
+    root.current.visible = !gone;
+    if (gone) {
+      revealedAt.current = null;
+      return;
+    }
+    const dbl = p.hp === 2;
+    root.current.position.set(p.x + ox, 0, p.y + oz);
+    crown.current.visible = dbl;
     if (revealedAt.current === null) revealedAt.current = p.tick > 0 && controller.state.tick - p.tick < 30 ? performance.now() : -1;
     const rk = revealedAt.current < 0 ? 1 : Math.min(1, (performance.now() - revealedAt.current) / 600);
-    root.current.scale.setScalar(Math.max(0.0001, rk < 1 ? rk * (1 + 0.3 * Math.sin(rk * Math.PI)) : 1));
+    root.current.scale.setScalar(Math.max(0.0001, rk < 1 ? rk * (1 + 0.3 * Math.sin(rk * Math.PI)) : 1) * (dbl ? 1.3 : 1));
     if (p.state === 'open' && openedAt.current === null) openedAt.current = -1;
     const t = clock.elapsedTime;
     const since = openedAt.current === null ? -1 : openedAt.current < 0 ? 9999 : performance.now() - openedAt.current;
     const k = since < 0 ? 0 : Math.min(1, since / 380);
     // Overshoot on the hinge, then rest wide open.
     lid.current.rotation.x = -k * (1.9 + 0.25 * Math.sin(Math.min(1, since / 600) * Math.PI));
+    // The Mimic's tell: now and then the lid twitches by itself, as if something breathed inside.
+    if (p.mimic && !dbl && since < 0) {
+      const w = (t + id * 0.71) % 5.5;
+      lid.current.rotation.x = w < 0.35 ? -0.12 * Math.abs(Math.sin(w * 28)) : 0;
+    }
     ring.current.visible = since < 0;
     if (since < 0) {
       const q = (t * 0.9 + id * 0.37) % 1;
@@ -133,6 +147,17 @@ function Chest({ id }: { id: number }) {
       <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]} material={glowRing.clone()}>
         <ringGeometry args={[0.38, 0.46, 32]} />
       </mesh>
+      {/* The double chest left by a beaten Mimic: gold crown and gems. */}
+      <group ref={crown} visible={false}>
+        {[-0.2, 0, 0.2].map((x) => (
+          <mesh key={x} position={[x, 0.62, 0]} material={x === 0 ? ruby : goldGlow}>
+            <octahedronGeometry args={[x === 0 ? 0.07 : 0.05, 0]} />
+          </mesh>
+        ))}
+        {[-0.24, 0.24].map((x) => (
+          <mesh key={x} position={[x, 0.2, 0]} geometry={bandGeo} material={goldGlow} />
+        ))}
+      </group>
       <mesh ref={shine} position={[0, 0.6, 0]}>
         <cylinderGeometry args={[0.22, 0.32, 1, 16, 1, true]} />
         <meshBasicMaterial color={rare ? '#ffd23f' : '#ffe9b0'} transparent opacity={0.8} toneMapped={false} depthWrite={false} side={THREE.DoubleSide} />

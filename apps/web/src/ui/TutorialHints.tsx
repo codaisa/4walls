@@ -8,7 +8,7 @@ import { isTouchDevice } from '../input/InputManager';
  * Contextual Adventure tips. Each one shows once per device, at the moment it matters (first bomb,
  * first Fagulha, first secret wall…), worded for the controls in hand. Never blocks the game.
  */
-type HintId = 'bomb' | 'escape' | 'powerup' | 'cage' | 'cracked' | 'key' | 'spark' | 'brazier' | 'vent' | 'map' | 'river' | 'fragile' | 'geyser' | 'lever' | 'seal' | 'root' | 'grass' | 'chasm' | 'boss' | 'totem' | 'plates' | 'core' | 'anchors';
+type HintId = 'bomb' | 'escape' | 'powerup' | 'cage' | 'cracked' | 'key' | 'spark' | 'brazier' | 'vent' | 'map' | 'river' | 'fragile' | 'geyser' | 'lever' | 'seal' | 'root' | 'grass' | 'chasm' | 'boss' | 'totem' | 'plates' | 'core' | 'anchors' | 'elite' | 'mimic';
 
 const KEY = '4walls.hints';
 const seenSet = (): Set<string> => {
@@ -69,6 +69,10 @@ function text(id: HintId, touch: boolean): { icon: string; body: string } {
       return { icon: '🕳️', body: 'Abismo! Cair é fatal. Dá para pular 1 casa por cima.' };
     case 'boss':
       return { icon: '☠️', body: 'O guardião do arco! Saia das casas marcadas no chão e acerte o corpo dele com explosões.' };
+    case 'elite':
+      return { icon: '👑', body: 'Inimigo de elite (de coroa)! O Magmito grande aguenta 3 explosões e a Fagulha grande se divide em duas.' };
+    case 'mimic':
+      return { icon: '🧰', body: 'Era um Baú Mimético! Ele pula em você e engole bombas para cuspir de volta. Vença e ganhe um baú duplo.' };
     case 'anchors':
       return { icon: '🌿', body: 'O Guardião está preso por 3 raízes e se cura enquanto uma viver. Exploda ao lado delas para soltá-lo!' };
     case 'plates':
@@ -112,6 +116,7 @@ export function TutorialHints({ controller }: { controller: MatchView }) {
         want('escape');
       } else if (e.type === 'powerupSpawned') want('powerup');
       else if (e.type === 'sparkAlert') want('spark');
+      else if (e.type === 'mimicAwoke') want('mimic');
       else if (e.type === 'regionEntered') {
         if (regionById(s, e.region)?.objective.kind === 'key') want('key');
         if (e.region >= 2) want('map');
@@ -134,6 +139,7 @@ export function TutorialHints({ controller }: { controller: MatchView }) {
       if (adv.props.some((p) => p.kind === 'root' && p.state === 'intact' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 4)) want('root');
       if (adv.props.some((p) => p.kind === 'grass' && p.state === 'dry' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 2)) want('grass');
       if (near(s, me, (x, y) => getCell(s.grid, x, y) === Cell.Chasm, 2)) want('chasm');
+      if (s.enemies.some((e) => e.alive && e.elite && Math.abs(e.x - me.x) + Math.abs(e.y - me.y) <= 6)) want('elite');
       if (s.boss && s.boss.regionId !== undefined && s.boss.action !== 'dead') {
         want('boss');
         if (s.boss.plates !== undefined) want('plates');

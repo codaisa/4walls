@@ -128,6 +128,36 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
     case 'sparkAlert':
       sfx.sparkAlert();
       break;
+    case 'enemyHurt':
+      sfx.rootHit();
+      break;
+    case 'eliteSplit':
+      sfx.crack();
+      break;
+    case 'mimicAwoke':
+      sfx.laugh();
+      sfx.rumble();
+      hud.set({ banner: { text: 'É UM BAÚ MIMÉTICO!', key: tick + 12 } });
+      break;
+    case 'mimicBite':
+      sfx.kick();
+      break;
+    case 'mimicCrouch':
+      sfx.sparkAlert();
+      break;
+    case 'mimicLand':
+      sfx.rumble();
+      break;
+    case 'mimicSwallow':
+      sfx.clink();
+      break;
+    case 'mimicSpit':
+      sfx.kick();
+      break;
+    case 'mimicDefeated':
+      sfx.secret();
+      hud.set({ banner: { text: 'MÍMICO VENCIDO! BAÚ DUPLO!', key: tick + 13 } });
+      break;
     case 'bridgeCracking':
       sfx.creak();
       break;
@@ -373,7 +403,7 @@ function adventureInfo(s: GameState): HudAdventure | null {
     index: r.id + 1,
     depth: adv.depth + 1,
     objective: r.objective.kind,
-    progress: r.objective.kind === 'clear' ? s.enemies.filter((e) => e.alive && e.regionId === r.id).length : r.objective.progress,
+    progress: r.objective.kind === 'clear' ? s.enemies.filter((e) => e.alive && e.regionId === r.id && e.kind !== 'mimic').length : r.objective.progress,
     goal: r.objective.goal,
     keyCarried: adv.props.some((p) => p.kind === 'key' && p.region === r.id && p.state === 'carried'),
     braziers: (() => {
