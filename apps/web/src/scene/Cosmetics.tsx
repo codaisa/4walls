@@ -1,6 +1,7 @@
 import { createPortal, useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { PooledLight } from './lightPool';
 
 /**
  * Cosmetics drawn on top of the shared models: hats (procedural, attached to the head bone so
@@ -154,7 +155,7 @@ export function HatModel({ id }: { id: string }) {
           <mesh material={mats.halo} rotation-x={Math.PI / 2}>
             <torusGeometry args={[0.22, 0.028, 10, 36]} />
           </mesh>
-          <pointLight color="#ffd27a" intensity={0.6} distance={1.2} />
+          <PooledLight color="#ffd27a" intensity={0.6} distance={1.2} />
         </group>
       );
     case 'hat_chifres':

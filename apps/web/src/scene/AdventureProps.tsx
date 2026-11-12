@@ -6,8 +6,9 @@ import { Cell } from '@4walls/shared';
 import { GEYSER_PERIOD, GEYSER_WARN, geyserPhase, getCell, platformPos, type PropState } from '@4walls/core';
 import { lerp, useGame } from './context';
 import { RESIDENT_OF } from '@4walls/shared';
-import { ShowcaseAvatar } from './ShowcaseAvatar';
+import { ResidentStatue } from './ResidentStatue';
 import { useGLTF } from '@react-three/drei';
+import { PooledLight, VirtualLight } from './lightPool';
 
 const wood = new THREE.MeshStandardMaterial({ color: '#8a4f24', roughness: 0.75 });
 const woodDark = new THREE.MeshStandardMaterial({ color: '#5e3216', roughness: 0.8 });
@@ -233,7 +234,7 @@ function GateKey({ id }: { id: number }) {
             <boxGeometry args={[0.08 - i * 0.02, 0.04, 0.03]} />
           </mesh>
         ))}
-        <pointLight color="#ffc04a" intensity={2.5} distance={3} />
+        <PooledLight color="#ffc04a" intensity={2.5} distance={3} />
       </group>
     </>
   );
@@ -383,7 +384,7 @@ function Tent({ id }: { id: number }) {
       {home && (
         <group position={[0, 0, 0.62]} scale={0.8}>
           <Suspense fallback={null}>
-            <ShowcaseAvatar characterId={resident} colorIndex={(Object.keys(RESIDENT_OF).indexOf(service) + 1) % 4} />
+            <ResidentStatue characterId={resident} colorIndex={(Object.keys(RESIDENT_OF).indexOf(service) + 1) % 4} />
           </Suspense>
         </group>
       )}
@@ -397,7 +398,7 @@ function Campfire({ id }: { id: number }) {
   const get = useProp(id);
   const p0 = get()!;
   const fire = useRef<THREE.Group>(null!);
-  const light = useRef<THREE.PointLight>(null!);
+  const light = useRef<VirtualLight>(null!);
   const ring = useRef<THREE.Mesh>(null!);
   const litAt = useRef<number | null>(p0.state === 'lit' ? -1 : null);
   useFrame(({ clock }) => {
@@ -455,7 +456,7 @@ function Campfire({ id }: { id: number }) {
         <ringGeometry args={[0.46, 0.54, 32]} />
         <meshBasicMaterial color="#ffb347" transparent opacity={0.5} toneMapped={false} depthWrite={false} />
       </mesh>
-      <pointLight ref={light} position={[0, 1.2, 0]} color="#ff9a3a" intensity={0} distance={7} />
+      <PooledLight ref={light} position={[0, 1.2, 0]} color="#ff9a3a" intensity={0} distance={7} />
     </group>
   );
 }
@@ -466,7 +467,7 @@ function Brazier({ id }: { id: number }) {
   const get = useProp(id);
   const p0 = get()!;
   const fire = useRef<THREE.Group>(null!);
-  const light = useRef<THREE.PointLight>(null!);
+  const light = useRef<VirtualLight>(null!);
   const smolder = useRef<THREE.Mesh>(null!);
   const litAt = useRef<number | null>(p0.state === 'lit' ? -1 : null);
   useFrame(({ clock }) => {
@@ -508,7 +509,7 @@ function Brazier({ id }: { id: number }) {
           <coneGeometry args={[0.13, 0.36, 7, 1, true]} />
         </mesh>
       </group>
-      <pointLight ref={light} position={[0, 1, 0]} color="#ff8a2a" intensity={0} distance={5} />
+      <PooledLight ref={light} position={[0, 1, 0]} color="#ff8a2a" intensity={0} distance={5} />
     </group>
   );
 }
@@ -1006,7 +1007,7 @@ function Totem({ id }: { id: number }) {
   const p0 = get()!;
   const rune = useMemo(() => totemRune.clone(), []);
   const ring = useRef<THREE.Group>(null!);
-  const glow = useRef<THREE.PointLight>(null!);
+  const glow = useRef<VirtualLight>(null!);
   const flash = useRef(0);
   useEffect(
     () =>
@@ -1064,7 +1065,7 @@ function Totem({ id }: { id: number }) {
           </mesh>
         ))}
       </group>
-      <pointLight ref={glow} position={[0, 1.3, 0]} color="#5fffd0" intensity={1.4} distance={3} decay={1.6} />
+      <PooledLight ref={glow} position={[0, 1.3, 0]} color="#5fffd0" intensity={1.4} distance={3} decay={1.6} />
     </group>
   );
 }

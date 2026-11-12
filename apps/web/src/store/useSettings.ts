@@ -72,12 +72,19 @@ export interface GraphicsPreset {
   /** Bloom + vignette post-processing. */
   post: boolean;
   msaa: number;
+  /** V0: real point lights for scene props (pooled) and for explosion flashes. Fixed per quality. */
+  lights: number;
+  fxLights: number;
+  /** V0: share of the particle pools (1 = full). */
+  particles: number;
+  /** V0: bloom computed at this fraction of the screen resolution (soft glow looks the same). */
+  bloomScale: number;
 }
 
 const PRESETS: Record<Exclude<Quality, 'auto'>, GraphicsPreset> = {
-  low: { dpr: [0.75, 1], shadows: false, shadowMap: 512, post: false, msaa: 0 },
-  medium: { dpr: [1, 1.25], shadows: true, shadowMap: 1024, post: true, msaa: 0 },
-  high: { dpr: [1, 1.75], shadows: true, shadowMap: 2048, post: true, msaa: 4 },
+  low: { dpr: [0.75, 1], shadows: false, shadowMap: 512, post: false, msaa: 0, lights: 2, fxLights: 1, particles: 0.4, bloomScale: 0.5 },
+  medium: { dpr: [1, 1.25], shadows: true, shadowMap: 1024, post: true, msaa: 0, lights: 4, fxLights: 2, particles: 0.65, bloomScale: 0.5 },
+  high: { dpr: [1, 1.75], shadows: true, shadowMap: 2048, post: true, msaa: 4, lights: 6, fxLights: 4, particles: 1, bloomScale: 1 },
 };
 
 /** The preset in effect ("auto": phones and tablets get medium, computers high). */

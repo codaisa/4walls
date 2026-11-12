@@ -122,9 +122,12 @@ export class SoftPool {
   private col: THREE.InstancedBufferAttribute;
   private misc: THREE.InstancedBufferAttribute;
 
+  private acc = 0;
   constructor(
     readonly n: number,
     readonly mode: SoftMode,
+    /** V0: share of spawn requests kept (lighter density on phones). */
+    readonly keep = 1,
   ) {
     const geo = new THREE.PlaneGeometry(1, 1);
     this.col = new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4).setUsage(THREE.DynamicDrawUsage);
@@ -166,6 +169,9 @@ export class SoftPool {
   }
 
   spawn(p: SoftSpec) {
+    this.acc += this.keep;
+    if (this.acc < 1) return;
+    this.acc -= 1;
     const i = this.head;
     this.head = (this.head + 1) % this.n;
     this.pos.set([p.x, p.y, p.z], i * 3);

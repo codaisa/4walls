@@ -5,6 +5,7 @@ import { regionAt, type RegionVariant } from '@4walls/core';
 import { FloatingParticles } from './Arena';
 import { useGame } from './context';
 import type { ArenaTheme } from './themes';
+import { PooledLight, VirtualLight } from './lightPool';
 
 /**
  * Mood of the region the group stands in. Later laps of the biome cycle come back at night, in
@@ -35,7 +36,7 @@ export function AdventureAtmosphere({ theme }: { theme: ArenaTheme }) {
   const { controller } = useGame();
   const scene = useThree((s) => s.scene);
   const [variant, setVariant] = useState<RegionVariant>('normal');
-  const lantern = useRef<THREE.PointLight>(null!);
+  const lantern = useRef<VirtualLight>(null!);
   const mix = useRef({ k: 0, from: 'normal' as RegionVariant, to: 'normal' as RegionVariant });
   const base = useRef(new Map<THREE.Light, Base>());
   const shaders = useRef<THREE.ShaderMaterial[]>([]);
@@ -133,7 +134,7 @@ export function AdventureAtmosphere({ theme }: { theme: ArenaTheme }) {
 
   return (
     <>
-      <pointLight ref={lantern} color="#ffd59a" intensity={0} distance={8} decay={1.4} visible={false} />
+      <PooledLight ref={lantern} color="#ffd59a" intensity={0} distance={8} decay={1.4} />
       {variant === 'night' && <FloatingParticles key="night" count={120} color={[2.4, 2.1, 0.7]} size={0.1} rise={[-0.12, 0.12]} wander={0.8} blink />}
       {variant === 'mist' && <MistWisps />}
       {variant === 'corrupted' && <FloatingParticles key="corrupt" count={180} color={[1.6, 0.35, 2.4]} size={0.08} rise={[0.15, 0.6]} wander={0.5} />}

@@ -1,6 +1,6 @@
 # 4Walls — Inventário de VFX, animação e texturas
 
-> Status: **inventário e plano para aprovação**. Nada foi baixado nem integrado ainda.
+> Status: **aprovado** (só CC0). **V0 concluído** (seção 6).
 > Objetivo: um **sistema de VFX coerente** (não uma coleção solta). Explosões, ambientes, chefes e
 > transições de bioma devem parecer polidos e satisfatórios **sem perder desempenho no celular**.
 
@@ -144,3 +144,41 @@ Cada marco segue o fluxo de sempre: implementar, testar, verificar no navegador 
 - Página **/vfx** (só em desenvolvimento): catálogo vivo, com prévia, nome, custo e qualidade mínima de cada efeito.
 - `docs/VFX_CATALOGO.md`: como usar cada componente e cada preset.
 - `docs/ASSETS_LICENCAS.md`: registro de licença de cada arquivo.
+
+## 6. Resultado do V0 (12/11/2026)
+
+**Como foi medido:**
+- tempo de GPU por quadro (extensão de timer do WebGL), chamadas de desenho e triângulos;
+- medidor de dev ligado em Ajustes → "Mostrar FPS";
+- mesmas cenas, 844×390, numa RTX 3060.
+
+Num celular os números são muitas vezes maiores, mas a **proporção** do ganho vale.
+
+| Cena (qualidade média, a do celular) | GPU antes | GPU depois | Chamadas de desenho | Triângulos |
+|---|---|---|---|---|
+| Acampamento (6 moradores) | 8,2 ms | **4,8 ms (−42%)** | 351 → 197 | 568k → 362k |
+| Região inicial (lava) | ~4,0 ms | **3,1 ms (−22%)** | ~150 → ~150 | igual |
+| Boss Rush (Golem, muita lava) | 4,0 ms | **3,2 ms (−19%)** | 108 → 110 | igual |
+| Pior quadro na 1ª explosão (travada) | **485 ms** | **55–70 ms** | — | — |
+| Qualidade alta (PC), região inicial | 7,5 ms | 6,5 ms | — | — |
+
+**O que mudou:**
+- **Moradores do acampamento viram estátuas:**
+  - a pose de descanso é congelada numa malha única (cor por vértice; 1 a 3 chamadas de desenho por herói, antes de 12 a 20 com esqueleto);
+  - respiração e um leve olhar em volta por código;
+  - sombra real só no "alto"; no celular, uma mancha suave.
+- **Lava e água do fundo:** o ruído de 5 camadas agora vem de uma textura repetível de 256×256 gerada no código, com o mesmo algoritmo. O fundo ficou cerca de 4 vezes mais barato, com a mesma aparência.
+- **Shaders pré-compilados** ao carregar a cena (em segundo plano). A primeira explosão não congela mais o jogo.
+- **Pool fixa de luzes:**
+  - fogueiras, braseiros, totens, tochas, a chave, a auréola e a lanterna da noite viraram luzes virtuais;
+  - a cada quadro acendem as mais fortes perto do centro da tela, em 2 / 4 / 6 luzes reais (baixo / médio / alto) mais 1 / 2 / 4 clarões de explosão;
+  - o número de luzes nunca muda, então os shaders não recompilam.
+- **Vagas de inimigo sob demanda:** antes eram 40 vagas fixas de cerca de 66 malhas cada (~2.600 objetos percorridos por quadro, mesmo invisíveis). Agora só as necessárias.
+- **Partículas por qualidade:** densidade de 40% / 65% / 100% (as bolas de fogo das explosões ficam em no mínimo 80%).
+- **Bloom** calculado em meia resolução no baixo e no médio.
+
+**Capturas antes e depois:** `docs/vfx/v0_acampamento.jpg`, `docs/vfx/v0_explosao.jpg` e `docs/vfx/v0_chefe_lava.jpg`. Ficaram visualmente equivalentes.
+
+**Ainda não feito (vai para o V1):**
+- os objetos de cenário (tendas, baús, capim, espinheiros) ainda são várias malhas cada; instanciar reduz bem as chamadas de desenho da Aventura;
+- conferir num celular de verdade.

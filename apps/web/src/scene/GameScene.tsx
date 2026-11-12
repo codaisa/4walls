@@ -25,6 +25,7 @@ import { Powerups } from './Powerups';
 import { THEMES } from './themes';
 import { graphicsPreset, useSettings } from '../store/useSettings';
 import { regionAt } from '@4walls/core';
+import { LightPool } from './lightPool';
 
 /** Steps the simulation once per rendered frame, before any visual reads the state. */
 function GameLoop() {
@@ -34,17 +35,83 @@ function GameLoop() {
 }
 
 /** FPS readout (settings → "Mostrar FPS"): measured inside the render loop, drawn in HTML. */
-function FpsProbe({ out }: { out: React.RefObject<HTMLDivElement | null> }) {
-  const acc = useMemo(() => ({ frames: 0, time: 0 }), []);
+function FpsProbe({ out, post }: { out: React.RefObject<HTMLDivElement | null>; post: boolean }) {
+  const gl = useThree((st) => st.gl);
+  const scene = useThree((st) => st.scene);
+  // Dev: reach the scene from the console for profiling.
+  useEffect(() => {
+    if (import.meta.env.DEV) (window as unknown as { __three?: unknown }).__three = { gl, scene };
+  }, [gl, scene]);
+  const acc = useMemo(() => ({ frames: 0, time: 0, calls: 0, tris: 0, worst: 0, gpu: 0, gpuN: 0 }), []);
+  // GPU time per frame (dev measurement; needs EXT_disjoint_timer_query_webgl2).
+  const timer = useMemo(() => {
+    const ctx = gl.getContext() as WebGL2RenderingContext;
+    const ext = ctx.getExtension('EXT_disjoint_timer_query_webgl2') as { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null;
+    return ext ? { ctx, ext, active: null as WebGLQuery | null, pending: [] as WebGLQuery[] } : null;
+  }, [gl]);
+  useEffect(() => {
+    // Count every render pass of the frame (post-processing renders several times).
+    gl.info.autoReset = false;
+    return () => {
+      gl.info.autoReset = true;
+    };
+  }, [gl]);
+  // Runs first each frame: the counters hold the whole previous frame.
   useFrame((_, dt) => {
     acc.frames++;
     acc.time += dt;
-    if (acc.time >= 0.5) {
-      if (out.current) out.current.textContent = `${Math.round(acc.frames / acc.time)} FPS`;
-      acc.frames = 0;
-      acc.time = 0;
+    acc.calls += gl.info.render.calls;
+    acc.tris += gl.info.render.triangles;
+    acc.worst = Math.max(acc.worst, dt);
+    gl.info.reset();
+    if (timer) {
+      const { ctx, ext } = timer;
+      if (timer.active) {
+        ctx.endQuery(ext.TIME_ELAPSED_EXT);
+        timer.pending.push(timer.active);
+        timer.active = null;
+      }
+      while (timer.pending.length && ctx.getQueryParameter(timer.pending[0], ctx.QUERY_RESULT_AVAILABLE)) {
+        const q = timer.pending.shift()!;
+        if (!ctx.getParameter(ext.GPU_DISJOINT_EXT)) {
+          acc.gpu += ctx.getQueryParameter(q, ctx.QUERY_RESULT) / 1e6;
+          acc.gpuN++;
+        }
+        ctx.deleteQuery(q);
+      }
+      if (timer.pending.length < 8) {
+        timer.active = ctx.createQuery();
+        if (timer.active) ctx.beginQuery(ext.TIME_ELAPSED_EXT, timer.active);
+      }
     }
-  });
+    if (acc.time >= 0.5) {
+      const perf = {
+        fps: Math.round(acc.frames / acc.time),
+        ms: Math.round((acc.time / acc.frames) * 1000 * 10) / 10,
+        worstMs: Math.round(acc.worst * 1000),
+        calls: Math.round(acc.calls / acc.frames),
+        tris: Math.round(acc.tris / acc.frames / 1000),
+        programs: gl.info.programs?.length ?? 0,
+        textures: gl.info.memory.textures,
+        gpuMs: acc.gpuN ? Math.round((acc.gpu / acc.gpuN) * 100) / 100 : -1,
+      };
+      if (out.current) out.current.textContent = `${perf.fps} FPS · ${perf.ms} ms (pior ${perf.worstMs}) · ${perf.calls} DC · ${perf.tris}k tri · ${perf.programs} sh${perf.gpuMs >= 0 ? ` · GPU ${perf.gpuMs} ms` : ''}`;
+      if (import.meta.env.DEV) (window as unknown as { __perf?: typeof perf }).__perf = perf;
+      acc.frames = acc.time = acc.calls = acc.tris = acc.worst = acc.gpu = acc.gpuN = 0;
+    }
+  }, -100);
+  // With post-processing the composer renders at priority 1: close the GPU timer right after it,
+  // so the measure covers this frame's drawing only (not the wait for the next frame).
+  return post ? <TimerEnd timer={timer} /> : null;
+}
+
+function TimerEnd({ timer }: { timer: { ctx: WebGL2RenderingContext; ext: { TIME_ELAPSED_EXT: number }; active: WebGLQuery | null; pending: WebGLQuery[] } | null }) {
+  useFrame(() => {
+    if (!timer?.active) return;
+    timer.ctx.endQuery(timer.ext.TIME_ELAPSED_EXT);
+    timer.pending.push(timer.active);
+    timer.active = null;
+  }, 2);
   return null;
 }
 
@@ -111,6 +178,8 @@ export function GameScene({ controller }: { controller: MatchView }) {
         <fog attach="fog" args={[theme.background, theme.fog[0], theme.fog[1]]} />
         <GameLoop />
         <HitStop />
+        <LightPool count={gfx.lights} />
+        <ShaderWarmUp />
         <hemisphereLight args={theme.hemi} />
         <ambientLight intensity={0.15} color={theme.ambient} />
         <directionalLight
@@ -154,12 +223,12 @@ export function GameScene({ controller }: { controller: MatchView }) {
         {controller.state.adventure && <EdgeProbe />}
         {gfx.post && (
           <EffectComposer multisampling={gfx.msaa}>
-            <Bloom mipmapBlur intensity={0.9} luminanceThreshold={1} luminanceSmoothing={0.2} radius={0.7} />
+            <Bloom mipmapBlur intensity={0.9} luminanceThreshold={1} luminanceSmoothing={0.2} radius={0.7} resolutionScale={gfx.bloomScale} />
             <Vignette offset={0.25} darkness={0.6} />
             <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
           </EffectComposer>
         )}
-        {showFps && <FpsProbe out={fpsRef} />}
+        {showFps && <FpsProbe out={fpsRef} post={gfx.post} />}
       </GameContext.Provider>
     </Canvas>
     {showFps && (
@@ -189,5 +258,31 @@ function HitStop() {
       setFrameloop('always');
     };
   }, [controller, setFrameloop]);
+  return null;
+}
+
+/**
+ * V0: compile every material in the scene shortly after it loads (in the background when the
+ * browser can), so the first explosion / boss / effect doesn't freeze the game while its shader
+ * compiles (a first blast used to stall a frame for ~0.5 s). Runs again once models have loaded.
+ */
+function ShaderWarmUp() {
+  const gl = useThree((st) => st.gl);
+  const scene = useThree((st) => st.scene);
+  const camera = useThree((st) => st.camera);
+  useEffect(() => {
+    let alive = true;
+    const run = () => {
+      if (!alive) return;
+      const r = gl as unknown as { compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<unknown> };
+      if (r.compileAsync) void r.compileAsync(scene, camera).catch(() => {});
+      else gl.compile(scene, camera);
+    };
+    const timers = [400, 2500, 6000].map((ms) => window.setTimeout(run, ms));
+    return () => {
+      alive = false;
+      timers.forEach((t) => window.clearTimeout(t));
+    };
+  }, [gl, scene, camera]);
   return null;
 }

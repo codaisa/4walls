@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { DIR_VEC, SLOT_COLORS } from '@4walls/shared';
 import { useGame } from './context';
+import { graphicsPreset, useSettings } from '../store/useSettings';
 import { SoftPool } from './SoftParticles';
 import { meteorRockPos } from './Hazards';
 
@@ -43,7 +44,8 @@ class ParticlePool {
   color: Float32Array;
   rot: Float32Array;
   /** Sparks are drawn as streaks stretched along their velocity. */
-  constructor(n: number, readonly stretch = false) {
+  private acc = 0;
+  constructor(n: number, readonly stretch = false, readonly keep = 1) {
     this.n = n;
     this.pos = new Float32Array(n * 3);
     this.vel = new Float32Array(n * 3);
@@ -58,6 +60,10 @@ class ParticlePool {
     this.rot = new Float32Array(n * 3);
   }
   spawn(p: ParticleSpec) {
+    // Lighter density on phones: keep `keep` of the requests, evenly.
+    this.acc += this.keep;
+    if (this.acc < 1) return;
+    this.acc -= 1;
     const i = this.head;
     this.head = (this.head + 1) % this.n;
     this.pos.set([p.x, p.y, p.z], i * 3);
@@ -121,17 +127,22 @@ class ParticlePool {
 }
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
-const LIGHTS = 4;
+/** Explosion flash lights (a fixed number per quality, so shaders never recompile). */
+const MAX_LIGHTS = 4;
 
 /**
  * Event-driven VFX: sparks (additive, bloom), smoke, debris chunks, flash lights and camera trauma.
  */
 export function Fx() {
   const { controller, fx, ox, oz } = useGame();
-  const sparks = useMemo(() => new ParticlePool(900, true), []);
-  const solids = useMemo(() => new ParticlePool(500), []);
-  const smoke = useMemo(() => new SoftPool(480, 'smoke'), []);
-  const fireballs = useMemo(() => new SoftPool(360, 'fireball'), []);
+  // V0: phones spawn fewer sparks, chunks and puffs (the same effects, a lighter density).
+  const gfx = graphicsPreset(useSettings.getState().quality);
+  const LIGHTS = Math.min(MAX_LIGHTS, gfx.fxLights);
+  const k = gfx.particles;
+  const sparks = useMemo(() => new ParticlePool(Math.round(900 * k), true, k), [k]);
+  const solids = useMemo(() => new ParticlePool(Math.round(500 * k), false, k), [k]);
+  const smoke = useMemo(() => new SoftPool(Math.round(480 * k), 'smoke', k), [k]);
+  const fireballs = useMemo(() => new SoftPool(Math.round(360 * k), 'fireball', Math.max(k, 0.8)), [k]);
   const decals = useMemo(() => new SoftPool(160, 'decal'), []);
   const shocks = useMemo(() => new SoftPool(40, 'shockwave'), []);
   const sparkMesh = useRef<THREE.InstancedMesh>(null!);

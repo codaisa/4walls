@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber';
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { DIR_VEC } from '@4walls/shared';
 import { damp, lerp, useGame } from './context';
@@ -9,6 +9,7 @@ const POOL = 40;
 
 /** Magmites: hopping blobs of cooled crust over a pulsing molten core. */
 export function Enemies() {
+  const [slots, setSlots] = useState(0);
   const { controller, ox, oz } = useGame();
   const groups = useRef<(THREE.Group | null)[]>([]);
   const bodies = useRef<(THREE.Group | null)[]>([]);
@@ -65,6 +66,9 @@ export function Enemies() {
     const s = controller.state;
     const t = clock.elapsedTime;
     m.body.emissiveIntensity = 1.1 + Math.sin(t * 3) * 0.4;
+    // V0: mount only as many slots as there are enemies (each slot is ~66 meshes).
+    const want = Math.min(POOL, Math.ceil(s.enemies.length / 4) * 4);
+    if (want > slots || want < slots - 8) setSlots(want);
     for (let i = 0; i < POOL; i++) {
       const g = groups.current[i];
       const b = bodies.current[i];
@@ -198,7 +202,7 @@ export function Enemies() {
 
   return (
     <>
-      {Array.from({ length: POOL }, (_, i) => (
+      {Array.from({ length: slots }, (_, i) => (
         <group key={i}>
         <mesh ref={(r) => void (marker.current[i] = r)} rotation-x={-Math.PI / 2} material={m.mark} visible={false}>
           <ringGeometry args={[0.32, 0.46, 24]} />

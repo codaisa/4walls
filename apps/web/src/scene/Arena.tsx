@@ -6,6 +6,7 @@ import { Cell, type BiomeId } from '@4walls/shared';
 import { cellIndex, getCell, inBounds } from '@4walls/core';
 import { useGame } from './context';
 import type { ArenaTheme } from './themes';
+import { PooledLight, VirtualLight } from './lightPool';
 
 /** Deterministic hash → [0,1) so decoration is stable for a given layout. */
 const h01 = (x: number, y: number, k = 0) => {
@@ -313,7 +314,7 @@ export function Arena({ theme }: { theme: ArenaTheme }) {
 
 /** Four corner light anchors: braziers (Caldeira) or paper lanterns (Floresta). */
 function Corners({ w, h, theme }: { w: number; h: number; theme: ArenaTheme }) {
-  const lights = useRef<(THREE.PointLight | null)[]>([]);
+  const lights = useRef<(VirtualLight | null)[]>([]);
   const flames = useRef<(THREE.Mesh | null)[]>([]);
   const lantern = theme.corner === 'lantern';
   const corners = useMemo(
@@ -356,7 +357,7 @@ function Corners({ w, h, theme }: { w: number; h: number; theme: ArenaTheme }) {
                 <sphereGeometry args={[0.22, 14, 10]} />
                 <meshBasicMaterial color={new THREE.Color(3.2, 2.2, 0.9)} toneMapped={false} />
               </mesh>
-              <pointLight ref={(l) => void (lights.current[i] = l)} position={[0.2, 1.15, 0]} color="#ffd38a" distance={8} decay={1.6} />
+              <PooledLight ref={(l) => void (lights.current[i] = l)} position={[0.2, 1.15, 0]} color="#ffd38a" distance={8} decay={1.6} />
             </>
           ) : (
             <>
@@ -372,7 +373,7 @@ function Corners({ w, h, theme }: { w: number; h: number; theme: ArenaTheme }) {
                 <coneGeometry args={[0.32, 0.8, 7]} />
                 <meshBasicMaterial color={new THREE.Color(3.5, 1.3, 0.25)} toneMapped={false} />
               </mesh>
-              <pointLight ref={(l) => void (lights.current[i] = l)} position={[0, 1.8, 0]} color="#ff8a3c" distance={9} decay={1.6} />
+              <PooledLight ref={(l) => void (lights.current[i] = l)} position={[0, 1.8, 0]} color="#ff8a3c" distance={9} decay={1.6} />
             </>
           )}
         </group>
