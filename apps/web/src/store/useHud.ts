@@ -43,7 +43,7 @@ export interface HudAdventure {
   index: number;
   /** Deepest region reached (1-based). */
   depth: number;
-  objective: 'clear' | 'key' | 'lever' | 'seals' | 'purify';
+  objective: 'clear' | 'key' | 'lever' | 'seals' | 'purify' | 'boss';
   progress: number;
   goal: number;
   /** Key objective: somebody carries the key. */
@@ -65,6 +65,9 @@ export interface HudBoss {
   index: number;
   total: number;
   dead: boolean;
+  /** Adventure: the arc (1-based) whose chamber it guards, and how many times it came back. */
+  arc?: number;
+  level?: number;
 }
 
 export interface HudState {

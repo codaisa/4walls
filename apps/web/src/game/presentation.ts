@@ -24,6 +24,9 @@ export interface MatchView {
 export const RESULT_DELAY_MS = 1400;
 
 /** Sound + banner feedback for a gameplay event. Shared by local and online matches. */
+/** Tick of the last chamber cleared (its banner stays up over the gate's). */
+let arcDoneTick = -999;
+
 export function presentEvent(e: GameEvent, tick: number, onResultShown: () => void): number | null {
   const hud = useHud.getState();
   switch (e.type) {
@@ -92,12 +95,17 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
       break;
     case 'regionCleared':
       sfx.victory();
-      // The end of an arc: a hint of what waits deeper (the arc's guardian, later).
-      if (e.arcEnd) hud.set({ banner: { text: 'FIM DO ARCO! ALGO DESPERTA NAS PROFUNDEZAS…', key: tick + 11 } });
+      // Right before the chamber: a hint of what waits; the chamber itself closes the arc.
+      if (e.bossNext) hud.set({ banner: { text: 'ALGO DESPERTA NAS PROFUNDEZAS…', key: tick + 11 } });
+      else if (e.arcEnd) {
+        arcDoneTick = tick;
+        hud.set({ banner: { text: 'ARCO CONCLUÍDO!', key: tick + 11 } });
+      }
       break;
     case 'gateOpened':
       sfx.go();
-      hud.set({ banner: { text: 'PORTÃO ABERTO!', key: tick } });
+      // The chamber's own banner ("arc complete") wins over the gate's.
+      if (tick - arcDoneTick > 2) hud.set({ banner: { text: 'PORTÃO ABERTO!', key: tick } });
       break;
     case 'gateClosed':
       sfx.alarm(1);
@@ -217,6 +225,20 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
     case 'bossEnraged':
       sfx.alarm(3);
       hud.set({ banner: { text: 'ELE ENFURECEU!', key: tick } });
+      break;
+    case 'bossPhase':
+      // Phase 1 already says "enraged"; deeper encounters have one more.
+      if (e.phase >= 2) {
+        sfx.alarm(3);
+        hud.set({ banner: { text: 'ÚLTIMO FÔLEGO!', key: tick + 3 } });
+      }
+      break;
+    case 'bossBlocked':
+      sfx.kick();
+      break;
+    case 'totemRevive':
+      sfx.pickup();
+      hud.set({ banner: { text: 'O TOTEM TROUXE UM ALIADO DE VOLTA!', key: tick + 2 } });
       break;
     case 'bossDefeated':
       sfx.explosion(1.6, true);
@@ -341,5 +363,6 @@ function bossInfo(s: GameState): HudBoss | null {
     index: s.bossesDefeated + (dead ? 0 : 1),
     total: s.bossesDefeated + s.bossQueue.length + (dead ? 0 : 1),
     dead,
+    ...(b.regionId !== undefined ? { arc: (s.adventure?.regions.find((r) => r.id === b.regionId)?.arc ?? 0) + 1, level: b.level ?? 0 } : {}),
   };
 }

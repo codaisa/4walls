@@ -619,6 +619,24 @@ export function Fx() {
               });
             fx.shake = Math.min(1, fx.shake + 0.2);
             break;
+          case 'bossBlocked':
+            // The blast clanks off the armor.
+            for (let i = 0; i < 10; i++)
+              sparks.spawn({
+                x: e.x + ox + rnd(-0.7, 0.7), y: rnd(0.8, 1.8), z: e.y + oz + rnd(-0.7, 0.7),
+                vx: rnd(-3, 3), vy: rnd(1, 4), vz: rnd(-3, 3),
+                life: rnd(0.2, 0.4), size: rnd(0.04, 0.07), color: '#dfe6ff', intensity: 3, gravity: 9, drag: 1,
+              });
+            break;
+          case 'totemRevive':
+            for (let i = 0; i < 30; i++)
+              sparks.spawn({
+                x: e.x + ox + rnd(-0.4, 0.4), y: rnd(0.1, 0.6), z: e.y + oz + rnd(-0.4, 0.4),
+                vx: rnd(-1, 1), vy: rnd(2, 5), vz: rnd(-1, 1),
+                life: rnd(0.6, 1.1), size: rnd(0.05, 0.09), color: '#5fffd0', intensity: 4, gravity: 1, drag: 1.2,
+              });
+            shocks.spawn({ x: e.x + ox, y: 0.05, z: e.y + oz, life: 0.7, size: 0.8, grow: 2.5, color: '#5fffd0', alpha: 0.9 });
+            break;
           case 'bossDefeated': {
             const bx = e.x + ox;
             const bz = e.y + oz;

@@ -6,7 +6,7 @@ antes da próxima:
 | # | Tarefa | Depende de | Status |
 |---|---|---|---|
 | 1 | **Mapa**: regiões viram fases, objetivos, mecânicas de ambiente, segredos, navegação, arcos | — | **Concluída** (M1–M5) |
-| 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | Esboço (seção 5) |
+| 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | Em andamento: B1 concluído (seção 5) |
 | 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Esboço (seção 6) |
 
 Ponto de partida (como está hoje):
@@ -270,23 +270,99 @@ Pontos de atenção:
 
 ---
 
-## 5. Tarefa 2 — Chefes (esboço; detalhamos depois da Tarefa 1)
+## 5. Tarefa 2 — Chefes (plano detalhado)
 
-- **Base que já existe:** `boss.ts` (máquina de estados, aviso no chão, fúria) com o **Golem Vulcânico** e o **Guardião Ancião** do Boss Rush. A Tarefa 2 evolui isso para um `BossController` genérico com:
-  - fases configuráveis;
-  - ataques telegrafados com hitbox por casa;
-  - pontos fracos e condições de vulnerabilidade;
-  - personalidade (provocações, fuga, fúria).
-- **Quatro categorias:** elites (na exploração), mini-chefes (a cada 2–3 regiões), chefes de bioma (fim de arco) e lendários ou secretos.
-- **Primeiro pacote:**
-  - **Golem Vulcânico** refeito: armadura que bloqueia explosões, placas destrutíveis, núcleo exposto e câmera lenta no acerto. Vira o mini-chefe da Ponte de Obsidiana ou o chefe do Arco 1.
-  - **Baú Mimético:** secreto, usa o baú da Tarefa 1.
-  - **Guardião da Floresta** refeito: pontos de sustentação nas raízes e fase móvel. Chefe do Bosque Chamuscado.
-- **Estrutura de cada luta:** descoberta (pistas no mapa) → introdução com câmera → fases → aberturas → clímax com câmera lenta → recompensa em 3 níveis e mudança no mundo (a lava esfria, uma passagem surge).
-- **Escala de 1 a 4 jogadores:**
-  - vida não linear e padrões de ataque diferentes por número de jogadores;
-  - uma forma de **reviver durante a luta** (ativar um mecanismo da arena).
-- **Desafios opcionais:** sem morrer, por tempo, todos vivos. Desbloqueiam cosméticos do chefe.
+### 5.1 Onde os chefes moram no mundo infinito
+
+- **Toda região de fim de arco vira uma Câmara do Guardião.** O objetivo especial da região (selos, raízes…) continua existindo e, ao cumpri-lo, o portão da câmara se abre. Lá dentro fica o chefe do arco, e o portão de saída só abre quando ele cai.
+- **A câmara é um formato de região próprio (`arena`):**
+  - chão aberto, para o corpo 3×3 se mover, e 4 pilares de cobertura;
+  - alguns blocos com power-ups;
+  - o mecanismo de reviver (ver 5.3);
+  - bordas de lava ou abismo conforme o bioma, nunca no caminho do chefe.
+- **Rotação dos chefes:**
+  - Arco 1 (Ponte de Obsidiana) → **Golem Vulcânico**.
+  - Arcos de floresta → **Guardião da Floresta**.
+  - Arcos vulcânicos → Golem.
+  - Novos chefes entram nessa rotação conforme forem desenhados.
+- **Mundo infinito:** o chefe volta mais forte a cada vez:
+  - mais vida;
+  - ataques mais rápidos;
+  - ataques extras desbloqueados por volta;
+  - um modificador da variante (noite, névoa ou corrompido; ver B5).
+  - Nunca há "último chefe".
+- **Durante a luta:** o portão de entrada se fecha e nenhum Magmito novo nasce. A câmera abre o zoom para mostrar a arena inteira.
+
+### 5.2 BossController genérico
+
+O `boss.ts` de hoje é uma máquina de estados (andar → preparar → atacar → recuperar) com o Golem e o Guardião do Boss Rush. Ele passa a ser movido por dados:
+
+- **Fases por % de vida.** Cada fase define:
+  - pesos dos ataques;
+  - velocidade;
+  - intervalo entre ataques;
+  - um evento de transição, como um rugido, a arena mudando ou um invulnerável curto.
+  - O "enfurecido" atual vira só a fase 2.
+- **Vulnerabilidade como regra explícita:**
+  - `armored`: explosões batem e não ferem;
+  - `exposed`: janela de dano depois de um atordoamento;
+  - `weakPoints`: partes com vida própria (placas, raízes) que precisam cair antes.
+- **Ataques telegrafados por casa:** todo ataque marca no chão as casas que vai atingir antes de acertar. Já existe para raízes e meteoros e passa a valer para todos.
+- **Ancorado na região:**
+  - O chefe nasce no centro da câmara e não sai dela.
+  - Lava, abismo e portões contam como parede para o corpo.
+- **Escala por número de jogadores (1 a 4):**
+  - vida ×1 / ×1,5 / ×1,9 / ×2,2;
+  - com mais gente, ataques com mais alvos (mais meteoros, mais linhas de raiz) em vez de só mais vida.
+- **Previsão online:** o chefe é simulado no servidor, como no Boss Rush. O cliente só interpola, e o determinismo e o replay ficam iguais.
+
+### 5.3 Reviver na luta
+
+- **Totem do Retorno:** um ou dois totens na câmara. Quando um aliado está caído, uma explosão no totem o traz de volta, com invulnerabilidade curta.
+- Cada totem tem uso limitado: recarrega na troca de fase.
+- Se todos caírem, vale a regra de derrota atual da Aventura. A Tarefa 3 muda isso para voltar ao último acampamento.
+
+### 5.4 Clímax e recompensa
+
+- **Golpe final:**
+  - O último acerto congela a imagem por um instante.
+  - A câmera dá zoom no chefe, e ele se desfaz.
+  - É só apresentação: a simulação não desacelera, então o online continua determinístico.
+- **Mudança no mundo:**
+  - Golem: a lava da câmara esfria e vira chão e uma ponte se forma.
+  - Guardião: os espinheiros murcham e abre-se uma trilha.
+- **Recompensa em 3 níveis**, por desafios da luta: **sem ninguém morrer**, **dentro do tempo** e **todos vivos no fim**.
+  - Bronze: moedas e um baú.
+  - Prata: mais moedas e um power-up raro garantido.
+  - Ouro: tudo isso e um cosmético exclusivo do chefe na 1ª vez.
+- **Conta:**
+  - chefes da Aventura contam em `bossKills`;
+  - o Perfil ganha um **bestiário** de chefes com o maior nível vencido;
+  - conquistas novas.
+
+### 5.5 Marcos
+
+| Marco | Conteúdo | Observação |
+|---|---|---|
+| **B1 — Base e câmara** | `BossController` movido por dados (fases, vulnerabilidade, telegrafia, âncora na região), formato `arena`, Câmara do Guardião no fim de cada arco (objetivo → portão → chefe → saída), Totem do Retorno, escala 1–4 jogadores, zoom da câmera, golpe final. Golem e Guardião atuais já funcionando dentro da Aventura | O Boss Rush tem que continuar igual (testes de regressão) |
+| **B2 — Golem refeito** | 4 placas de armadura (uma por lado; explosão naquele lado quebra a placa), núcleo exposto depois de investida contra a parede, fase 2 com chuva de meteoros e lava subindo pelas bordas, fase 3 com pulo que racha o chão, a lava esfriando no fim | Modelo novo com placas que caem |
+| **B3 — Guardião da Floresta refeito** | 3 raízes de sustentação pela arena (com vida própria); enquanto uma viver, ele se regenera e fica preso no chão. Sem raízes, entra na fase móvel (anda, mergulha, invoca brotos), os espinheiros murchando no fim | Usa a arte de raiz do M4 |
+| **B4 — Elites e Baú Mimético** | Elites na exploração a partir do arco 2 (Magmito grande com 3 de vida, Fagulha que se divide), e o **Baú Mimético** secreto: alguns baús mordem quem abre, pulam, engolem bombas e cospem de volta; vencido, solta baú duplo | Mais comum em arcos corrompidos |
+| **B5 — Infinito e variantes** | Nível do chefe por arco (vida, velocidade, ataques extras por volta), modificadores por variante (🌙 noite: o chefe só aparece pela própria luz e pelos ataques telegrafados; ☁️ névoa: ataques vindos da neblina; 🟣 corrompido: invoca motas violetas e ganha uma fase extra), recompensas em 3 níveis, bestiário no Perfil, conquistas, os chefes novos também no Boss Rush | Fecha a Tarefa 2 |
+
+**Como ficou o B1:**
+- **Arcos com câmara:** cada arco agora tem 5–7 regiões: as terras do bioma, a transição (com o aviso "algo desperta…") e a **Câmara do Guardião** no fim. O 1º arco termina na Câmara do Golem (região 5), e o Bosque Chamuscado passou a ser a região 6.
+- **A câmara:** salão aberto (cantos arredondados), 4 pilares de cobertura (2 são **Totens do Retorno**), poucos blocos com power-ups e nenhum Magmito. O chefe dorme no meio e acorda quando o grupo inteiro entra e o portão de trás se fecha. A saída só abre quando ele cai, e aí os aliados caídos voltam como em qualquer portão.
+- **Controlador:** fases por % de vida (Golem e Guardião: 50%; nas voltas seguintes também 25%, com ataques mais frequentes), troca de fase com 1 s de respiro e recarga dos totens, regra de armadura (`exposedDuring`, pronta para o B2), corpo preso à câmara (lava, abismo e borda contam como parede), só o fogo dos jogadores fere (não meteoros, gêiseres ou capim).
+- **Escala:** vida × 1 / 1,5 / 1,9 / 2,2 por número de jogadores; o 1º encontro é mais leve (×0,8) e cada volta soma +30% de vida (até ×3) e +6% de velocidade (até ×1,4). Com 3+ jogadores, as raízes do Guardião cruzam dois alvos.
+- **Totem do Retorno:** com um aliado caído, explodir ao lado do totem o traz de volta (com proteção). 1 uso por fase.
+- **Apresentação:** barra do chefe na Aventura ("Guardião do Arco N · Nv."), a câmera abre para mostrar o chefe e aproxima no golpe final, cartão com a etiqueta "CHEFE", ☠️ no mapa, dicas novas (chefe e totem) e, no celular, o painel de objetivo some durante a luta para não cobrir a arena.
+- **Fica para depois:** o congelamento de imagem no golpe final (hoje é só o zoom), a recompensa em 3 níveis e a mudança no mundo (B5), os "pilares que caem" da Ponte de Obsidiana.
+
+Pontos de atenção:
+- **B1 é o maior marco:** mexe no `boss.ts`, no formato de região e no fluxo de portões ao mesmo tempo.
+- **A câmara precisa caber na janela de 3 regiões ao vivo.** O chefe tem que ficar estável quando a região anterior é descartada.
+- **Mini-chefes a cada 2–3 regiões** ficam de fora deste pacote: as elites (B4) cumprem esse papel. Volto nisso se os testes pedirem.
 
 ## 6. Tarefa 3 — Acampamentos e progressão (esboço)
 

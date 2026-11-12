@@ -53,7 +53,7 @@ export function Hud({ onResume, onRestart, onExit, exitLabel, mode, resultNote }
         <div className="hidden w-48 sm:block" />
       </div>
 
-      {mode === 'bossrush' && <BossBar />}
+      {(mode === 'bossrush' || mode === 'adventure') && <BossBar />}
 
       {phase === 'countdown' && (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -227,7 +227,8 @@ function BossBar() {
             {b.name}
           </span>
           <span className="text-xs font-bold opacity-75">
-            {b.dead ? 'Derrotado!' : b.enraged ? 'ENFURECIDO' : b.title} · Chefão {Math.max(1, b.index)}/{b.total}
+            {b.dead ? 'Derrotado!' : b.enraged ? 'ENFURECIDO' : b.title} ·{' '}
+            {b.arc ? `Guardião do Arco ${b.arc}${b.level ? ` · Nv. ${b.level + 1}` : ''}` : `Chefão ${Math.max(1, b.index)}/${b.total}`}
           </span>
         </div>
         <div className="mt-1 h-3 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/15">
@@ -240,9 +241,14 @@ function BossBar() {
 
 function AdventurePanel() {
   const a = useHud((s) => s.adventure);
+  const fighting = useHud((s) => !!s.boss && !s.boss.dead);
   if (!a) return null;
+  // Phones: during a chamber fight the boss bar says it all, and the top of the hall must stay visible.
+  if (fighting && TOUCH) return null;
   const objective = a.gateOpen ? (
     <span className="text-violet-200">✦ Portão aberto: siga em frente</span>
+  ) : a.objective === 'boss' ? (
+    <span className="text-red-200">☠️ Derrote o guardião do arco</span>
   ) : a.objective === 'seals' ? (
     <span className="text-violet-200">💠 Selos {a.progress}/{a.goal} · só em cadeia</span>
   ) : a.objective === 'purify' ? (

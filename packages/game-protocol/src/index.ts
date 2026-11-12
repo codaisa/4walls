@@ -202,7 +202,7 @@ export interface Snapshot {
   r: GameResult | null;
   /** Endless Adventure (see AdvSnap). */
   adv?: AdvSnap;
-  /** Boss Rush: the boss in the arena, the queue, how many fell, when the next one enters. */
+  /** Boss Rush / Adventure chambers: the boss in the arena, the queue, how many fell, when the next one enters. */
   bs?: Omit<BossState, 'px' | 'py'> | null;
   bq?: BossId[];
   bd?: number;
@@ -252,7 +252,7 @@ export function encodeSnapshot(s: GameState, ack: Record<number, number>, ev: Ga
           },
         }
       : {}),
-    ...(s.mode === 'bossrush'
+    ...(s.mode === 'bossrush' || s.adventure
       ? {
           bs: s.boss ? (({ px: _px, py: _py, ...b }) => ({ ...b, x: r3(b.x), y: r3(b.y) }))(s.boss) : null,
           bq: s.bossQueue,

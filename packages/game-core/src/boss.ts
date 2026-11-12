@@ -1,10 +1,10 @@
 import { BOSSES, BOSS_ARENA, Cell, DIRS, DIR_VEC, RULES, TICK_DT, secToTicks, type BossDef, type BossId, type Dir } from '@4walls/shared';
 import { destroyBlock } from './bombs';
 import { hitPlayer } from './combat';
-import { createGrid, getCell, setCell } from './grid';
+import { cellIndex, createGrid, getCell, inBounds, setCell } from './grid';
 import { nextRandom, pickWeighted, randInt } from './rng';
 import type { BossAttack, BossState, Flame, GameState, Grid, PlayerState } from './types';
-import { cellOf, newId } from './world';
+import { cellOf, isPit, newId } from './world';
 
 /** Bosses cover the 3×3 cells around their center; players touching that body die. */
 const BODY_HALF = 1;
@@ -47,18 +47,29 @@ export function buildBossArena(rngHolder: { rng: number }): { grid: Grid; spawns
 
 // ───────────────────────────── lifecycle ─────────────────────────────
 
-export function spawnBoss(s: GameState, kind: BossId) {
+/** Where and how strong a boss enters (the Adventure's Guardian Chambers); Boss Rush uses the defaults. */
+export interface BossSpawn {
+  x: number;
+  y: number;
+  regionId: number;
+  level: number;
+  hp: number;
+  speedMul: number;
+}
+
+export function spawnBoss(s: GameState, kind: BossId, at?: BossSpawn) {
   const def = BOSSES[kind];
   const { w, h } = s.grid;
-  const x = Math.floor(w / 2);
-  const y = Math.floor(h / 2);
+  const x = at?.x ?? Math.floor(w / 2);
+  const y = at?.y ?? Math.floor(h / 2);
   crushFootprint(s, x, y);
+  const hp = at?.hp ?? def.hp;
   s.boss = {
     kind,
     x, y, px: x, py: y, tx: x, ty: y,
     facing: 'down',
-    hp: def.hp,
-    maxHp: def.hp,
+    hp,
+    maxHp: hp,
     enraged: false,
     action: 'walk',
     actionStart: s.tick,
@@ -72,6 +83,8 @@ export function spawnBoss(s: GameState, kind: BossId) {
     frozenUntil: 0,
     lastHitTick: -999,
     diedTick: -1,
+    phase: 0,
+    ...(at ? { regionId: at.regionId, level: at.level, speedMul: at.speedMul } : {}),
   };
   const total = s.bossesDefeated + s.bossQueue.length + 1;
   s.events.push({ type: 'bossSpawned', boss: kind, index: s.bossesDefeated, total });
@@ -94,7 +107,7 @@ export function updateBoss(s: GameState) {
     // The body crumbles for a moment, then the next boss (if any) is on its way.
     if (s.tick - b.diedTick >= secToTicks(2.2)) {
       s.boss = null;
-      if (s.bossQueue.length) s.nextBossTick = s.tick + secToTicks(2.5);
+      if (s.bossQueue.length && b.regionId === undefined) s.nextBossTick = s.tick + secToTicks(2.5);
     }
     return;
   }
@@ -133,10 +146,19 @@ function setAction(s: GameState, b: BossState, action: BossState['action'], sec:
   b.actionUntil = s.tick + secToTicks(sec);
 }
 
-/** The whole 3×3 body fits (walls and pillars block; blocks get crushed). */
-function footprintClear(s: GameState, cx: number, cy: number) {
+/** Cell inside the boss's arena: anywhere in Boss Rush, its own Guardian Chamber in the Adventure. */
+export function inArena(s: GameState, b: { regionId?: number }, x: number, y: number) {
+  if (b.regionId === undefined || !s.adventure) return true;
+  return inBounds(s.grid, x, y) && s.adventure.regionOf[cellIndex(s.grid, x, y)] === b.regionId;
+}
+
+/** The whole 3×3 body fits (walls, pillars, pits and the chamber's edge block; blocks get crushed). */
+function footprintClear(s: GameState, b: { regionId?: number }, cx: number, cy: number) {
   for (let dy = -BODY_HALF; dy <= BODY_HALF; dy++)
-    for (let dx = -BODY_HALF; dx <= BODY_HALF; dx++) if (getCell(s.grid, cx + dx, cy + dy) === Cell.Wall) return false;
+    for (let dx = -BODY_HALF; dx <= BODY_HALF; dx++) {
+      const c = getCell(s.grid, cx + dx, cy + dy);
+      if (c === Cell.Wall || isPit(c) || !inArena(s, b, cx + dx, cy + dy)) return false;
+    }
   return true;
 }
 
@@ -189,20 +211,24 @@ function takeDamage(s: GameState, b: BossState, def: BossDef): boolean {
   const cx = cellOf(b.x);
   const cy = cellOf(b.y);
   for (const f of s.flames) {
-    if (f.untilTick <= s.tick || f.ownerId === 'boss' || f.ownerId === 'meteor') continue;
+    // Only the players' fire counts (not its own, meteors, geysers or burning grass).
+    if (f.untilTick <= s.tick || f.ownerId === 'boss' || f.ownerId === 'meteor' || f.ownerId === '') continue;
     if (Math.abs(f.x - cx) > BODY_HALF || Math.abs(f.y - cy) > BODY_HALF) continue;
     if (f.kind === 'ice') {
       if (s.tick >= b.frozenUntil) b.frozenUntil = s.tick + secToTicks(def.freezeSec);
       continue;
     }
+    // Armored bosses only open up during some actions; otherwise the blast clanks off.
+    if (def.exposedDuring && !(def.exposedDuring as string[]).includes(b.action)) {
+      b.invulnUntil = s.tick + secToTicks(def.hitCooldownSec);
+      s.events.push({ type: 'bossBlocked', x: b.x, y: b.y });
+      return false;
+    }
     b.hp = Math.max(0, b.hp - 1);
     b.invulnUntil = s.tick + secToTicks(def.hitCooldownSec);
     b.lastHitTick = s.tick;
     s.events.push({ type: 'bossHit', hp: b.hp, maxHp: b.maxHp, byId: f.ownerId, x: b.x, y: b.y });
-    if (!b.enraged && b.hp > 0 && b.hp <= b.maxHp / 2) {
-      b.enraged = true;
-      s.events.push({ type: 'bossEnraged' });
-    }
+    enterPhase(s, b, def);
     if (b.hp <= 0) {
       setAction(s, b, 'dead', 0);
       b.diedTick = s.tick;
@@ -220,6 +246,9 @@ function takeDamage(s: GameState, b: BossState, def: BossDef): boolean {
       const owner = s.players.find((p) => p.id === f.ownerId);
       if (owner) owner.kills++;
       s.events.push({ type: 'bossDefeated', boss: b.kind, x: b.x, y: b.y });
+      // Adventure: the chamber's objective is this boss.
+      const reg = b.regionId === undefined ? undefined : s.adventure?.regions.find((r) => r.id === b.regionId);
+      if (reg && reg.objective.kind === 'boss') reg.objective.progress = reg.objective.goal;
       return true;
     }
     return false;
@@ -227,8 +256,32 @@ function takeDamage(s: GameState, b: BossState, def: BossDef): boolean {
   return false;
 }
 
+/** Thresholds of this encounter: deeper Adventure bosses get an extra, faster phase. */
+const phasesOf = (b: BossState, def: BossDef) => ((b.level ?? 0) > 0 && def.deepPhases ? def.deepPhases : def.phases);
+
+/**
+ * Crossing a health threshold starts the next phase. Phase 1 is the enraged one (faster, wider
+ * attacks); later phases cut the pause between attacks. In the Adventure a phase change gives a
+ * short breather (the boss roars, untouchable) and recharges the chamber's totems.
+ */
+function enterPhase(s: GameState, b: BossState, def: BossDef) {
+  if (b.hp <= 0) return;
+  const want = phasesOf(b, def).filter((t) => b.hp <= b.maxHp * t).length;
+  const now = b.phase ?? 0;
+  if (want <= now) return;
+  b.phase = want;
+  if (!b.enraged && want >= 1) {
+    b.enraged = true;
+    s.events.push({ type: 'bossEnraged' });
+  }
+  if (b.regionId === undefined) return;
+  s.events.push({ type: 'bossPhase', phase: want });
+  b.invulnUntil = Math.max(b.invulnUntil, s.tick + secToTicks(1));
+  for (const p of s.adventure?.props ?? []) if (p.kind === 'totem' && p.region === b.regionId && p.state === 'used') p.state = 'idle';
+}
+
 function walk(s: GameState, b: BossState, def: BossDef) {
-  let budget = (b.enraged ? def.enragedSpeed : def.speed) * TICK_DT;
+  let budget = (b.enraged ? def.enragedSpeed : def.speed) * (b.speedMul ?? 1) * TICK_DT;
   while (budget > 1e-6) {
     if (atCell(b)) {
       if (s.tick >= b.nextAttackTick) return; // stop on the cell to attack
@@ -241,7 +294,7 @@ function walk(s: GameState, b: BossState, def: BossDef) {
       for (const d of DIRS) {
         const nx = b.x + DIR_VEC[d].x;
         const ny = b.y + DIR_VEC[d].y;
-        if (!footprintClear(s, nx, ny)) continue;
+        if (!footprintClear(s, b, nx, ny)) continue;
         const dist = Math.abs(target.x - nx) + Math.abs(target.y - ny) + nextRandom(s) * 0.3;
         if (dist < bestD) {
           bestD = dist;
@@ -278,12 +331,12 @@ function chooseAttack(s: GameState, b: BossState, def: BossDef) {
   b.facing = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
   b.targets = [];
   if (attack === 'charge') b.chargeDir = b.facing;
-  if (attack === 'roots') b.targets = rootLines(s, b, target);
+  if (attack === 'roots') b.targets = rootTargets(s, b, target);
   if (attack === 'burrow') {
-    const spot = emergeSpot(s, target);
+    const spot = emergeSpot(s, b, target);
     if (spot) b.targets = [spot];
     else attack = 'roots';
-    if (attack === 'roots') b.targets = rootLines(s, b, target);
+    if (attack === 'roots') b.targets = rootTargets(s, b, target);
   }
   b.attack = attack;
   const speedUp = b.enraged ? 0.8 : 1;
@@ -302,13 +355,14 @@ function chooseAttack(s: GameState, b: BossState, def: BossDef) {
  * Root lines: the whole row and column through the target player (stopping at walls), plus —
  * once enraged — the row and column through the boss itself. Never inside the boss's body.
  */
-export function rootLines(s: GameState, b: { x: number; y: number; enraged: boolean }, target: { x: number; y: number }) {
+export function rootLines(s: GameState, b: { x: number; y: number; enraged: boolean; regionId?: number }, target: { x: number; y: number }) {
   const seen = new Set<number>();
   const out: { x: number; y: number }[] = [];
   const bx = cellOf(b.x);
   const by = cellOf(b.y);
   const add = (x: number, y: number) => {
     if (Math.abs(x - bx) <= BODY_HALF && Math.abs(y - by) <= BODY_HALF) return;
+    if (!inArena(s, b, x, y)) return;
     const k = y * s.grid.w + x;
     if (seen.has(k)) return;
     seen.add(k);
@@ -329,15 +383,29 @@ export function rootLines(s: GameState, b: { x: number; y: number; enraged: bool
   return out;
 }
 
+/**
+ * Root lines of one attack. In the Adventure a big group (3+) gets a second cross through the
+ * player farthest from the first target, so spreading out never makes the fight trivial.
+ */
+function rootTargets(s: GameState, b: BossState, target: PlayerState) {
+  const cells = rootLines(s, b, target);
+  const alive = s.players.filter((p) => p.alive);
+  if (b.regionId === undefined || alive.length < 3) return cells;
+  const far = alive.reduce((best, p) => (Math.abs(p.x - target.x) + Math.abs(p.y - target.y) > Math.abs(best.x - target.x) + Math.abs(best.y - target.y) ? p : best), target);
+  const seen = new Set(cells.map((c) => c.y * s.grid.w + c.x));
+  for (const c of rootLines(s, { ...b, enraged: false }, far)) if (!seen.has(c.y * s.grid.w + c.x)) cells.push(c);
+  return cells;
+}
+
 /** Where the Guardião bursts out: a free 3×3 spot 2–4 cells from the player (never on top of anyone). */
-function emergeSpot(s: GameState, target: PlayerState) {
+function emergeSpot(s: GameState, b: BossState, target: PlayerState) {
   const tx = cellOf(target.x);
   const ty = cellOf(target.y);
   const spots: { x: number; y: number }[] = [];
   for (let y = ty - 4; y <= ty + 4; y++)
     for (let x = tx - 4; x <= tx + 4; x++) {
       const d = Math.max(Math.abs(x - tx), Math.abs(y - ty));
-      if (d < 2 || !footprintClear(s, x, y)) continue;
+      if (d < 2 || !footprintClear(s, b, x, y)) continue;
       if (s.players.some((p) => p.alive && Math.abs(p.x - x) < 1.6 && Math.abs(p.y - y) < 1.6)) continue;
       spots.push({ x, y });
     }
@@ -354,14 +422,14 @@ function summonSprouts(s: GameState, b: BossState, count: number, max: number) {
   for (let y = by - 3; y <= by + 3; y++)
     for (let x = bx - 3; x <= bx + 3; x++) {
       if (Math.max(Math.abs(x - bx), Math.abs(y - by)) < 2) continue;
-      if (getCell(s.grid, x, y) !== Cell.Floor || s.bombs.some((bb) => bb.x === x && bb.y === y)) continue;
+      if (getCell(s.grid, x, y) !== Cell.Floor || !inArena(s, b, x, y) || s.bombs.some((bb) => bb.x === x && bb.y === y)) continue;
       if (s.players.some((p) => Math.abs(p.x - x) + Math.abs(p.y - y) < 2)) continue;
       if (s.enemies.some((e) => e.alive && Math.round(e.x) === x && Math.round(e.y) === y)) continue;
       free.push({ x, y });
     }
   for (let i = 0; i < n && free.length; i++) {
     const [c] = free.splice(randInt(s, free.length), 1);
-    s.enemies.push({ id: newId(s), kind: 'sprout', x: c.x, y: c.y, px: c.x, py: c.y, dir: null, tx: c.x, ty: c.y, alive: true, diedTick: -1, frozenUntil: 0, regionId: -1 });
+    s.enemies.push({ id: newId(s), kind: 'sprout', x: c.x, y: c.y, px: c.x, py: c.y, dir: null, tx: c.x, ty: c.y, alive: true, diedTick: -1, frozenUntil: 0, regionId: b.regionId ?? -1 });
   }
 }
 
@@ -382,7 +450,7 @@ function emerge(s: GameState, b: BossState, def: BossDef) {
 }
 
 /** Cells hit by a slam: a ring around the body (wider once enraged). */
-export function slamCells(s: GameState, b: { x: number; y: number; enraged: boolean }, maxRing?: number) {
+export function slamCells(s: GameState, b: { x: number; y: number; enraged: boolean; regionId?: number }, maxRing?: number) {
   const cx = cellOf(b.x);
   const cy = cellOf(b.y);
   const outer = maxRing ?? (b.enraged ? 4 : 3);
@@ -390,7 +458,7 @@ export function slamCells(s: GameState, b: { x: number; y: number; enraged: bool
   for (let y = cy - outer; y <= cy + outer; y++)
     for (let x = cx - outer; x <= cx + outer; x++) {
       const ring = Math.max(Math.abs(x - cx), Math.abs(y - cy));
-      if (ring < 2 || getCell(s.grid, x, y) === Cell.Wall) continue;
+      if (ring < 2 || getCell(s.grid, x, y) === Cell.Wall || !inArena(s, b, x, y)) continue;
       cells.push({ x, y });
     }
   return cells;
@@ -409,7 +477,8 @@ function fireCells(s: GameState, b: BossState, cells: { x: number; y: number }[]
 
 function performAttack(s: GameState, b: BossState, def: BossDef) {
   const attack = b.attack;
-  const cooldown = secToTicks(b.enraged ? def.enragedAttackEverySec : def.attackEverySec);
+  // Phase 2 and beyond (deep encounters) attack more often.
+  const cooldown = secToTicks((b.enraged ? def.enragedAttackEverySec : def.attackEverySec) * ((b.phase ?? 0) >= 2 ? 0.8 : 1));
   if (attack === 'slam') {
     fireCells(s, b, slamCells(s, b));
     s.events.push({ type: 'bossSlam', x: b.x, y: b.y });
@@ -467,7 +536,7 @@ function chargeStep(s: GameState, b: BossState, def: BossDef) {
     if (atCell(b)) {
       const nx = b.x + DIR_VEC[dir].x;
       const ny = b.y + DIR_VEC[dir].y;
-      if (!footprintClear(s, nx, ny)) {
+      if (!footprintClear(s, b, nx, ny)) {
         fireCells(s, b, slamCells(s, b, 2));
         s.events.push({ type: 'bossSlam', x: b.x, y: b.y });
         b.chargeDir = null;

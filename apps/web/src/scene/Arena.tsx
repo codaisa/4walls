@@ -43,7 +43,7 @@ export function Arena({ theme }: { theme: ArenaTheme }) {
     // Cage cells are crates in the rules but drawn by <Cages />.
     const cageSet = new Set(adventure?.cages.map((c) => k(c.x, c.y)) ?? []);
     // Braziers stand on wall cells in the rules but are drawn by <AdventureProps />.
-    const propSet = new Set(adventure?.props.filter((p) => p.kind === 'brazier' || p.kind === 'lever' || p.kind === 'seal' || p.kind === 'root').map((p) => k(p.x, p.y)) ?? []);
+    const propSet = new Set(adventure?.props.filter((p) => p.kind === 'brazier' || p.kind === 'lever' || p.kind === 'seal' || p.kind === 'root' || p.kind === 'totem').map((p) => k(p.x, p.y)) ?? []);
     // Brambles are crates in the rules, drawn as thorn bushes by <AdventureProps />.
     const bushSet = new Set(adventure?.props.filter((p) => p.kind === 'bramble').map((p) => k(p.x, p.y)) ?? []);
     // The lava river is an open channel down to the magma sea; bridges and the shuttle platform

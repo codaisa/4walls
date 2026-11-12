@@ -167,6 +167,12 @@ export interface BossDef {
   freezeSec: number;
   /** Which attacks this boss uses. */
   attacks: ('slam' | 'meteors' | 'charge' | 'roots' | 'spores' | 'burrow')[];
+  /** Health fractions where a new phase starts (phase 1 is the enraged one). */
+  phases: number[];
+  /** Extra phases for stronger (deeper) encounters in the Adventure. */
+  deepPhases?: number[];
+  /** Armored boss: blasts only hurt it during these actions (otherwise they clank off). */
+  exposedDuring?: ('walk' | 'windup' | 'recover' | 'charge' | 'stunned')[];
   /** Guardião: root lines, sprout summons and the underground dive. */
   rootsWindupSec?: number;
   sporesWindupSec?: number;
@@ -197,6 +203,8 @@ export const BOSSES: Record<BossId, BossDef> = {
     enragedMeteors: 7,
     freezeSec: 1.6,
     attacks: ['slam', 'meteors', 'charge'],
+    phases: [0.5],
+    deepPhases: [0.5, 0.25],
   },
   guardian: {
     id: 'guardian',
@@ -217,6 +225,8 @@ export const BOSSES: Record<BossId, BossDef> = {
     enragedMeteors: 0,
     freezeSec: 1.4,
     attacks: ['roots', 'spores', 'burrow'],
+    phases: [0.5],
+    deepPhases: [0.5, 0.25],
     rootsWindupSec: 1.0,
     sporesWindupSec: 0.7,
     burrowWindupSec: 0.6,

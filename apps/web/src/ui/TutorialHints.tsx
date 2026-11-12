@@ -8,7 +8,7 @@ import { isTouchDevice } from '../input/InputManager';
  * Contextual Adventure tips. Each one shows once per device, at the moment it matters (first bomb,
  * first Fagulha, first secret wall…), worded for the controls in hand. Never blocks the game.
  */
-type HintId = 'bomb' | 'escape' | 'powerup' | 'cage' | 'cracked' | 'key' | 'spark' | 'brazier' | 'vent' | 'map' | 'river' | 'fragile' | 'geyser' | 'lever' | 'seal' | 'root' | 'grass' | 'chasm';
+type HintId = 'bomb' | 'escape' | 'powerup' | 'cage' | 'cracked' | 'key' | 'spark' | 'brazier' | 'vent' | 'map' | 'river' | 'fragile' | 'geyser' | 'lever' | 'seal' | 'root' | 'grass' | 'chasm' | 'boss' | 'totem';
 
 const KEY = '4walls.hints';
 const seenSet = (): Set<string> => {
@@ -67,6 +67,10 @@ function text(id: HintId, touch: boolean): { icon: string; body: string } {
       return { icon: '🔥', body: 'Capim seco pega fogo e o fogo se espalha. Não fique em cima!' };
     case 'chasm':
       return { icon: '🕳️', body: 'Abismo! Cair é fatal. Dá para pular 1 casa por cima.' };
+    case 'boss':
+      return { icon: '☠️', body: 'O guardião do arco! Saia das casas marcadas no chão e acerte o corpo dele com explosões.' };
+    case 'totem':
+      return { icon: '🗿', body: 'Um aliado caiu! Exploda ao lado de um Totem do Retorno (brilho verde) para trazê-lo de volta.' };
     case 'map':
       return { icon: '🗺️', body: touch ? 'Toque em 🗺️ (no canto) para ver o mapa da jornada.' : 'Aperte M para ver o mapa da jornada.' };
   }
@@ -124,6 +128,10 @@ export function TutorialHints({ controller }: { controller: MatchView }) {
       if (adv.props.some((p) => p.kind === 'root' && p.state === 'intact' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 4)) want('root');
       if (adv.props.some((p) => p.kind === 'grass' && p.state === 'dry' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 2)) want('grass');
       if (near(s, me, (x, y) => getCell(s.grid, x, y) === Cell.Chasm, 2)) want('chasm');
+      if (s.boss && s.boss.regionId !== undefined && s.boss.action !== 'dead') {
+        want('boss');
+        if (s.players.some((p) => !p.alive && !p.left) && adv.props.some((p) => p.kind === 'totem' && p.state === 'idle')) want('totem');
+      }
       if (adv.props.some((p) => p.kind === 'lever' && p.state === 'off' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 4)) want('lever');
       if (adv.props.some((p) => p.kind === 'bridge' && p.state === 'cracking' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 1)) want('fragile');
       // Show the next tip when the current one is done.

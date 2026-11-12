@@ -126,8 +126,8 @@ export function GameScene({ controller }: { controller: MatchView }) {
         {controller.state.adventure ? <AdventureWorld theme={theme} /> : <Arena key={`arena-${arenaTheme}`} theme={theme} />}
         {controller.state.adventure && <AdventureAtmosphere theme={theme} />}
         <Hazards />
-        {controller.state.mode === 'bossrush' && <Boss />}
-        {controller.state.mode === 'bossrush' && <RootSpikes />}
+        {(controller.state.mode === 'bossrush' || controller.state.adventure) && <Boss />}
+        {(controller.state.mode === 'bossrush' || controller.state.adventure) && <RootSpikes />}
         {controller.state.players.map((p) => (
           <PlayerAvatar key={p.id} playerId={p.id} />
         ))}

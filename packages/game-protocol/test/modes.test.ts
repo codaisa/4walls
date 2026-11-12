@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createGame, step, type GameState } from '@4walls/core';
+import { createGame, spawnBoss, step, type GameState } from '@4walls/core';
 import type { ModeId } from '@4walls/shared';
 import { applySnapshot, encodeSnapshot, isOnlineMode, sanitizeName } from '../src';
 
@@ -57,6 +57,17 @@ describe('every mode online', () => {
     sync(server, mirror);
     expect(mirror.boss).toBeNull();
     expect(mirror.bossesDefeated).toBe(1);
+  });
+
+  it('adventure: a chamber boss travels to the mirror with its chamber, level and phase', () => {
+    const { server, mirror } = pair('adventure');
+    spawnBoss(server, 'golem', { x: 7, y: 7, regionId: 0, level: 1, hp: 20, speedMul: 1.06 });
+    for (let i = 0; i < 10; i++) step(server, {});
+    sync(server, mirror);
+    expect(mirror.boss).toMatchObject({ kind: 'golem', regionId: 0, level: 1, maxHp: 20, phase: 0 });
+    server.boss = null;
+    sync(server, mirror);
+    expect(mirror.boss).toBeNull();
   });
 
   it('player names are trimmed, short and safe', () => {

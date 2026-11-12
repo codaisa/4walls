@@ -1,6 +1,6 @@
-import { ADVENTURE, Cell, DIR_VEC, DIRS } from '@4walls/shared';
+import { ADVENTURE, BOSSES, Cell, DIR_VEC, DIRS } from '@4walls/shared';
 import { describe, expect, it } from 'vitest';
-import { arcInfo, arcOfRegion, cellIndex, createGame, difficulty, geyserPhase, regionDifficulty, spawnBomb, getCell, inBounds, platformPos, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
+import { arcBoss, arcInfo, arcOfRegion, chamberCenter, isPit, cellIndex, createGame, difficulty, geyserPhase, regionDifficulty, spawnBomb, getCell, inBounds, platformPos, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
 
 const make = (seed = 11, players = 1) => {
   const s = createGame({
@@ -23,6 +23,10 @@ function complete(s: GameState, id: number) {
     for (const e of s.enemies) if (e.regionId === id) e.alive = false;
   } else if (r.objective.kind === 'seals' || r.objective.kind === 'purify') {
     for (const p of s.adventure!.props) if (p.region === id && (p.kind === 'seal' || p.kind === 'root')) p.state = 'broken';
+  } else if (r.objective.kind === 'boss') {
+    // The chamber's boss falls (its own fight is covered in boss tests).
+    r.objective.progress = r.objective.goal;
+    s.boss = null;
   } else if (r.objective.kind === 'lever') {
     const lever = s.adventure!.props.find((p) => p.kind === 'lever' && p.region === id)!;
     const side = DIRS.map((d) => ({ x: lever.x + DIR_VEC[d].x, y: lever.y + DIR_VEC[d].y })).find((c) => getCell(s.grid, c.x, c.y) === Cell.Floor)!;
@@ -95,11 +99,11 @@ describe('endless adventure: world', () => {
   });
 
   it('scripted introduction, then seeded names and objectives', () => {
-    expect([0, 1, 2, 3, 4].map((i) => regionInfo(7, i).name)).toEqual(['Caldeira Rasa', 'Campos de Cinza', 'Rio de Magma', 'Ponte de Obsidiana', 'Bosque Chamuscado']);
+    expect([0, 1, 2, 3, 4, 5].map((i) => regionInfo(7, i).name)).toEqual(['Caldeira Rasa', 'Campos de Cinza', 'Rio de Magma', 'Ponte de Obsidiana', 'Câmara do Golem', 'Bosque Chamuscado']);
     expect(regionInfo(7, 1).objective).toBe('key');
     const later = Array.from({ length: 40 }, (_, i) => regionInfo(7, 5 + i));
     expect(new Set(later.map((r) => r.name)).size).toBeGreaterThan(15);
-    expect(new Set(later.map((r) => r.objective))).toEqual(new Set(['clear', 'key', 'lever', 'seals', 'purify']));
+    expect(new Set(later.map((r) => r.objective))).toEqual(new Set(['clear', 'key', 'lever', 'seals', 'purify', 'boss']));
     expect(regionInfo(7, 12)).toEqual(regionInfo(7, 12));
   });
 
@@ -177,7 +181,7 @@ describe('endless adventure: the journey', () => {
         const gateNeighbor = DIRS.map((d) => ({ x: g.x + DIR_VEC[d].x, y: g.y + DIR_VEC[d].y })).some((c) => inBounds(s.grid, c.x, c.y) && seen.has(cellIndex(s.grid, c.x, c.y)) && regionAt(s, c.x, c.y) === id);
         expect(gateNeighbor, `seed ${seed} region ${id}: exit`).toBe(true);
         const isletOf = (pp: { x: number; y: number }) => DIRS.filter((d) => getCell(s.grid, pp.x + DIR_VEC[d].x, pp.y + DIR_VEC[d].y) === Cell.Lava).length >= 2;
-        for (const p of s.adventure!.props.filter((pp) => pp.region === id && !['brazier', 'lever', 'bridge', 'platform', 'seal', 'root', 'bramble', 'grass'].includes(pp.kind) && !isletOf(pp))) {
+        for (const p of s.adventure!.props.filter((pp) => pp.region === id && !['brazier', 'lever', 'bridge', 'platform', 'seal', 'root', 'bramble', 'grass', 'totem'].includes(pp.kind) && !isletOf(pp))) {
           // Secret chests sit behind a cracked wall: open it for the check.
           for (const d of DIRS) {
             const x = p.x + DIR_VEC[d].x;
@@ -187,7 +191,7 @@ describe('endless adventure: the journey', () => {
           expect(reach(s, start).has(cellIndex(s.grid, p.x, p.y)), `seed ${seed} region ${id}: ${p.kind}`).toBe(true);
         }
         // Braziers and levers stand like pillars: one of their sides must be reachable.
-        for (const b of s.adventure!.props.filter((pp) => pp.region === id && ['brazier', 'lever', 'seal', 'root'].includes(pp.kind))) {
+        for (const b of s.adventure!.props.filter((pp) => pp.region === id && ['brazier', 'lever', 'seal', 'root', 'totem'].includes(pp.kind))) {
           const side = DIRS.some((d) => {
             const x = b.x + DIR_VEC[d].x;
             const y = b.y + DIR_VEC[d].y;
@@ -296,7 +300,7 @@ describe('endless adventure: M2 mechanics', () => {
     expect(deep.some((m) => m.shape === 'plaza')).toBe(true);
     expect(deep.some((m) => m.braziers)).toBe(true);
     expect(deep.some((m) => m.vents > 0)).toBe(true);
-    expect(regionMods(21, 60).sparks).toBeGreaterThanOrEqual(regionMods(21, 6).sparks);
+    expect(regionMods(21, [60, 61, 62].find((i) => regionInfo(21, i).objective !== 'boss')!).sparks).toBeGreaterThanOrEqual(regionMods(21, 6).sparks);
     expect(regionMods(21, 9)).toEqual(regionMods(21, 9));
   });
 
@@ -528,11 +532,11 @@ describe('endless adventure: M4 obsidian and forest', () => {
   });
 
   it('"A corrupção": three corrupted roots; brambles grow back until the last root is purified', () => {
-    const s = reach(4);
-    expect(region(s, 4).objective.kind).toBe('purify');
-    const roots = props(s, 4, 'root');
+    const s = reach(5);
+    expect(region(s, 5).objective.kind).toBe('purify');
+    const roots = props(s, 5, 'root');
     expect(roots).toHaveLength(3);
-    const bramble = props(s, 4, 'bramble')[0];
+    const bramble = props(s, 5, 'bramble')[0];
     expect(bramble).toBeTruthy();
     for (const p of s.players) {
       p.x = p.px = roots[0].x;
@@ -561,8 +565,8 @@ describe('endless adventure: M4 obsidian and forest', () => {
   });
 
   it('dry grass catches fire, spreads tuft to tuft, kills, and burns out', () => {
-    const s = reach(4);
-    const tufts = props(s, 4, 'grass');
+    const s = reach(5);
+    const tufts = props(s, 5, 'grass');
     expect(tufts.length).toBeGreaterThanOrEqual(2);
     const a = tufts.find((t) => tufts.some((u) => Math.abs(u.x - t.x) + Math.abs(u.y - t.y) === 1))!;
     const b = tufts.find((u) => Math.abs(u.x - a.x) + Math.abs(u.y - a.y) === 1)!;
@@ -602,13 +606,13 @@ describe('endless adventure: M4 obsidian and forest', () => {
 });
 
 describe('endless adventure: M5 arcs, variants and shapes', () => {
-  it('arcs of 4–6 regions: a dominant biome, then a transition; biomes take turns', () => {
+  it('arcs of 5–7 regions: a dominant biome, a transition, then the Guardian Chamber; biomes take turns', () => {
     for (const seed of [1, 7, 99]) {
-      expect(arcInfo(seed, 0)).toMatchObject({ start: 0, length: 4, biome: 'volcanic', variant: 'normal' });
+      expect(arcInfo(seed, 0)).toMatchObject({ start: 0, length: 5, biome: 'volcanic', variant: 'normal' });
       for (let k = 0; k < 30; k++) {
         const a = arcInfo(seed, k);
-        expect(a.length).toBeGreaterThanOrEqual(4);
-        expect(a.length).toBeLessThanOrEqual(6);
+        expect(a.length).toBeGreaterThanOrEqual(5);
+        expect(a.length).toBeLessThanOrEqual(7);
         expect(arcInfo(seed, k + 1).start).toBe(a.start + a.length);
         expect(a.biome).toBe(k % 2 ? 'forest' : 'volcanic');
         for (let i = a.start; i < a.start + a.length; i++) {
@@ -616,7 +620,9 @@ describe('endless adventure: M5 arcs, variants and shapes', () => {
           expect(arcOfRegion(seed, i).arc.index).toBe(k);
           expect(info.arc).toBe(k);
           expect(info.arcEnd).toBe(i === a.start + a.length - 1);
-          if (i >= 5) expect(info.biome).toBe(info.arcEnd ? 'transition' : a.biome);
+          expect(info.objective === 'boss').toBe(info.arcEnd);
+          expect(info.bossNext).toBe(i === a.start + a.length - 2);
+          if (i >= 5) expect(info.biome).toBe(info.bossNext ? 'transition' : a.biome);
           expect(info.variant).toBe(a.variant);
         }
       }
@@ -641,10 +647,10 @@ describe('endless adventure: M5 arcs, variants and shapes', () => {
     expect(combos.size).toBe(6);
   });
 
-  it('arc rhythm: a breather at the start of an arc, one more Magmito at its end', () => {
+  it('arc rhythm: a breather at the start of an arc, one more Magmito before the chamber', () => {
     const a = arcInfo(3, 4);
     expect(regionDifficulty(3, a.start).enemies).toBeLessThanOrEqual(difficulty(a.start).enemies);
-    const last = a.start + a.length - 1;
+    const last = a.start + a.length - 2;
     expect(regionDifficulty(3, last).enemies).toBeGreaterThanOrEqual(difficulty(last).enemies);
     for (let d = 0; d < 300; d++) expect(regionDifficulty(3, d).enemies).toBeLessThanOrEqual(ADVENTURE.enemiesCap);
   });
@@ -684,5 +690,118 @@ describe('endless adventure: M5 arcs, variants and shapes', () => {
     const info = regionInfo(21, 14);
     expect(r).toMatchObject({ arc: info.arc, variant: info.variant, arcEnd: info.arcEnd });
     expect(s.adventure!.journey.map((j) => j.arc)).toEqual(Array.from({ length: 15 }, (_, i) => regionInfo(21, i).arc));
+  });
+});
+
+describe('endless adventure: B1 Guardian Chambers', () => {
+  /** Walks the group into region `target` (the chamber when it is the arc's last region). */
+  const into = (target: number, seed = 3, players = 2) => {
+    const s = make(seed, players);
+    for (let id = 0; id < target; id++) {
+      complete(s, id);
+      walkThrough(s, id);
+    }
+    return s;
+  };
+  const flameOn = (s: GameState, x: number, y: number, ownerId = 'p1') =>
+    s.flames.push({ x, y, part: 'center', dir: null, bombId: 999, ownerId, bornTick: s.tick, untilTick: s.tick + 30, kind: 'normal' });
+
+  it('every arc ends in a chamber: an open hall with the boss bed clear and two Totems of Return', () => {
+    for (const seed of [3, 8, 21]) {
+      const s = make(seed, 1);
+      for (let id = 0; id < 20; id++) {
+        const r = region(s, id);
+        if (r.objective.kind === 'boss') {
+          expect(regionMods(seed, id).shape).toBe('arena');
+          const c = chamberCenter(r);
+          for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) expect(getCell(s.grid, c.x + dx, c.y + dy), `seed ${seed} region ${id}`).toBe(Cell.Floor);
+          const totems = s.adventure!.props.filter((p) => p.region === id && p.kind === 'totem');
+          expect(totems).toHaveLength(2);
+          for (const t of totems) expect(getCell(s.grid, t.x, t.y)).toBe(Cell.Wall);
+          expect(s.enemies.filter((e) => e.alive && e.regionId === id)).toHaveLength(0);
+        }
+        complete(s, id);
+        walkThrough(s, id);
+      }
+    }
+    expect(regionInfo(3, 4).objective).toBe('boss');
+    expect(regionInfo(3, 3).bossNext).toBe(true);
+  });
+
+  it('the boss wakes once the group is in, never leaves its chamber, and opens the way when it falls', () => {
+    const s = into(3);
+    // Still outside: nothing awake yet.
+    expect(s.boss).toBeNull();
+    complete(s, 3);
+    walkThrough(s, 3);
+    const b = s.boss!;
+    expect(b).toMatchObject({ kind: 'golem', regionId: 4, level: 0 });
+    expect(b.hp).toBe(Math.round(BOSSES.golem.hp * 1.5 * 0.8));
+    for (const p of s.players) p.invulnUntil = 1e9;
+    for (let i = 0; i < 60 * 50; i++) {
+      step(s, {});
+      if (!s.boss) break;
+      const bx = Math.round(s.boss.x);
+      const by = Math.round(s.boss.y);
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          expect(regionAt(s, bx + dx, by + dy)).toBe(4);
+          expect(isPit(getCell(s.grid, bx + dx, by + dy))).toBe(false);
+        }
+    }
+    expect(s.result).toBeNull();
+    // The killing blow.
+    const boss = s.boss!;
+    boss.hp = 1;
+    boss.invulnUntil = 0;
+    boss.frozenUntil = 0;
+    flameOn(s, Math.round(boss.x), Math.round(boss.y));
+    step(s, {});
+    step(s, {});
+    expect(boss.action).toBe('dead');
+    expect(region(s, 4).cleared).toBe(true);
+    const g = exitGate(s, 4);
+    expect(g.open).toBe(true);
+    expect(getCell(s.grid, g.x, g.y)).toBe(Cell.Floor);
+  });
+
+  it('a Totem of Return brings a fallen ally back, once per boss phase', () => {
+    const s = into(4);
+    const b = s.boss!;
+    b.frozenUntil = 1e9; // keep it still for the test
+    const [p1, p2] = s.players;
+    p1.invulnUntil = 1e9;
+    const totem = s.adventure!.props.find((p) => p.region === 4 && p.kind === 'totem')!;
+    const side = DIRS.map((d) => ({ x: totem.x + DIR_VEC[d].x, y: totem.y + DIR_VEC[d].y })).find((c) => getCell(s.grid, c.x, c.y) === Cell.Floor)!;
+    const blast = () => {
+      spawnBomb(s, { ownerId: 'p1', x: side.x, y: side.y, range: 1 }).detonateTick = s.tick + 1;
+      for (let i = 0; i < 3; i++) step(s, {});
+    };
+    p2.alive = false;
+    blast();
+    expect(p2.alive).toBe(true);
+    expect(totem.state).toBe('used');
+    for (let i = 0; i < 60; i++) step(s, {});
+    p2.alive = false;
+    blast();
+    expect(p2.alive).toBe(false);
+    // A new phase recharges it.
+    b.frozenUntil = 0;
+    b.invulnUntil = 0;
+    b.hp = Math.floor(b.maxHp / 2) + 1;
+    flameOn(s, Math.round(b.x), Math.round(b.y));
+    step(s, {});
+    expect(b.phase).toBe(1);
+    expect(totem.state).toBe('idle');
+  });
+
+  it('bosses take turns by biome and come back stronger; bigger groups face more health', () => {
+    expect(arcBoss(3, 0)).toEqual({ kind: 'golem', level: 0 });
+    expect(arcBoss(3, 1)).toEqual({ kind: 'guardian', level: 0 });
+    expect(arcBoss(3, 2)).toEqual({ kind: 'golem', level: 1 });
+    expect(arcBoss(3, 5)).toEqual({ kind: 'guardian', level: 2 });
+    const solo = into(4, 3, 1).boss!;
+    const four = into(4, 3, 4).boss!;
+    expect(four.maxHp).toBeGreaterThan(solo.maxHp * 2);
   });
 });

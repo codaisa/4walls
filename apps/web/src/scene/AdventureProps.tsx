@@ -46,6 +46,8 @@ export function AdventureProps() {
           <Bramble key={p.id} id={p.id} />
         ) : p.kind === 'grass' ? (
           <Grass key={p.id} id={p.id} />
+        ) : p.kind === 'totem' ? (
+          <Totem key={p.id} id={p.id} />
         ) : (
           <Lever key={p.id} id={p.id} />
         ),
@@ -783,6 +785,85 @@ function Grass({ id }: { id: number }) {
       <mesh ref={scorch} position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]} material={ash} visible={false}>
         <circleGeometry args={[0.45, 12]} />
       </mesh>
+    </group>
+  );
+}
+
+// ───────────────────────────── Guardian Chamber ─────────────────────────────
+
+const totemStone = new THREE.MeshStandardMaterial({ color: '#77707e', roughness: 0.82, flatShading: true });
+const totemCap = new THREE.MeshStandardMaterial({ color: '#36313b', roughness: 0.7, flatShading: true });
+const totemRune = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 2.4, 1.8), toneMapped: false });
+
+/**
+ * Totem of Return: a carved stone pillar with teal runes and a floating ring. Ready, it glows and
+ * the ring spins; spent, it goes dark until the boss's next phase recharges it.
+ */
+function Totem({ id }: { id: number }) {
+  const { controller, ox, oz } = useGame();
+  const get = useProp(id);
+  const p0 = get()!;
+  const rune = useMemo(() => totemRune.clone(), []);
+  const ring = useRef<THREE.Group>(null!);
+  const glow = useRef<THREE.PointLight>(null!);
+  const flash = useRef(0);
+  useEffect(
+    () =>
+      controller.on((e) => {
+        if (e.type === 'totemRevive' && e.propId === id) flash.current = 1;
+      }),
+    [controller, id],
+  );
+  useFrame(({ clock }, dt) => {
+    const p = get();
+    if (!p) return;
+    const t = clock.elapsedTime;
+    const ready = p.state === 'idle';
+    flash.current = Math.max(0, flash.current - dt * 1.2);
+    const k = ready ? 0.75 + 0.25 * Math.sin(t * 3 + id) : 0.1;
+    const f = flash.current * 3;
+    rune.color.setRGB(0.4 * k + f, 2.4 * k + f, 1.8 * k + f);
+    ring.current.rotation.y = t * (ready ? 0.9 : 0.12);
+    ring.current.position.y = 1.32 + (ready ? Math.sin(t * 2 + id) * 0.06 : -0.08);
+    glow.current.intensity = (ready ? 1.4 : 0) + flash.current * 8;
+  });
+  return (
+    <group position={[p0.x + ox, 0, p0.y + oz]}>
+      <mesh position={[0, 0.1, 0]} material={totemCap} receiveShadow castShadow>
+        <cylinderGeometry args={[0.46, 0.5, 0.2, 8]} />
+      </mesh>
+      <mesh position={[0, 0.66, 0]} material={totemStone} castShadow receiveShadow>
+        <boxGeometry args={[0.52, 0.95, 0.52]} />
+      </mesh>
+      <mesh position={[0, 1.2, 0]} rotation={[0, Math.PI / 4, 0]} material={totemCap} castShadow>
+        <cylinderGeometry args={[0.2, 0.4, 0.22, 4]} />
+      </mesh>
+      {/* Carved face: two glowing eyes and a mouth line on the front. */}
+      {[-0.11, 0.11].map((x) => (
+        <mesh key={x} position={[x, 0.86, 0.265]} material={rune}>
+          <boxGeometry args={[0.09, 0.05, 0.02]} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.64, 0.265]} material={rune}>
+        <boxGeometry args={[0.22, 0.035, 0.02]} />
+      </mesh>
+      {/* Side runes. */}
+      {[0, 1, 2].map((i) => (
+        <mesh key={i} position={[0, 0.5 + i * 0.16, 0]} rotation={[0, (i * Math.PI) / 2 + Math.PI / 2, 0]} material={rune}>
+          <boxGeometry args={[0.04, 0.1, 0.54]} />
+        </mesh>
+      ))}
+      <group ref={ring} position={[0, 1.32, 0]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]} material={rune}>
+          <torusGeometry args={[0.36, 0.025, 6, 28]} />
+        </mesh>
+        {[0, 1, 2, 3].map((i) => (
+          <mesh key={i} position={[Math.cos((i * Math.PI) / 2) * 0.36, 0, Math.sin((i * Math.PI) / 2) * 0.36]} material={rune}>
+            <octahedronGeometry args={[0.06, 0]} />
+          </mesh>
+        ))}
+      </group>
+      <pointLight ref={glow} position={[0, 1.3, 0]} color="#5fffd0" intensity={1.4} distance={3} decay={1.6} />
     </group>
   );
 }

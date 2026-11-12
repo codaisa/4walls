@@ -16,8 +16,10 @@ interface Card {
 
 export const VARIANT_BADGE: Record<RegionVariant, string> = { normal: '', night: '🌙 Noite', mist: '☁️ Névoa', corrupted: '🟣 Corrompida' };
 
-const objectiveText = (kind: 'clear' | 'key' | 'lever' | 'seals' | 'purify') =>
-  kind === 'key'
+const objectiveText = (kind: 'clear' | 'key' | 'lever' | 'seals' | 'purify' | 'boss') =>
+  kind === 'boss'
+    ? '☠️ Derrote o guardião do arco'
+    : kind === 'key'
     ? '🔑 Ache a chave e leve até o portão'
     : kind === 'lever'
       ? '⚙️ Cruze o rio de lava e exploda a alavanca'
@@ -78,7 +80,7 @@ export function ChapterCard({ controller }: { controller: MatchView }) {
         )}
         <div className="chapter-index font-display">
           REGIÃO {card.index}
-          {card.arcEnd && <span className="chapter-tag">FIM DO ARCO</span>}
+          {card.arcEnd && <span className="chapter-tag chapter-boss">CHEFE</span>}
           {card.variant !== 'normal' && <span className={`chapter-tag variant-${card.variant}`}>{VARIANT_BADGE[card.variant]}</span>}
         </div>
         <div className="chapter-name font-display">{card.name}</div>

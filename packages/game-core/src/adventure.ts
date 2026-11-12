@@ -1,4 +1,5 @@
-import { ADVENTURE, Cell, CHARACTER_IDS, CHARACTERS, DIR_VEC, DIRS, POWERUPS, RULES, secToTicks, type BiomeId, type CharacterId, type PowerupType } from '@4walls/shared';
+import { ADVENTURE, BOSSES, Cell, CHARACTER_IDS, CHARACTERS, DIR_VEC, DIRS, POWERUPS, RULES, secToTicks, type BiomeId, type BossId, type CharacterId, type PowerupType } from '@4walls/shared';
+import { spawnBoss } from './boss';
 import { cellIndex, createGrid, getCell, inBounds, setCell } from './grid';
 import { nextRandom, pickWeighted, randInt } from './rng';
 import type { AdventureState, CageState, EnemyState, GameState, GateState, Grid, PlayerState, PropState, RegionDir, RegionObjectiveKind, RegionState, RegionVariant } from './types';
@@ -45,6 +46,7 @@ const SCRIPTED: { name: string; chapter: string; biome: BiomeId; objective: Regi
   { name: 'Campos de Cinza', chapter: 'A infestação', biome: 'volcanic', objective: 'key' },
   { name: 'Rio de Magma', chapter: 'A travessia', biome: 'volcanic', objective: 'lever' },
   { name: 'Ponte de Obsidiana', chapter: 'O guardião', biome: 'transition', objective: 'seals' },
+  { name: 'Câmara do Golem', chapter: 'O Golem desperta', biome: 'volcanic', objective: 'boss' },
   { name: 'Bosque Chamuscado', chapter: 'A corrupção', biome: 'forest', objective: 'purify' },
 ];
 
@@ -68,14 +70,20 @@ const CHAPTERS: Record<RegionObjectiveKind, string[]> = {
   lever: ['A travessia', 'A ponte levadiça', 'O rio de fogo', 'A outra margem'],
   seals: ['O guardião', 'Os selos', 'A passagem selada', 'O abismo'],
   purify: ['A corrupção', 'Raízes podres', 'O bosque doente', 'A cura'],
+  boss: ['O guardião desperta', 'O confronto', 'A prova do arco', 'O trono'],
+};
+/** Names of the Guardian Chambers, by the boss that lives there. */
+const CHAMBER_NAMES: Record<BossId, string[]> = {
+  golem: ['Câmara do Golem', 'Forja do Golem', 'Trono de Magma', 'Coração da Caldeira', 'Salão de Basalto'],
+  guardian: ['Covil do Guardião', 'Clareira do Guardião', 'Trono de Raízes', 'Santuário Antigo', 'Salão dos Troncos'],
 };
 // ───────────────────────────── arcs ─────────────────────────────
 
 /**
  * The journey is a chain of arcs. Each arc has a dominant biome (volcanic and forest take turns)
- * and 4–6 regions; its last region is a transition (obsidian, mist) toward the next biome, where
- * the arc's guardian will wait. Every full lap of the biome cycle (two arcs) comes back with a new
- * mood — night, mist or corruption — so region 40 never looks like region 4.
+ * and 5–7 regions: the biome's lands, a transition (obsidian, mist) toward the next biome, and the
+ * Guardian Chamber where the arc's boss waits. Every full lap of the biome cycle (two arcs) comes
+ * back with a new mood — night, mist or corruption — so region 40 never looks like region 4.
  */
 export interface ArcInfo {
   index: number;
@@ -99,8 +107,9 @@ const arcStarts = new Map<number, number[]>();
 export function arcInfo(seed: number, index: number): ArcInfo {
   const starts = arcStarts.get(seed) ?? [0];
   arcStarts.set(seed, starts);
-  // The first arc is the scripted introduction: 3 volcanic regions and the Obsidian Bridge.
-  const lengthOf = (k: number) => (k === 0 ? 4 : 4 + randInt(subRng(seed, k, 11), 3));
+  // The first arc is the scripted introduction: 3 volcanic regions, the Obsidian Bridge and the
+  // Golem's chamber. Later arcs: 3–5 lands, the transition and the chamber.
+  const lengthOf = (k: number) => (k === 0 ? 5 : 5 + randInt(subRng(seed, k, 11), 3));
   while (starts.length <= index + 1) starts.push(starts[starts.length - 1] + lengthOf(starts.length - 1));
   const biome = ARC_DOMINANT[index % 2];
   const lap = Math.floor(index / 2);
@@ -115,8 +124,8 @@ export function arcInfo(seed: number, index: number): ArcInfo {
 /** The arc region `id` belongs to and its position inside it. */
 export function arcOfRegion(seed: number, id: number) {
   let k = 0;
-  // Arcs are 4–6 long: start from a guess just under the answer and walk forward.
-  for (k = Math.max(0, Math.floor(id / 6) - 1); ; k++) {
+  // Arcs are 5–7 long: start from a guess just under the answer and walk forward.
+  for (k = Math.max(0, Math.floor(id / 7) - 1); ; k++) {
     const a = arcInfo(seed, k);
     if (id < a.start) {
       k = Math.max(0, k - 2);
@@ -126,24 +135,40 @@ export function arcOfRegion(seed: number, id: number) {
   }
 }
 
+/** Boss of an arc's Guardian Chamber: the biome's own, a little stronger every time it comes back. */
+export function arcBoss(seed: number, arc: number): { kind: BossId; level: number } {
+  const a = arcInfo(seed, arc);
+  // Volcanic and forest arcs take turns, so arc k meets its boss for the (k / 2)-th time.
+  return { kind: a.biome === 'forest' ? 'guardian' : 'golem', level: Math.floor(arc / 2) };
+}
+
 /** Name, chapter, biome and objective of region `id`: cheap, needs no world generation. */
 export function regionInfo(seed: number, id: number) {
   const { arc, last, pos } = arcOfRegion(seed, id);
   const variant = arc.variant;
-  if (id < SCRIPTED.length) return { ...SCRIPTED[id], variant, arc: arc.index, arcEnd: last, arcPos: pos };
+  // The region right before the chamber is the transition (and the boss's warning).
+  const bossNext = pos === arc.length - 2;
+  if (id < SCRIPTED.length) return { ...SCRIPTED[id], variant, arc: arc.index, arcEnd: last, arcPos: pos, bossNext };
   const r = subRng(seed, id, 3);
-  const biome: BiomeId = last ? 'transition' : arc.biome;
+  if (last) {
+    // The Guardian Chamber: the boss's own hall, in the arc's biome.
+    const names = CHAMBER_NAMES[arcBoss(seed, arc.index).kind];
+    const name = names[randInt(r, names.length)];
+    const chapter = CHAPTERS.boss[randInt(r, CHAPTERS.boss.length)];
+    return { name, chapter, biome: arc.biome as BiomeId, objective: 'boss' as RegionObjectiveKind, variant, arc: arc.index, arcEnd: true, arcPos: pos, bossNext: false };
+  }
+  const biome: BiomeId = bossNext ? 'transition' : arc.biome;
   // A lava river cuts some regions in two (never in the forest): cross it and pull the lever.
   const roll = nextRandom(r);
-  // Corrupted laps lean on the roots; the arc's last region is usually sealed.
-  const special = nextRandom(r) < (last ? 0.6 : variant === 'corrupted' ? 0.6 : 0.4);
+  // Corrupted laps lean on the roots; the transition before the chamber is usually sealed.
+  const special = nextRandom(r) < (bossNext ? 0.6 : variant === 'corrupted' ? 0.6 : 0.4);
   // Transition regions may be an obsidian causeway with seals; forests may be corrupted.
   const objective: RegionObjectiveKind =
     biome === 'transition' && special ? 'seals' : biome === 'forest' && special ? 'purify' : biome !== 'forest' && roll < 0.22 ? 'lever' : roll < 0.55 ? 'key' : 'clear';
   const parts = NAME_PARTS[biome];
   const name = `${parts.head[randInt(r, parts.head.length)]} ${parts.tail[randInt(r, parts.tail.length)]}`;
   const chapter = CHAPTERS[objective][randInt(r, CHAPTERS[objective].length)];
-  return { name, chapter, biome, objective, variant, arc: arc.index, arcEnd: last, arcPos: pos };
+  return { name, chapter, biome, objective, variant, arc: arc.index, arcEnd: false, arcPos: pos, bossNext };
 }
 
 /**
@@ -164,25 +189,26 @@ export function difficulty(depth: number) {
 
 /**
  * Difficulty of one region: the depth curve plus the arc's rhythm. The first region of an arc is
- * a breather (one Magmito fewer), the arc's last one is tense (one more), and a corrupted lap adds
- * one more on top.
+ * a breather (one Magmito fewer), the transition before the chamber is tense (one more), and a
+ * corrupted lap adds one more on top. The chamber itself only has its boss.
  */
 export function regionDifficulty(seed: number, id: number) {
   const d = difficulty(id);
   if (id < SCRIPTED.length) return d;
   const info = regionInfo(seed, id);
-  const delta = (info.arcPos === 0 ? -1 : 0) + (info.arcEnd ? 1 : 0) + (info.variant === 'corrupted' ? 1 : 0);
+  const delta = (info.arcPos === 0 ? -1 : 0) + (info.bossNext ? 1 : 0) + (info.variant === 'corrupted' ? 1 : 0);
   return { ...d, enemies: Math.max(2, Math.min(ADVENTURE.enemiesCap, d.enemies + delta)) };
 }
 
-export type RegionShape = 'island' | 'plaza' | 'river' | 'causeway' | 'ring' | 'twin' | 'longbridge';
+export type RegionShape = 'island' | 'plaza' | 'river' | 'causeway' | 'ring' | 'twin' | 'longbridge' | 'arena';
 
 /** Map mechanics of a region: shape, Fagulhas, ash vents, the braziers side mission. */
 export interface RegionMods {
   /**
    * island: the noisy ellipse; plaza: flower beds around a crossroads; river: lava band + lever;
    * causeway: walkway over a chasm; ring: a pit in the middle, the fight goes around it; twin: two
-   * islands joined by one narrow bridge; longbridge: two banks over a wide pit, two long bridges.
+   * islands joined by one narrow bridge; longbridge: two banks over a wide pit, two long bridges;
+   * arena: the Guardian Chamber, an open hall with four pillars (two are Totems of Return).
    */
   shape: RegionShape;
   sparks: number;
@@ -199,9 +225,11 @@ export function regionMods(seed: number, id: number): RegionMods {
     { shape: 'plaza', sparks: 2, vents: 2, braziers: true }, // A infestação: everything new at once
     { shape: 'island', sparks: 2, vents: 1, braziers: false },
     { shape: 'plaza', sparks: 2, vents: 1, braziers: true },
+    { shape: 'arena', sparks: 0, vents: 0, braziers: false }, // the Golem's chamber
     { shape: 'island', sparks: 1, vents: 0, braziers: false },
   ];
   const info = regionInfo(seed, id);
+  if (info.objective === 'boss') return { shape: 'arena', sparks: 0, vents: 0, braziers: false, grass: 0 };
   const river = info.objective === 'lever';
   const shapeFor = info.objective === 'seals' ? ('causeway' as const) : river ? ('river' as const) : null;
   const grass = info.biome === 'forest' ? 2 + (id > 8 ? 1 : 0) : 0;
@@ -276,6 +304,7 @@ interface Blueprint {
 /** Builds region `id` deterministically from the seed (chain must reach id + 1). */
 function regionBlueprint(seed: number, adv: AdventureState, id: number): Blueprint {
   const info = regionInfo(seed, id);
+  if (info.objective === 'boss') return chamberBlueprint(seed, adv, id, info);
   const diff = regionDifficulty(seed, id);
   const r = subRng(seed, id, 2);
   const { cx, cy } = chunkOf(adv, id);
@@ -766,6 +795,94 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
   return { state, cells, ox, oy, exitGate, spawns, cage, props, enemySpots, enemyCount: diff.enemies, enemySpeed: diff.enemySpeed, sparks: mods.sparks };
 }
 
+/** Pillars of the chamber, relative to the chunk (symmetric around the hall's middle). */
+const CHAMBER_PILLARS: Pt[] = [
+  { x: 4, y: 4 },
+  { x: 11, y: 4 },
+  { x: 4, y: 10 },
+  { x: 11, y: 10 },
+];
+
+/**
+ * The Guardian Chamber: an open hall so the boss's 3×3 body can roam (no grid pillars), four
+ * pillars for cover — two of them Totems of Return — and a few crates for power-ups. The boss
+ * sleeps in the middle until the whole group is in and the gate behind them seals.
+ */
+function chamberBlueprint(seed: number, adv: AdventureState, id: number, info: ReturnType<typeof regionInfo>): Blueprint {
+  const r = subRng(seed, id, 2);
+  const { cx, cy } = chunkOf(adv, id);
+  const ox = cx * CW;
+  const oy = cy * CH;
+  const cells = new Uint8Array(CW * CH).fill(Cell.Wall);
+  const at = (x: number, y: number) => (y - oy) * CW + (x - ox);
+  const set = (x: number, y: number, c: Cell) => {
+    if (x >= ox && y >= oy && x < ox + CW && y < oy + CH) cells[at(x, y)] = c;
+  };
+  const get = (x: number, y: number) => cells[at(x, y)];
+  // The hall: the whole chunk inside its rim, with the corners rounded off.
+  for (let y = oy + 1; y < oy + CH - 1; y++)
+    for (let x = ox + 1; x < ox + CW - 1; x++) {
+      const ex = Math.min(x - (ox + 1), ox + CW - 2 - x);
+      const ey = Math.min(y - (oy + 1), oy + CH - 2 - y);
+      if (ex + ey >= 2) set(x, y, Cell.Floor);
+    }
+  const exitDir = adv.dirs[id];
+  const exit = edgeCell(ox, oy, exitDir);
+  const entry = id > 0 ? edgeCell(ox, oy, opposite(adv.dirs[id - 1])) : null;
+  if (entry) set(entry.x, entry.y, Cell.Floor);
+  set(exit.x, exit.y, Cell.Wall); // sealed until the boss falls
+  const center = { x: ox + 7, y: oy + 7 };
+  // Pillars; one diagonal pair are the Totems of Return.
+  const flip = nextRandom(r) < 0.5;
+  const totems = (flip ? [0, 3] : [1, 2]).map((i) => ({ x: ox + CHAMBER_PILLARS[i].x, y: oy + CHAMBER_PILLARS[i].y }));
+  for (const p of CHAMBER_PILLARS) set(ox + p.x, oy + p.y, Cell.Wall);
+  // A few crates: never on the boss's bed, the doorways or right beside a totem.
+  const near = (a: Pt | null, x: number, y: number, d: number) => !!a && Math.abs(a.x - x) + Math.abs(a.y - y) <= d;
+  for (let y = oy + 1; y < oy + CH - 1; y++)
+    for (let x = ox + 1; x < ox + CW - 1; x++) {
+      if (get(x, y) !== Cell.Floor) continue;
+      if (Math.max(Math.abs(x - center.x), Math.abs(y - center.y)) <= 2 || near(entry, x, y, 3) || near(exit, x, y, 2)) continue;
+      if (totems.some((t) => near(t, x, y, 1))) continue;
+      if (nextRandom(r) < 0.12) set(x, y, Cell.Block);
+    }
+  let propSeq = 0;
+  const props: Omit<PropState, 'tick'>[] = totems.map((t) => ({ id: id * 64 + propSeq++, kind: 'totem' as const, region: id, x: t.x, y: t.y, state: 'idle' as const }));
+  const state: RegionState = {
+    id,
+    name: info.name,
+    chapter: info.chapter,
+    biome: info.biome,
+    arc: info.arc,
+    variant: info.variant,
+    arcEnd: true,
+    cx,
+    cy,
+    objective: { kind: 'boss', progress: 0, goal: 1, done: false },
+    unlocked: id === 0,
+    cleared: false,
+    entry,
+  };
+  const exitGate: GateState = { id, x: exit.x, y: exit.y, axis: exitDir === 'E' ? 'h' : 'v', from: id, to: id + 1, open: false, openedTick: -1, kind: 'exit' };
+  return { state, cells, ox, oy, exitGate, spawns: [], cage: null, props, enemySpots: [], enemyCount: 0, enemySpeed: 1, sparks: 0 };
+}
+
+/** Where the chamber's boss sleeps (the hall's middle). */
+export const chamberCenter = (reg: { cx: number; cy: number }) => ({ x: reg.cx * CW + 7, y: reg.cy * CH + 7 });
+
+/** Health multipliers by group size: more players, more health (not linear). */
+const BOSS_HP_BY_PLAYERS = [1, 1.5, 1.9, 2.2];
+
+/** The group is in and the way back sealed: the chamber's boss wakes up. */
+function wakeGuardian(s: GameState, reg: RegionState) {
+  const { kind, level } = arcBoss(s.config.seed, reg.arc);
+  const players = Math.max(1, Math.min(4, s.players.filter((p) => !p.left).length));
+  // The very first one is a gentle introduction; every comeback is tougher (capped).
+  const levelMul = level === 0 ? 0.8 : Math.min(3, 1 + 0.3 * level);
+  const hp = Math.max(6, Math.round(BOSSES[kind].hp * BOSS_HP_BY_PLAYERS[players - 1] * levelMul));
+  const c = chamberCenter(reg);
+  spawnBoss(s, kind, { x: c.x, y: c.y, regionId: reg.id, level, hp, speedMul: Math.min(1.4, 1 + 0.06 * level) });
+}
+
 // ───────────────────────────── the live window ─────────────────────────────
 
 /** Re-allocates the grid around the given regions, keeping the live cells of the ones already there. */
@@ -872,6 +989,8 @@ export function detachRegion(s: GameState, id: number, authority = true) {
   s.flames = s.flames.filter((f) => !inside(f.x, f.y));
   s.powerups = s.powerups.filter((p) => !inside(p.x, p.y));
   s.mines = s.mines.filter((m) => !inside(m.x, m.y));
+  s.meteors = s.meteors.filter((m) => !inside(m.x, m.y));
+  if (s.boss?.regionId === id) s.boss = null;
   rebuildWindow(s, adv.regions.filter((r) => r.id !== id), new Map());
   // Seal the way back.
   const next = adv.regions.find((r) => r.id === id + 1);
@@ -952,6 +1071,11 @@ function updateObjectives(s: GameState) {
     else if (o.kind === 'lever') progress = adv.props.some((p) => p.kind === 'lever' && p.region === r.id && p.state === 'on') ? 1 : 0;
     else if (o.kind === 'seals') progress = adv.props.filter((p) => p.kind === 'seal' && p.region === r.id && p.state === 'broken').length;
     else if (o.kind === 'purify') progress = adv.props.filter((p) => p.kind === 'root' && p.region === r.id && p.state === 'broken').length;
+    else if (o.kind === 'boss') {
+      // Set by the boss itself when it falls (boss.ts).
+      if (o.progress < o.goal) continue;
+      progress = o.progress;
+    }
     if (progress !== o.progress) {
       o.progress = progress;
       s.events.push({ type: 'objectiveProgress', region: r.id, progress, goal: o.goal });
@@ -959,7 +1083,7 @@ function updateObjectives(s: GameState) {
     if (progress < o.goal) continue;
     o.done = true;
     r.cleared = true;
-    s.events.push({ type: 'regionCleared', region: r.id, arcEnd: r.arcEnd });
+    s.events.push({ type: 'regionCleared', region: r.id, arcEnd: r.arcEnd, bossNext: regionInfo(s.config.seed, r.id + 1).objective === 'boss' });
     if (!adv.regions.some((x) => x.id === r.id + 1)) attachRegion(s, r.id + 1);
     const g = adv.gates.find((x) => x.kind !== 'back' && x.from === r.id);
     if (g && !g.open) {
@@ -1013,6 +1137,7 @@ function updateProgress(s: GameState) {
   for (const r of behind) detachRegion(s, r.id);
   adv.closing = null;
   s.events.push({ type: 'gateClosed', region: c.region });
+  if (reg.objective.kind === 'boss' && !reg.cleared && !s.boss) wakeGuardian(s, reg);
 }
 
 // ───────────────────────────── the lava river ─────────────────────────────
@@ -1265,6 +1390,7 @@ function updateProps(s: GameState) {
       const burned = flamesAt(s, pr.x, pr.y).length > 0;
       if (opener || burned) openChest(s, pr, opener?.id ?? null);
     } else if (pr.kind === 'key') updateKey(s, pr);
+    else if (pr.kind === 'totem' && pr.state === 'idle') updateTotem(s, pr);
     else if (pr.kind === 'brazier' && pr.state === 'unlit') {
       const touched = DIRS.some((d) => flamesAt(s, pr.x + DIR_VEC[d].x, pr.y + DIR_VEC[d].y).length > 0);
       if (!touched) continue;
@@ -1283,6 +1409,38 @@ function updateProps(s: GameState) {
       }
     }
   }
+}
+
+/**
+ * Totem of Return: while an ally is down, a player's blast against the totem brings them back
+ * beside it (with spawn protection). One use per boss phase: the next phase recharges it.
+ */
+function updateTotem(s: GameState, pr: PropState) {
+  const fallen = s.players.find((p) => !p.alive && !p.left);
+  if (!fallen) return;
+  let byId: string | null = null;
+  for (const d of DIRS)
+    for (const f of flamesAt(s, pr.x + DIR_VEC[d].x, pr.y + DIR_VEC[d].y))
+      if (f.bornTick === s.tick && f.bombId >= 0 && s.players.some((p) => p.id === f.ownerId)) byId = f.ownerId;
+  if (!byId) return;
+  const c = safeCellsNear(s, pr.x, pr.y, 1)[0] ?? { x: pr.x, y: pr.y + 1 };
+  Object.assign(fallen, {
+    alive: true,
+    x: c.x,
+    y: c.y,
+    px: c.x,
+    py: c.y,
+    moving: false,
+    slideDir: null,
+    maneuver: null,
+    frozenUntil: 0,
+    passBombs: [],
+    diedTick: -1,
+    invulnUntil: s.tick + secToTicks(Math.max(REVIVE_INVULN_SEC, RULES.invulnSec)),
+  });
+  pr.state = 'used';
+  pr.tick = s.tick;
+  s.events.push({ type: 'totemRevive', propId: pr.id, playerId: fallen.id, byId, x: c.x, y: c.y });
 }
 
 function openChest(s: GameState, pr: PropState, byId: string | null) {

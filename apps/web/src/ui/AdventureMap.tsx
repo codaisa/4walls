@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Cell, SLOT_COLORS, type BiomeId } from '@4walls/shared';
-import { cellIndex, getCell, type GameState, type RegionVariant } from '@4walls/core';
+import { cellIndex, getCell, regionInfo, type GameState, type RegionVariant } from '@4walls/core';
 import { sfx } from '../audio/Sfx';
 import type { MatchView } from '../game/presentation';
 import { isTouchDevice } from '../input/InputManager';
@@ -165,7 +165,7 @@ export function AdventureMap({ controller }: { controller: MatchView }) {
               <ol className="mt-1 flex flex-wrap gap-1 overflow-y-auto text-xs [@media(max-height:500px)]:flex-col [@media(max-height:500px)]:flex-nowrap">
                 {journey.map((j, i) => (
                   <li key={j.id} className={`rounded-full px-2 py-0.5 font-bold ${i === journey.length - 1 ? 'bg-amber-300 text-amber-950' : 'bg-white/10 text-white/80'}`}>
-                    {BIOME_ICON[j.biome]}
+                    {regionInfo(controller.state.config.seed, j.id).objective === 'boss' ? '☠️' : BIOME_ICON[j.biome]}
                     {VARIANT_ICON[j.variant ?? 'normal']} {j.id + 1}. {j.name}
                   </li>
                 ))}

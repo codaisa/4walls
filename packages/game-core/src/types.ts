@@ -167,7 +167,7 @@ export interface EnemyState {
   speedMul?: number;
 }
 
-export type RegionObjectiveKind = 'clear' | 'key' | 'lever' | 'seals' | 'purify';
+export type RegionObjectiveKind = 'clear' | 'key' | 'lever' | 'seals' | 'purify' | 'boss';
 
 /** What opens a region's exit gate. */
 export interface RegionObjective {
@@ -193,7 +193,7 @@ export interface RegionState {
   /** Arc (0-based) this region belongs to, and its visual variant. */
   arc: number;
   variant: RegionVariant;
-  /** Last region of its arc (the transition toward the next biome). */
+  /** Last region of its arc: the Guardian Chamber, where the arc's boss waits. */
   arcEnd: boolean;
   /** Chunk position on the world lattice. */
   cx: number;
@@ -221,7 +221,7 @@ export interface GateState {
   kind?: 'exit' | 'back';
 }
 
-export type PropKind = 'chest' | 'key' | 'brazier' | 'vent' | 'bridge' | 'platform' | 'geyser' | 'lever' | 'seal' | 'root' | 'bramble' | 'grass';
+export type PropKind = 'chest' | 'key' | 'brazier' | 'vent' | 'bridge' | 'platform' | 'geyser' | 'lever' | 'seal' | 'root' | 'bramble' | 'grass' | 'totem';
 
 /**
  * Adventure props. Chest: opened by walking onto it or by a blast, drops loot (rare = secret).
@@ -324,6 +324,14 @@ export interface BossState {
   frozenUntil: number;
   lastHitTick: number;
   diedTick: number;
+  /** Phase index: 0 at full health, +1 at each threshold crossed (phase 1 = enraged). */
+  phase?: number;
+  /** Adventure: the Guardian Chamber it is bound to (never leaves it). */
+  regionId?: number;
+  /** Adventure: how many times this boss was beaten before in the journey (it comes back stronger). */
+  level?: number;
+  /** Speed multiplier from the level. */
+  speedMul?: number;
 }
 
 export type GameEvent =
@@ -350,7 +358,7 @@ export type GameEvent =
   | { type: 'eventStart'; event: GameEventId }
   | { type: 'eventEnd'; event: GameEventId }
   | { type: 'meteorImpact'; x: number; y: number }
-  | { type: 'regionCleared'; region: number; arcEnd?: boolean }
+  | { type: 'regionCleared'; region: number; arcEnd?: boolean; bossNext?: boolean }
   | { type: 'gateOpened'; gateId: number; x: number; y: number; region: number }
   /** Adventure: a fallen ally comes back when a gate opens. */
   | { type: 'playerRevived'; playerId: string; x: number; y: number }
@@ -394,6 +402,9 @@ export type GameEvent =
   | { type: 'bossCharge'; dir: Dir }
   | { type: 'bossHit'; hp: number; maxHp: number; byId: string; x: number; y: number }
   | { type: 'bossEnraged' }
+  | { type: 'bossPhase'; phase: number }
+  | { type: 'bossBlocked'; x: number; y: number }
+  | { type: 'totemRevive'; propId: number; playerId: string; byId: string; x: number; y: number }
   | { type: 'bossRoots'; cells: { x: number; y: number }[] }
   | { type: 'bossSpores'; x: number; y: number }
   | { type: 'bossBurrow'; x: number; y: number }

@@ -58,14 +58,35 @@ export function CameraRig() {
       maxZ = Math.max(maxZ, z + 2);
     }
     if (!focus.length) minX = maxX = minZ = maxZ = 0;
+    // Guardian Chamber: the boss stays in the shot; when it falls, the camera leans in on it.
+    const boss = s.adventure ? s.boss : null;
+    let finale = false;
+    if (boss) {
+      const bx = lerp(boss.px, boss.x, controller.alpha) + ox;
+      const bz = lerp(boss.py, boss.y, controller.alpha) + oz;
+      const since = boss.action === 'dead' ? (controller.tickF - boss.diedTick) / 60 : -1;
+      if (since >= 0 && since < 1.7) {
+        [minX, maxX, minZ, maxZ] = [bx - 2.6, bx + 2.6, bz - 1.7, bz + 1.7];
+        finale = true;
+      } else if (since < 0) {
+        minX = Math.min(minX, bx - 2);
+        maxX = Math.max(maxX, bx + 2);
+        minZ = Math.min(minZ, bz - 2);
+        maxZ = Math.max(maxZ, bz + 2);
+      }
+    }
     // Adventure: follow the players with a fixed gameplay-sized window (grows if co-op players spread).
     const follow = !!s.adventure || close;
     const fw = close ? CLOSE_HALF_W : FOLLOW_HALF_W;
     const fd = close ? CLOSE_HALF_D : FOLLOW_HALF_D;
-    const halfW = follow
+    const halfW = finale
+      ? (maxX - minX) / 2
+      : follow
       ? Math.min(w / 2, Math.max((maxX - minX) / 2, fw))
       : Math.min(w / 2, Math.max((maxX - minX) / 2, (w / 2) * MIN_FRAME));
-    const halfD = follow
+    const halfD = finale
+      ? (maxZ - minZ) / 2
+      : follow
       ? Math.min(h / 2, Math.max((maxZ - minZ) / 2, fd))
       : Math.min(h / 2, Math.max((maxZ - minZ) / 2, (h / 2) * MIN_FRAME));
     let cx = follow ? (minX + maxX) / 2 : lerp((minX + maxX) / 2, 0, 0.6);
