@@ -99,6 +99,28 @@ describe('adventure world', () => {
     expect(s.result).toMatchObject({ outcome: 'victory', reason: 'allRegionsCleared' });
   });
 
+  it('opening a gate revives fallen allies at the gate, protected; departed players stay out', () => {
+    const s = make(11, 3);
+    const adv = s.adventure!;
+    s.phase = 'playing';
+    const [, p2, p3] = s.players;
+    for (const p of [p2, p3]) {
+      p.alive = false;
+      p.diedTick = s.tick;
+    }
+    p3.left = true; // quit the online match
+    for (const e of s.enemies) if (e.regionId === 0) e.alive = false;
+    step(s, {});
+    const g = adv.gates.find((gg) => gg.from === 0)!;
+    expect(g.open).toBe(true);
+    expect(p2.alive).toBe(true);
+    expect(Math.abs(p2.x - g.x) + Math.abs(p2.y - g.y)).toBeLessThanOrEqual(2);
+    expect(getCell(s.grid, p2.x, p2.y)).toBe(Cell.Floor);
+    expect(p2.invulnUntil).toBeGreaterThan(s.tick + 60);
+    expect(p3.alive).toBe(false);
+    expect(s.events).toContainEqual({ type: 'playerRevived', playerId: p2.id, x: p2.x, y: p2.y });
+  });
+
   it('each region has its own enemies, more in later regions', () => {
     const s = make();
     const counts = s.adventure!.regions.map((r) => s.enemies.filter((e) => e.regionId === r.id).length);

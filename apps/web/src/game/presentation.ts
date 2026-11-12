@@ -88,6 +88,10 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
       sfx.go();
       hud.set({ banner: { text: 'PORTÃO ABERTO!', key: tick } });
       break;
+    case 'playerRevived':
+      sfx.pickup();
+      hud.set({ banner: { text: 'ALIADOS DE VOLTA!', key: tick + 1 } });
+      break;
     case 'bossSpawned':
       sfx.alarm(2);
       hud.set({ banner: { text: BOSSES[e.boss].name.toUpperCase() + '!', key: tick } });

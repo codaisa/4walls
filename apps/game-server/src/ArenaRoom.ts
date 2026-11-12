@@ -166,6 +166,7 @@ export class ArenaRoom extends Room {
       // Players of a departed connection are knocked out (they can't be controlled any more).
       for (const s of mine) {
         const p = this.game.players.find((pp) => pp.slot === s.slot);
+        if (p) p.left = true;
         if (p?.alive) {
           p.alive = false;
           p.diedTick = this.game.tick;

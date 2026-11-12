@@ -97,6 +97,59 @@ textarea {
   padding: 0.5rem;
 }
 
+/*
+ * Scrollbars in the game's look: an ember-gold pill on a dark rounded rail.
+ * Chromium/Safari use the ::-webkit-scrollbar parts (setting scrollbar-color there would turn them
+ * off), Firefox gets the standard colors.
+ */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track {
+  margin: 8px;
+  border: 1px solid rgba(255, 170, 110, 0.22);
+  border-radius: 999px;
+  background: rgba(10, 4, 8, 0.45);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+::-webkit-scrollbar-thumb {
+  min-height: 36px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffd23f, #ff7a3c 60%, #d9481f) padding-box;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #ffe169, #ff8f50 60%, #e65a2c) padding-box;
+}
+::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, #fff09a, #ffa25e 60%, #f06a36) padding-box;
+}
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+@supports (-moz-appearance: none) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #ff8f45 rgba(10, 4, 8, 0.45);
+  }
+}
+@media (max-height: 500px) {
+  ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  ::-webkit-scrollbar-thumb {
+    border-width: 2px;
+  }
+}
+
 /* Short landscape screens (phones): tighter menus. */
 @media (max-height: 500px) {
   .menu-btn {

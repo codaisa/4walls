@@ -242,6 +242,19 @@ export function Fx() {
               });
             break;
           }
+          case 'playerRevived': {
+            // Back through the gate: a column of sparks in the player's colors.
+            const p = s.players.find((pp) => pp.id === e.playerId);
+            const c = p ? SLOT_COLORS[p.colorIndex % SLOT_COLORS.length] : SLOT_COLORS[0];
+            for (let i = 0; i < 36; i++)
+              solids.spawn({
+                x: e.x + ox + rnd(-0.35, 0.35), y: rnd(0.05, 0.4), z: e.y + oz + rnd(-0.35, 0.35),
+                vx: rnd(-0.6, 0.6), vy: rnd(3, 6), vz: rnd(-0.6, 0.6),
+                life: rnd(0.7, 1.2), size: rnd(0.04, 0.08), color: Math.random() < 0.5 ? c.primary : '#fff6c8',
+                gravity: 2, drag: 1.2, bounce: false,
+              });
+            break;
+          }
           case 'playerDied': {
             const p = s.players.find((pp) => pp.id === e.playerId);
             const c = p ? SLOT_COLORS[p.colorIndex % SLOT_COLORS.length] : SLOT_COLORS[0];

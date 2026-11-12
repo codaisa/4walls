@@ -106,6 +106,7 @@ Limites desta versão:
   - O mundo tem 5 regiões em formato de ilha irregular, ligadas por corredores e geradas por seed: vulcão → transição → floresta.
   - A câmera segue os jogadores.
   - Exploda os Magmitos de uma região para abrir o **portão** selado da próxima.
+  - Cada portão aberto **traz de volta os aliados caídos**: eles reaparecem junto ao portão, piscando com alguns segundos de proteção, e mantêm os power-ups. Quem saiu da sala online não volta.
   - Vitória ao libertar todas as regiões. Sem limite de tempo e sem eventos aleatórios. Não disponível no online.
 
 - **Chefões (Boss Rush)** (menu principal → *Chefões*, ou *Chefões* nas opções do lobby local, 1–4 jogadores co-op):

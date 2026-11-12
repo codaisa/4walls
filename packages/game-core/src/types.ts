@@ -28,6 +28,8 @@ export interface PlayerState {
   speedLevel: number;
   shield: number;
   invulnUntil: number;
+  /** Left the online match for good (never revived). */
+  left?: boolean;
   /** Bombs this player is still overlapping and may walk off of. */
   passBombs: number[];
   diedTick: number;
@@ -253,6 +255,8 @@ export type GameEvent =
   | { type: 'meteorImpact'; x: number; y: number }
   | { type: 'regionCleared'; region: number }
   | { type: 'gateOpened'; gateId: number; x: number; y: number; region: number }
+  /** Adventure: a fallen ally comes back when a gate opens. */
+  | { type: 'playerRevived'; playerId: string; x: number; y: number }
   | { type: 'bossSpawned'; boss: BossId; index: number; total: number }
   | { type: 'bossWindup'; attack: BossAttack }
   | { type: 'bossSlam'; x: number; y: number }

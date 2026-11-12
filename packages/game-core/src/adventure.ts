@@ -1,8 +1,8 @@
-import { ADVENTURE, Cell, type BiomeId } from '@4walls/shared';
+import { ADVENTURE, Cell, DIR_VEC, DIRS, RULES, secToTicks, type BiomeId } from '@4walls/shared';
 import { cellIndex, createGrid, getCell, setCell } from './grid';
 import { nextRandom, randInt } from './rng';
 import type { AdventureState, EnemyState, GameState, GateState, Grid, RegionState } from './types';
-import { newId } from './world';
+import { bombAt, flamesAt, mineAt, newId } from './world';
 
 /**
  * Adventure mode world: regions laid out along a random walk on a chunk lattice (so the world is
@@ -203,8 +203,63 @@ export function updateAdventure(s: GameState) {
       setCell(s.grid, g.x, g.y, Cell.Floor);
       adv.regions[g.to].unlocked = true;
       s.events.push({ type: 'gateOpened', gateId: g.id, x: g.x, y: g.y, region: g.to });
+      reviveAllies(s, g);
     }
   }
+}
+
+/** Seconds of spawn protection after coming back. */
+const REVIVE_INVULN_SEC = 2.5;
+
+/**
+ * Co-op rule: every opened gate brings fallen allies back, standing at the gate on safe floor
+ * (no bombs, flames, mines or Magmitos), blinking with spawn protection. They keep their power-ups.
+ */
+function reviveAllies(s: GameState, g: GateState) {
+  const fallen = s.players.filter((p) => !p.alive && !p.left);
+  if (!fallen.length) return;
+  const spots = safeCellsNear(s, g.x, g.y, fallen.length);
+  fallen.forEach((p, i) => {
+    const c = spots[i] ?? { x: g.x, y: g.y };
+    Object.assign(p, {
+      alive: true,
+      x: c.x,
+      y: c.y,
+      px: c.x,
+      py: c.y,
+      moving: false,
+      slideDir: null,
+      maneuver: null,
+      frozenUntil: 0,
+      passBombs: [],
+      diedTick: -1,
+      invulnUntil: s.tick + secToTicks(Math.max(REVIVE_INVULN_SEC, RULES.invulnSec)),
+    });
+    s.events.push({ type: 'playerRevived', playerId: p.id, x: c.x, y: c.y });
+  });
+}
+
+/** Breadth-first search over walkable floor from (x, y): the closest `n` safe cells. */
+function safeCellsNear(s: GameState, x: number, y: number, n: number) {
+  const out: { x: number; y: number }[] = [];
+  const seen = new Set<number>([cellIndex(s.grid, x, y)]);
+  const queue = [{ x, y }];
+  const safe = (cx: number, cy: number) =>
+    !bombAt(s, cx, cy) && !mineAt(s, cx, cy) && flamesAt(s, cx, cy).length === 0 && !s.enemies.some((e) => e.alive && Math.round(e.x) === cx && Math.round(e.y) === cy);
+  while (queue.length && out.length < n) {
+    const c = queue.shift()!;
+    if (safe(c.x, c.y)) out.push(c);
+    for (const d of DIRS) {
+      const nx = c.x + DIR_VEC[d].x;
+      const ny = c.y + DIR_VEC[d].y;
+      if (nx < 0 || ny < 0 || nx >= s.grid.w || ny >= s.grid.h) continue;
+      const k = cellIndex(s.grid, nx, ny);
+      if (seen.has(k) || getCell(s.grid, nx, ny) !== Cell.Floor) continue;
+      seen.add(k);
+      queue.push({ x: nx, y: ny });
+    }
+  }
+  return out;
 }
 
 /** Region the player stands in (for the HUD). */
