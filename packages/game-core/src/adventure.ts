@@ -976,6 +976,14 @@ function campBlueprint(seed: number, adv: AdventureState, id: number, info: Retu
   // Tents of the residents, in a ring around the fire (never on the paths in and out).
   const TENTS: [number, number, string][] = [[-3, -3, 'shop'], [3, -3, 'smith'], [-5, 0, 'cook'], [5, 0, 'scout'], [-3, 3, 'contract'], [3, 3, 'wheel']];
   let tentSeq = 1;
+  // The vault and the journey board stand at the fire's corners.
+  for (const [dx, dy, kind] of [[1, 1, 'vault'], [-1, 1, 'board']] as const) {
+    const x = center.x + dx;
+    const y = center.y + dy;
+    if (paths.has(at(x, y)) || cells[at(x, y)] !== Cell.Floor) continue;
+    set(x, y, Cell.Wall);
+    props.push({ id: id * 64 + 40 + tentSeq++, kind, region: id, x, y, state: 'idle' });
+  }
   for (const [dx, dy, service] of TENTS) {
     const x = center.x + dx;
     const y = center.y + dy;

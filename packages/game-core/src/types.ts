@@ -243,7 +243,7 @@ export interface GateState {
   kind?: 'exit' | 'back';
 }
 
-export type PropKind = 'chest' | 'key' | 'brazier' | 'vent' | 'bridge' | 'platform' | 'geyser' | 'lever' | 'seal' | 'root' | 'bramble' | 'grass' | 'totem' | 'campfire' | 'tent';
+export type PropKind = 'chest' | 'key' | 'brazier' | 'vent' | 'bridge' | 'platform' | 'geyser' | 'lever' | 'seal' | 'root' | 'bramble' | 'grass' | 'totem' | 'campfire' | 'tent' | 'vault' | 'board';
 
 /**
  * Adventure props. Chest: opened by walking onto it or by a blast, drops loot (rare = secret).

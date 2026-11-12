@@ -8,7 +8,7 @@ import { isTouchDevice } from '../input/InputManager';
  * Contextual Adventure tips. Each one shows once per device, at the moment it matters (first bomb,
  * first Fagulha, first secret wall…), worded for the controls in hand. Never blocks the game.
  */
-type HintId = 'bomb' | 'escape' | 'powerup' | 'cage' | 'cracked' | 'key' | 'spark' | 'brazier' | 'vent' | 'map' | 'river' | 'fragile' | 'geyser' | 'lever' | 'seal' | 'root' | 'grass' | 'chasm' | 'boss' | 'totem' | 'plates' | 'core' | 'anchors' | 'elite' | 'mimic' | 'motes' | 'night' | 'mist' | 'medals';
+type HintId = 'bomb' | 'escape' | 'powerup' | 'cage' | 'cracked' | 'key' | 'spark' | 'brazier' | 'vent' | 'map' | 'river' | 'fragile' | 'geyser' | 'lever' | 'seal' | 'root' | 'grass' | 'chasm' | 'boss' | 'totem' | 'plates' | 'core' | 'anchors' | 'elite' | 'mimic' | 'motes' | 'night' | 'mist' | 'medals' | 'camp' | 'campShop' | 'hearts' | 'relic';
 
 const KEY = '4walls.hints';
 const seenSet = (): Set<string> => {
@@ -69,6 +69,14 @@ function text(id: HintId, touch: boolean): { icon: string; body: string } {
       return { icon: '🕳️', body: 'Abismo! Cair é fatal. Dá para pular 1 casa por cima.' };
     case 'boss':
       return { icon: '☠️', body: 'O guardião do arco! Saia das casas marcadas no chão e acerte o corpo dele com explosões.' };
+    case 'camp':
+      return { icon: '🔥', body: 'Acampamento! Reúnam-se na fogueira: ela salva a expedição e enche os corações.' };
+    case 'campShop':
+      return { icon: '🏕️', body: 'Abra 🏕️ Acampamento para comprar com os moradores. Guarde moedas no cofre: se o grupo cair, perde metade do que carrega.' };
+    case 'hearts':
+      return { icon: '❤️', body: 'Na Aventura cada herói tem 3 corações. Um golpe tira um; a fogueira enche todos.' };
+    case 'relic':
+      return { icon: '🏺', body: 'Uma relíquia! Ela vale até o fim da expedição e fica para sempre no seu códice (Perfil).' };
     case 'motes':
       return { icon: '🟣', body: 'Chefe corrompido: motas violetas caçam você. Uma explosão as desfaz, e ele ganha uma fase a mais.' };
     case 'night':
@@ -125,6 +133,10 @@ export function TutorialHints({ controller }: { controller: MatchView }) {
       } else if (e.type === 'powerupSpawned') want('powerup');
       else if (e.type === 'sparkAlert') want('spark');
       else if (e.type === 'mimicAwoke') want('mimic');
+      else if (e.type === 'heartLost' && isMine(e.playerId)) want('hearts');
+      else if (e.type === 'relicFound') want('relic');
+      else if (e.type === 'campLit' && !e.again) want('campShop');
+      else if (e.type === 'regionEntered' && regionById(s, e.region)?.objective.kind === 'camp') want('camp');
       else if (e.type === 'regionEntered') {
         if (regionById(s, e.region)?.objective.kind === 'key') want('key');
         if (e.region >= 2) want('map');

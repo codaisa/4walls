@@ -7,7 +7,7 @@ antes da próxima:
 |---|---|---|---|
 | 1 | **Mapa**: regiões viram fases, objetivos, mecânicas de ambiente, segredos, navegação, arcos | — | **Concluída** (M1–M5) |
 | 2 | **Chefes**: elites, mini-chefes, chefes de bioma, lendários e secretos | Mapa (arenas, gatilhos, recompensas) | **Concluída** (B1–B5, seção 5) |
-| 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | Em andamento: A1 a A4 concluídos (seção 6) |
+| 3 | **Acampamentos**: checkpoints, hub, progresso da expedição e da conta | Mapa + Chefes | **Concluída** (A1–A5, seção 6) |
 
 Ponto de partida (como está hoje):
 - 5 regiões-ilha num reticulado de blocos de 16×14 casas, ligadas por corredores e geradas por seed.
@@ -414,7 +414,7 @@ Pontos de atenção:
 
 ## 6. Tarefa 3 — Acampamentos e progressão (plano detalhado)
 
-> Status: **aprovado** com as recomendações (corações no A4, perda de 50%, um acampamento por arco, save online na conta do anfitrião). **A1 a A4 concluídos.**
+> Status: **aprovado** com as recomendações (corações no A4, perda de 50%, um acampamento por arco, save online na conta do anfitrião). **Concluída (A1–A5).**
 
 ### 6.1 A ideia em uma frase
 
@@ -657,5 +657,19 @@ Entram:
   - Arqueólogo: códice completo, com o título "Arqueólogo".
 - **XP novo:** "Acampamentos" e "Contratos".
 - **Correção:** como a Aventura online só termina na fogueira, quem sai da sala no meio da expedição agora tem a partida registrada (XP, códice, histórico). Antes saía sem nada.
+
+**Como ficou o A5 (arte e acabamento, fecha a Tarefa 3):**
+- **Modelos novos:** `tools/blender/camp_props.py` gera em GLB:
+  - a fogueira (anel de pedras, toras cruzadas, brasas e um banco);
+  - a tenda (lona em A com um lado em sombra, porta aberta, mastros, cordas e flâmula; a lona é recolorida no jogo pela cor do serviço);
+  - o cofre (caixa de ferro com faixas e cadeado dourados);
+  - o mural da jornada (quadro com folhas presas).
+  - As formas procedurais ficam como reserva enquanto carrega ou se o arquivo falhar.
+- **Cofre e mural:** ficam nos cantos da fogueira (com cuidado para não fechar os caminhos), virados para ela.
+- **Música:** no acampamento toca uma música própria, lenta e quente (Dó – Lá menor – Fá – Sol, sem caixa), e a do bioma volta ao sair.
+- **Cartão de capítulo:** novo selo "ACAMPAMENTO", como o "CHEFE".
+- **Dicas novas (1ª vez de cada):** o acampamento, a loja e o cofre depois de acender a fogueira, os corações no primeiro golpe e a primeira relíquia.
+- **Celular:** os botões do acampamento ficaram compactos numa linha, e o painel fica acima dos controles de toque. Conferido em 844×390.
+- **Ainda em aberto (fora do plano):** os pilares que caem na Ponte de Obsidiana, o Ateliê aberto pelo acampamento, moradores andando entre as tendas e um modelo próprio do Mímico.
 
 **Decisões aprovadas (12/11/2026):** corações (B, no A4), 50% de perda, um acampamento por arco, save online na conta do anfitrião.

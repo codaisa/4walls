@@ -671,6 +671,7 @@ textarea {
 .chapter-tag.variant-mist { background: rgba(220, 230, 235, 0.25); color: #f2f6f8; }
 .chapter-tag.variant-corrupted { background: rgba(170, 90, 255, 0.3); color: #f0dcff; }
 .chapter-tag.chapter-boss { background: rgba(255, 70, 50, 0.32); color: #ffe0d8; }
+.chapter-tag.chapter-camp { background: rgba(255, 170, 60, 0.3); color: #fff0d0; }
 .chapter-name {
   color: #fff4dc;
   font-size: clamp(1.8rem, 11vh, 4.4rem);

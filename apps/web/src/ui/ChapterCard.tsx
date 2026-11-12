@@ -12,6 +12,7 @@ interface Card {
   arc: { n: number; name: string; variant: RegionVariant } | null;
   variant: RegionVariant;
   arcEnd: boolean;
+  camp: boolean;
 }
 
 export const VARIANT_BADGE: Record<RegionVariant, string> = { normal: '', night: '🌙 Noite', mist: '☁️ Névoa', corrupted: '🟣 Corrompida' };
@@ -52,6 +53,7 @@ export function ChapterCard({ controller }: { controller: MatchView }) {
         arc: a.start === id ? { n: r.arc + 1, name: a.name, variant: a.variant } : null,
         variant: r.variant,
         arcEnd: r.arcEnd,
+        camp: r.objective.kind === 'camp',
       });
     };
     // The first card waits for the countdown to finish (it would cover the big 3-2-1).
@@ -83,6 +85,7 @@ export function ChapterCard({ controller }: { controller: MatchView }) {
         <div className="chapter-index font-display">
           REGIÃO {card.index}
           {card.arcEnd && <span className="chapter-tag chapter-boss">CHEFE</span>}
+          {card.camp && <span className="chapter-tag chapter-camp">ACAMPAMENTO</span>}
           {card.variant !== 'normal' && <span className={`chapter-tag variant-${card.variant}`}>{VARIANT_BADGE[card.variant]}</span>}
         </div>
         <div className="chapter-name font-display">{card.name}</div>

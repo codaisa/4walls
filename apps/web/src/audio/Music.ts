@@ -20,7 +20,25 @@ interface Song {
   padGain: number;
 }
 
-const SONGS: Record<'volcano' | 'forest', Song> = {
+const SONGS: Record<'volcano' | 'forest' | 'camp', Song> = {
+  // Around the fire: slow and warm, major: C – Am – F – G, no snare.
+  camp: {
+    bpm: 84,
+    bars: [
+      { root: 60, minor: false },
+      { root: 57, minor: true },
+      { root: 53, minor: false },
+      { root: 55, minor: false },
+    ],
+    kick: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    snare: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    hat: [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+    arp: [0, -1, 2, -1, 3, -1, 2, -1, 1, -1, 2, -1, 3, -1, -1, -1],
+    bass: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+    arpWave: 'sine',
+    arpGain: 0.07,
+    padGain: 0.045,
+  },
   // Driving, minor, a bit menacing: Am – F – G – Em
   volcano: {
     bpm: 126,

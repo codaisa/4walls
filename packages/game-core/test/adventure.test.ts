@@ -192,7 +192,7 @@ describe('endless adventure: the journey', () => {
         const gateNeighbor = DIRS.map((d) => ({ x: g.x + DIR_VEC[d].x, y: g.y + DIR_VEC[d].y })).some((c) => inBounds(s.grid, c.x, c.y) && seen.has(cellIndex(s.grid, c.x, c.y)) && regionAt(s, c.x, c.y) === id);
         expect(gateNeighbor, `seed ${seed} region ${id}: exit`).toBe(true);
         const isletOf = (pp: { x: number; y: number }) => DIRS.filter((d) => getCell(s.grid, pp.x + DIR_VEC[d].x, pp.y + DIR_VEC[d].y) === Cell.Lava).length >= 2;
-        for (const p of s.adventure!.props.filter((pp) => pp.region === id && !['brazier', 'lever', 'bridge', 'platform', 'seal', 'root', 'bramble', 'grass', 'totem', 'campfire', 'tent'].includes(pp.kind) && !isletOf(pp))) {
+        for (const p of s.adventure!.props.filter((pp) => pp.region === id && !['brazier', 'lever', 'bridge', 'platform', 'seal', 'root', 'bramble', 'grass', 'totem', 'campfire', 'tent', 'vault', 'board'].includes(pp.kind) && !isletOf(pp))) {
           // Secret chests sit behind a cracked wall: open it for the check.
           for (const d of DIRS) {
             const x = p.x + DIR_VEC[d].x;
@@ -202,7 +202,7 @@ describe('endless adventure: the journey', () => {
           expect(reach(s, start).has(cellIndex(s.grid, p.x, p.y)), `seed ${seed} region ${id}: ${p.kind}`).toBe(true);
         }
         // Braziers and levers stand like pillars: one of their sides must be reachable.
-        for (const b of s.adventure!.props.filter((pp) => pp.region === id && ['brazier', 'lever', 'seal', 'root', 'totem', 'campfire', 'tent'].includes(pp.kind))) {
+        for (const b of s.adventure!.props.filter((pp) => pp.region === id && ['brazier', 'lever', 'seal', 'root', 'totem', 'campfire', 'tent', 'vault', 'board'].includes(pp.kind))) {
           const side = DIRS.some((d) => {
             const x = b.x + DIR_VEC[d].x;
             const y = b.y + DIR_VEC[d].y;

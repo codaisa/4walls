@@ -24,6 +24,7 @@ import { Boss } from './Boss';
 import { Powerups } from './Powerups';
 import { THEMES } from './themes';
 import { graphicsPreset, useSettings } from '../store/useSettings';
+import { regionAt } from '@4walls/core';
 
 /** Steps the simulation once per rendered frame, before any visual reads the state. */
 function GameLoop() {
@@ -74,10 +75,22 @@ export function GameScene({ controller }: { controller: MatchView }) {
     return () => window.clearInterval(id);
   }, [controller]);
   const theme = THEMES[arenaTheme];
+  // A5: a calm song while the group is at a camp; the biome's song everywhere else.
+  const [atCamp, setAtCamp] = useState(false);
   useEffect(() => {
-    music.play(theme.music);
-    return () => music.stop();
-  }, [theme.music]);
+    if (!controller.state.adventure) return;
+    const id = window.setInterval(() => {
+      const s = controller.state;
+      const lead = s.players.find((p) => p.alive) ?? s.players[0];
+      const rid = lead ? regionAt(s, lead.x, lead.y) : -1;
+      setAtCamp(s.adventure?.regions.find((r) => r.id === rid)?.objective.kind === 'camp');
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [controller]);
+  useEffect(() => {
+    music.play(atCamp ? 'camp' : theme.music);
+  }, [theme.music, atCamp]);
+  useEffect(() => () => music.stop(), []);
 
   return (
     <>

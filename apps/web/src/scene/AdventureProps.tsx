@@ -7,6 +7,7 @@ import { GEYSER_PERIOD, GEYSER_WARN, geyserPhase, getCell, platformPos, type Pro
 import { lerp, useGame } from './context';
 import { RESIDENT_OF } from '@4walls/shared';
 import { ShowcaseAvatar } from './ShowcaseAvatar';
+import { useGLTF } from '@react-three/drei';
 
 const wood = new THREE.MeshStandardMaterial({ color: '#8a4f24', roughness: 0.75 });
 const woodDark = new THREE.MeshStandardMaterial({ color: '#5e3216', roughness: 0.8 });
@@ -30,7 +31,7 @@ export function AdventureProps() {
   return (
     <>
       {props.map((p) =>
-        p.kind === 'chest' ? <Chest key={p.id} id={p.id} /> : p.kind === 'campfire' ? <Campfire key={p.id} id={p.id} /> : p.kind === 'tent' ? <Tent key={p.id} id={p.id} /> : p.kind === 'key' ? <GateKey key={p.id} id={p.id} /> : p.kind === 'brazier' ? (
+        p.kind === 'chest' ? <Chest key={p.id} id={p.id} /> : p.kind === 'campfire' ? <Campfire key={p.id} id={p.id} /> : p.kind === 'tent' ? <Tent key={p.id} id={p.id} /> : p.kind === 'vault' || p.kind === 'board' ? <CampDecor key={p.id} id={p.id} /> : p.kind === 'key' ? <GateKey key={p.id} id={p.id} /> : p.kind === 'brazier' ? (
           <Brazier key={p.id} id={p.id} />
         ) : p.kind === 'vent' ? (
           <AshVent key={p.id} id={p.id} />
@@ -297,6 +298,49 @@ const ashMat = new THREE.MeshStandardMaterial({ color: '#6e6468', roughness: 1, 
 
 const logMat = new THREE.MeshStandardMaterial({ color: '#5b3a22', roughness: 0.9 });
 
+/** A Blender-made camp prop (tools/blender/camp_props.py), shadows on, optional cloth recolor. */
+function CampGLB({ url, canvas }: { url: string; canvas?: string }) {
+  const gltf = useGLTF(url);
+  const scene = useMemo(() => {
+    const sc = gltf.scene.clone(true);
+    sc.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      m.castShadow = true;
+      m.receiveShadow = true;
+      if (canvas) {
+        const mats = (Array.isArray(m.material) ? m.material : [m.material]).map((x) => {
+          if (x.name !== 'Canvas' && x.name !== 'CanvasShade') return x;
+          const c = (x as THREE.MeshStandardMaterial).clone();
+          c.color.set(canvas);
+          // The other side of the roof sits in shade: the ridge reads from the top camera.
+          if (x.name === 'CanvasShade') c.color.multiplyScalar(0.62);
+          return c;
+        });
+        m.material = Array.isArray(m.material) ? mats : mats[0];
+      }
+    });
+    return sc;
+  }, [gltf, canvas]);
+  return <primitive object={scene} />;
+}
+for (const u of ['/models/camp_fire.glb?v=2', '/models/camp_tent.glb?v=2', '/models/camp_vault.glb?v=2', '/models/camp_board.glb?v=2']) useGLTF.preload(u);
+
+/** Beside the camp's fire: the vault (where coins are kept) and the journey board. */
+function CampDecor({ id }: { id: number }) {
+  const { controller, ox, oz } = useGame();
+  const p = useProp(id)()!;
+  const fire = controller.state.adventure?.props.find((q) => q.kind === 'campfire' && q.region === p.region);
+  const yaw = fire ? Math.atan2(fire.x - p.x, fire.y - p.y) : 0;
+  return (
+    <group position={[p.x + ox, 0, p.y + oz]} rotation-y={yaw}>
+      <Suspense fallback={null}>
+        <CampGLB url={p.kind === 'vault' ? '/models/camp_vault.glb?v=2' : '/models/camp_board.glb?v=2'} />
+      </Suspense>
+    </group>
+  );
+}
+
 const TENT_COLOR: Record<string, string> = { shop: '#d9534f', smith: '#6d6a75', cook: '#e8a33d', scout: '#3f8fd2', contract: '#8a5cc7', wheel: '#3fb37f' };
 const tentGeo = new THREE.ConeGeometry(0.62, 1.05, 4, 1);
 tentGeo.rotateY(Math.PI / 4);
@@ -321,14 +365,19 @@ function Tent({ id }: { id: number }) {
   const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: TENT_COLOR[service] ?? '#aa7744', roughness: 0.85, side: THREE.DoubleSide, flatShading: true }), [service]);
   return (
     <group position={[p0.x + ox, 0, p0.y + oz]} rotation-y={yaw}>
-      <mesh position={[0, 0.52, 0]} geometry={tentGeo} material={mat} castShadow receiveShadow />
-      <mesh position={[0, 0.3, 0.42]} material={coal}>
-        <planeGeometry args={[0.32, 0.55]} />
-      </mesh>
-      <mesh position={[0, 1.18, 0]} material={logMat}>
-        <cylinderGeometry args={[0.02, 0.02, 0.35, 5]} />
-      </mesh>
-      <mesh ref={flag} position={[0.1, 1.28, 0]} material={mat}>
+      <Suspense
+        fallback={
+          <>
+            <mesh position={[0, 0.52, 0]} geometry={tentGeo} material={mat} castShadow receiveShadow />
+            <mesh position={[0, 0.3, 0.42]} material={coal}>
+              <planeGeometry args={[0.32, 0.55]} />
+            </mesh>
+          </>
+        }
+      >
+        <CampGLB url="/models/camp_tent.glb?v=2" canvas={TENT_COLOR[service]} />
+      </Suspense>
+      <mesh ref={flag} position={[0.1, 1.38, -0.5]} material={mat}>
         <planeGeometry args={[0.2, 0.12]} />
       </mesh>
       {home && (
@@ -373,19 +422,24 @@ function Campfire({ id }: { id: number }) {
   });
   return (
     <group position={[p0.x + ox, 0, p0.y + oz]}>
-      {Array.from({ length: 9 }, (_, i) => (
-        <mesh key={i} position={[Math.cos((i / 9) * Math.PI * 2) * 0.42, 0.07, Math.sin((i / 9) * Math.PI * 2) * 0.42]} material={stone} castShadow>
-          <dodecahedronGeometry args={[0.11, 0]} />
-        </mesh>
-      ))}
-      {[0, 1, 2].map((i) => (
-        <mesh key={i} position={[0, 0.12, 0]} rotation={[0, (i / 3) * Math.PI, Math.PI / 2 - 0.25]} material={logMat} castShadow>
-          <cylinderGeometry args={[0.06, 0.07, 0.62, 6]} />
-        </mesh>
-      ))}
-      <mesh position={[0, 0.06, 0]} material={coal}>
-        <cylinderGeometry args={[0.28, 0.3, 0.05, 10]} />
-      </mesh>
+      <Suspense
+        fallback={
+          <>
+            {Array.from({ length: 9 }, (_, i) => (
+              <mesh key={i} position={[Math.cos((i / 9) * Math.PI * 2) * 0.42, 0.07, Math.sin((i / 9) * Math.PI * 2) * 0.42]} material={stone} castShadow>
+                <dodecahedronGeometry args={[0.11, 0]} />
+              </mesh>
+            ))}
+            {[0, 1, 2].map((i) => (
+              <mesh key={i} position={[0, 0.12, 0]} rotation={[0, (i / 3) * Math.PI, Math.PI / 2 - 0.25]} material={logMat} castShadow>
+                <cylinderGeometry args={[0.06, 0.07, 0.62, 6]} />
+              </mesh>
+            ))}
+          </>
+        }
+      >
+        <CampGLB url="/models/camp_fire.glb?v=2" />
+      </Suspense>
       <group ref={fire} position={[0, 0.15, 0]}>
         <mesh position={[0, 0.38, 0]} material={fireMat}>
           <coneGeometry args={[0.3, 0.85, 9, 1, true]} />
