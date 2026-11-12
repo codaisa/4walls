@@ -43,7 +43,7 @@ export interface HudAdventure {
   index: number;
   /** Deepest region reached (1-based). */
   depth: number;
-  objective: 'clear' | 'key' | 'lever';
+  objective: 'clear' | 'key' | 'lever' | 'seals' | 'purify';
   progress: number;
   goal: number;
   /** Key objective: somebody carries the key. */

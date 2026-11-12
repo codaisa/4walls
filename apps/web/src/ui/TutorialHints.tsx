@@ -8,7 +8,7 @@ import { isTouchDevice } from '../input/InputManager';
  * Contextual Adventure tips. Each one shows once per device, at the moment it matters (first bomb,
  * first Fagulha, first secret wall…), worded for the controls in hand. Never blocks the game.
  */
-type HintId = 'bomb' | 'escape' | 'powerup' | 'cage' | 'cracked' | 'key' | 'spark' | 'brazier' | 'vent' | 'map' | 'river' | 'fragile' | 'geyser' | 'lever';
+type HintId = 'bomb' | 'escape' | 'powerup' | 'cage' | 'cracked' | 'key' | 'spark' | 'brazier' | 'vent' | 'map' | 'river' | 'fragile' | 'geyser' | 'lever' | 'seal' | 'root' | 'grass' | 'chasm';
 
 const KEY = '4walls.hints';
 const seenSet = (): Set<string> => {
@@ -59,6 +59,14 @@ function text(id: HintId, touch: boolean): { icon: string; body: string } {
       return { icon: '♨️', body: 'Gêiser: quando borbulhar em vermelho, saia de cima!' };
     case 'lever':
       return { icon: '⚙️', body: 'Exploda ao lado da alavanca para baixar a ponte levadiça e abrir o portão.' };
+    case 'seal':
+      return { icon: '💠', body: 'Selo de Obsidiana: uma bomba sozinha não faz nada. Encoste 2 bombas para explodirem em cadeia!' };
+    case 'root':
+      return { icon: '🌿', body: 'Raiz corrompida: 3 explosões a curam. Enquanto viver, os espinheiros voltam a crescer.' };
+    case 'grass':
+      return { icon: '🔥', body: 'Capim seco pega fogo e o fogo se espalha. Não fique em cima!' };
+    case 'chasm':
+      return { icon: '🕳️', body: 'Abismo! Cair é fatal. Dá para pular 1 casa por cima.' };
     case 'map':
       return { icon: '🗺️', body: touch ? 'Toque em 🗺️ (no canto) para ver o mapa da jornada.' : 'Aperte M para ver o mapa da jornada.' };
   }
@@ -112,6 +120,10 @@ export function TutorialHints({ controller }: { controller: MatchView }) {
       if (adv.props.some((p) => p.kind === 'vent' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 3)) want('vent');
       if (near(s, me, (x, y) => getCell(s.grid, x, y) === Cell.Lava, 3)) want('river');
       if (adv.props.some((p) => p.kind === 'geyser' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 3)) want('geyser');
+      if (adv.props.some((p) => p.kind === 'seal' && p.state === 'intact' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 4)) want('seal');
+      if (adv.props.some((p) => p.kind === 'root' && p.state === 'intact' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 4)) want('root');
+      if (adv.props.some((p) => p.kind === 'grass' && p.state === 'dry' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 2)) want('grass');
+      if (near(s, me, (x, y) => getCell(s.grid, x, y) === Cell.Chasm, 2)) want('chasm');
       if (adv.props.some((p) => p.kind === 'lever' && p.state === 'off' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 4)) want('lever');
       if (adv.props.some((p) => p.kind === 'bridge' && p.state === 'cracking' && Math.abs(p.x - me.x) + Math.abs(p.y - me.y) <= 1)) want('fragile');
       // Show the next tip when the current one is done.

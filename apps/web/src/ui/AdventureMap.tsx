@@ -31,6 +31,11 @@ function drawMap(ctx: CanvasRenderingContext2D, s: GameState, W: number, H: numb
       if (!reg) continue;
       const c = getCell(g, x, y);
       if (c === Cell.Wall || c === Cell.Cracked) continue;
+      if (c === Cell.Chasm) {
+        ctx.fillStyle = reg.unlocked ? '#140a1e' : 'rgba(40,20,60,0.4)';
+        ctx.fillRect(px(x), py(y), cell, cell);
+        continue;
+      }
       if (c === Cell.Lava) {
         ctx.fillStyle = reg.unlocked ? '#d9481f' : 'rgba(255,90,30,0.25)';
         ctx.fillRect(px(x), py(y), cell, cell);
@@ -75,6 +80,7 @@ function drawMap(ctx: CanvasRenderingContext2D, s: GameState, W: number, H: numb
       ctx.fillRect(px(p.x) + cell * 0.1, py(p.y) + cell * 0.2, cell * 0.8, cell * 0.6);
     }
     if (p.kind === 'key' && p.state !== 'used') dot(p.x, p.y, Math.max(2, cell * 0.55), '#ffd23f', '#fff4c2');
+    if ((p.kind === 'seal' || p.kind === 'root') && p.state === 'intact') dot(p.x, p.y, Math.max(2, cell * 0.6), p.kind === 'seal' ? '#b46bff' : '#8a3fd1', '#ffffff');
     if (p.kind === 'brazier' && seenAt(p.x, p.y)) dot(p.x, p.y, Math.max(2, cell * 0.45), p.state === 'lit' ? '#ff8a2a' : '#5a3a2a', '#ffb070');
   }
   for (const c of adv.cages) if (c.state !== 'rescued' && seenAt(c.x, c.y)) dot(c.x, c.y, Math.max(2, cell * 0.5), '#7fd6ff', '#0b2a44');

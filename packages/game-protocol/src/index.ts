@@ -178,10 +178,10 @@ export interface AdvSnap {
   r: [number, number, number, number][];
   g: [number, number][];
   c: [number, number][];
-  p: [number, number, number, number, string][];
+  p: [number, number, number, number, string, number?][];
   cl: [number, number] | null;
 }
-const PROP_STATES = ['closed', 'open', 'idle', 'carried', 'used', 'hidden', 'unlit', 'lit', 'solid', 'cracking', 'fallen', 'raised', 'lowered', 'off', 'on'] as const;
+const PROP_STATES = ['closed', 'open', 'idle', 'carried', 'used', 'hidden', 'unlit', 'lit', 'solid', 'cracking', 'fallen', 'raised', 'lowered', 'off', 'on', 'intact', 'broken', 'grown', 'cut', 'dry', 'burning', 'burnt'] as const;
 
 /** Authoritative snapshot (~30×/s, msgpack-encoded by Colyseus). Floats rounded to 3 decimals. */
 export interface Snapshot {
@@ -247,7 +247,7 @@ export function encodeSnapshot(s: GameState, ack: Record<number, number>, ev: Ga
             r: s.adventure.regions.map((r) => [r.id, (r.unlocked ? 1 : 0) | (r.cleared ? 2 : 0), r.objective.progress, r.objective.goal]),
             g: s.adventure.gates.filter((g) => g.kind !== 'back').map((g) => [g.from, g.open ? g.openedTick : -1]),
             c: s.adventure.cages.map((c) => [c.id, c.state === 'locked' ? 0 : c.state === 'free' ? 1 : 2]),
-            p: s.adventure.props.map((p) => [p.id, PROP_STATES.indexOf(p.state), p.x, p.y, p.carrierId ?? '']),
+            p: s.adventure.props.map((p) => (p.hp !== undefined ? [p.id, PROP_STATES.indexOf(p.state), p.x, p.y, p.carrierId ?? '', p.hp] : [p.id, PROP_STATES.indexOf(p.state), p.x, p.y, p.carrierId ?? ''])),
             cl: s.adventure.closing ? [s.adventure.closing.region, s.adventure.closing.atTick] : null,
           },
         }
@@ -318,9 +318,10 @@ export function applySnapshot(s: GameState, snap: Snapshot) {
         g.openedTick = Math.max(0, t);
       }
     }
-    for (const [id, st, x, y, carrier] of a.p) {
+    for (const [id, st, x, y, carrier, hp] of a.p) {
       const p = adv.props.find((q) => q.id === id);
       if (!p) continue;
+      if (hp !== undefined) p.hp = hp;
       p.state = PROP_STATES[st] ?? p.state;
       p.x = x;
       p.y = y;

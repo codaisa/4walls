@@ -1,7 +1,7 @@
 import { Cell, DIR_VEC, RULES, TICK_DT, secToTicks, type Dir, type PlayerInput } from '@4walls/shared';
 import { getCell } from './grid';
 import type { GameState, PlayerState } from './types';
-import { bombAt, canBombEnter, isFrozen, isSolidForPlayer } from './world';
+import { bombAt, canBombEnter, isFrozen, isPit, isSolidForPlayer } from './world';
 import { carriesKey } from './adventure';
 
 const EPS = 1e-6;
@@ -146,7 +146,7 @@ export function startManeuver(s: GameState, p: PlayerState, kind: 'roll' | 'jump
   } else {
     const c1 = getCell(s.grid, cx + v.x, cy + v.y);
     // Hop over a bomb, open floor or a single cell of lava (never land in it).
-    const overable = c1 === Cell.Floor || c1 === Cell.Lava || (c1 === Cell.Block && s.tick < p.ghostUntil);
+    const overable = c1 === Cell.Floor || isPit(c1) || (c1 === Cell.Block && s.tick < p.ghostUntil);
     if (overable && !isSolidForPlayer(s, p, cx + v.x * 2, cy + v.y * 2) && !bombAt(s, cx + v.x * 2, cy + v.y * 2)) n = 2;
     else if (!isSolidForPlayer(s, p, cx + v.x, cy + v.y)) n = 1;
   }

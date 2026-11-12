@@ -228,6 +228,32 @@ class SfxEngine {
     this.tone(70, 1.4, { to: 50, type: 'sawtooth', gain: 0.1, delay: 0.2 });
   }
 
+  /** Obsidian and forest. */
+  clink() {
+    this.tone(1800, 0.12, { to: 1500, type: 'triangle', gain: 0.1 });
+    this.tone(2700, 0.09, { type: 'sine', gain: 0.06, delay: 0.02 });
+  }
+  crack() {
+    this.burst(0.25, 5000, 900, 0.3, 3);
+    this.tone(400, 0.2, { to: 160, type: 'square', gain: 0.08 });
+  }
+  shatter() {
+    this.burst(0.6, 6500, 1200, 0.45, 2);
+    [1568, 1976, 2349, 2794].forEach((f, i) => this.tone(f, 0.25, { type: 'sine', gain: 0.07, delay: i * 0.05 }));
+  }
+  rootHit() {
+    this.tone(140, 0.25, { to: 90, type: 'sawtooth', gain: 0.1 });
+  }
+  purify() {
+    [523, 784, 1046, 1318].forEach((f, i) => this.tone(f, 0.4, { type: 'sine', gain: 0.12, delay: i * 0.09, bus: 'ui' }));
+  }
+  rustle() {
+    this.burst(0.3, 2500, 600, 0.12, 2);
+  }
+  ignite() {
+    this.burst(0.5, 1800, 300, 0.3, 0.7);
+  }
+
   // ── Rescued heroes ──
   /** "Joins the fight!": a whoosh, a brass stab and (new hero) a fanfare. */
   heroReveal(isNew: boolean) {

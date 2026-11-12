@@ -10,8 +10,16 @@ interface Card {
   objective: string;
 }
 
-const objectiveText = (kind: 'clear' | 'key' | 'lever') =>
-  kind === 'key' ? '🔑 Ache a chave e leve até o portão' : kind === 'lever' ? '⚙️ Cruze o rio de lava e exploda a alavanca' : '💥 Exploda todos os Magmitos';
+const objectiveText = (kind: 'clear' | 'key' | 'lever' | 'seals' | 'purify') =>
+  kind === 'key'
+    ? '🔑 Ache a chave e leve até o portão'
+    : kind === 'lever'
+      ? '⚙️ Cruze o rio de lava e exploda a alavanca'
+      : kind === 'seals'
+        ? '💠 Quebre os 3 selos com explosões em cadeia'
+        : kind === 'purify'
+          ? '🌿 Purifique as 3 raízes corrompidas'
+          : '💥 Exploda todos os Magmitos';
 let seq = 1;
 
 /**

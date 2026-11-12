@@ -2,7 +2,8 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { GEYSER_PERIOD, GEYSER_WARN, geyserPhase, platformPos, type PropState } from '@4walls/core';
+import { Cell } from '@4walls/shared';
+import { GEYSER_PERIOD, GEYSER_WARN, geyserPhase, getCell, platformPos, type PropState } from '@4walls/core';
 import { lerp, useGame } from './context';
 
 const wood = new THREE.MeshStandardMaterial({ color: '#8a4f24', roughness: 0.75 });
@@ -37,6 +38,14 @@ export function AdventureProps() {
           <Platform key={p.id} id={p.id} />
         ) : p.kind === 'geyser' ? (
           <Geyser key={p.id} id={p.id} />
+        ) : p.kind === 'seal' ? (
+          <Seal key={p.id} id={p.id} />
+        ) : p.kind === 'root' ? (
+          <Root key={p.id} id={p.id} />
+        ) : p.kind === 'bramble' ? (
+          <Bramble key={p.id} id={p.id} />
+        ) : p.kind === 'grass' ? (
+          <Grass key={p.id} id={p.id} />
         ) : (
           <Lever key={p.id} id={p.id} />
         ),
@@ -570,6 +579,210 @@ function Lever({ id }: { id: number }) {
           <sphereGeometry args={[0.08, 12, 8]} />
         </mesh>
       </group>
+    </group>
+  );
+}
+
+// ───────────────────────────── obsidian and corrupted forest ─────────────────────────────
+
+const obsidianGlass = new THREE.MeshPhysicalMaterial({ color: '#1c1428', roughness: 0.08, metalness: 0.2, clearcoat: 1, emissive: '#2a0a4a', emissiveIntensity: 0.4 });
+const veinMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.5, 2.8), toneMapped: false });
+const rootBark = new THREE.MeshStandardMaterial({ color: '#3a2430', roughness: 0.85, flatShading: true });
+const corruptCore = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 0.4, 2.6), toneMapped: false });
+const sapling = new THREE.MeshStandardMaterial({ color: '#6fd84a', roughness: 0.5, emissive: '#1f6a10', emissiveIntensity: 0.4 });
+const thorn = new THREE.MeshStandardMaterial({ color: '#2f3a24', roughness: 0.8, flatShading: true });
+const thornTip = new THREE.MeshStandardMaterial({ color: '#7a4a6a', roughness: 0.6 });
+const straw = new THREE.MeshStandardMaterial({ color: '#c9a35a', roughness: 0.95, flatShading: true });
+const ash = new THREE.MeshStandardMaterial({ color: '#1a1416', roughness: 1 });
+
+/** Obsidian seal: a dark crystal monolith; each chain blast opens brighter violet cracks. */
+function Seal({ id }: { id: number }) {
+  const { controller, ox, oz } = useGame();
+  const get = useProp(id);
+  const p0 = get()!;
+  const root = useRef<THREE.Group>(null!);
+  const veins = useRef<THREE.Group>(null!);
+  const brokeAt = useRef<number | null>(null);
+  const hitAt = useRef(0);
+  useEffect(
+    () =>
+      controller.on((e) => {
+        if ((e.type === 'sealCracked' || e.type === 'sealResisted') && e.propId === id) hitAt.current = performance.now();
+      }),
+    [controller, id],
+  );
+  useFrame(({ clock }) => {
+    const p = get();
+    if (!p) return;
+    if (p.state === 'broken') {
+      if (brokeAt.current === null) brokeAt.current = performance.now();
+      const k = Math.min(1, (performance.now() - brokeAt.current) / 450);
+      root.current.scale.set(1 + k * 0.5, Math.max(0.0001, 1 - k), 1 + k * 0.5);
+      root.current.visible = k < 1;
+      return;
+    }
+    const hp = p.hp ?? 3;
+    // Cracks show up as the seal weakens (3 → 0).
+    veins.current.children.forEach((v, i) => (v.visible = i < (3 - hp) * 2 + 1));
+    const pulse = 0.6 + 0.4 * Math.sin(clock.elapsedTime * (2 + (3 - hp) * 2));
+    veinMat.color.setRGB(1.6 * pulse, 0.5 * pulse, 2.8 * pulse);
+    const shake = performance.now() - hitAt.current < 200 ? Math.sin(performance.now() * 0.12) * 0.04 : 0;
+    root.current.position.x = shake;
+  });
+  return (
+    <group position={[p0.x + ox, 0, p0.y + oz]}>
+      <group ref={root}>
+        <mesh position={[0, 0.55, 0]} scale={[0.42, 0.62, 0.42]} material={obsidianGlass} castShadow receiveShadow>
+          <octahedronGeometry args={[1, 0]} />
+        </mesh>
+        <mesh position={[0, 0.08, 0]} material={stone} receiveShadow>
+          <cylinderGeometry args={[0.42, 0.48, 0.16, 6]} />
+        </mesh>
+        <group ref={veins} position={[0, 0.55, 0]}>
+          {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+            <mesh key={i} position={[Math.cos(i * 2.1) * 0.2, (i % 3) * 0.18 - 0.18, Math.sin(i * 2.1) * 0.2]} rotation={[i * 0.7, i * 1.3, 0.4 + i]} material={veinMat}>
+              <boxGeometry args={[0.03, 0.34, 0.03]} />
+            </mesh>
+          ))}
+        </group>
+      </group>
+    </group>
+  );
+}
+
+/** Corrupted root: a knot of twisted roots around a pulsing violet heart; purified, a sapling sprouts. */
+function Root({ id }: { id: number }) {
+  const { ox, oz } = useGame();
+  const get = useProp(id);
+  const p0 = get()!;
+  const knot = useRef<THREE.Group>(null!);
+  const core = useRef<THREE.Mesh>(null!);
+  const sprout = useRef<THREE.Group>(null!);
+  const curedAt = useRef<number | null>(null);
+  const roots = useMemo(() => Array.from({ length: 6 }, (_, i) => ({ a: (i / 6) * Math.PI * 2 + i * 0.3, tilt: 0.5 + (i % 3) * 0.2, len: 0.55 + (i % 2) * 0.2 })), []);
+  useFrame(({ clock }) => {
+    const p = get();
+    if (!p) return;
+    const t = clock.elapsedTime;
+    if (p.state === 'broken') {
+      if (curedAt.current === null) curedAt.current = performance.now();
+      const k = Math.min(1, (performance.now() - curedAt.current) / 600);
+      knot.current.scale.setScalar(Math.max(0.0001, 1 - k));
+      knot.current.visible = k < 1;
+      sprout.current.visible = true;
+      sprout.current.scale.setScalar(Math.max(0.0001, k));
+      sprout.current.rotation.y = t * 0.6;
+      return;
+    }
+    sprout.current.visible = false;
+    const hp = p.hp ?? 3;
+    const beat = 1 + 0.15 * Math.sin(t * (3 + (3 - hp)));
+    core.current.scale.setScalar((0.6 + hp * 0.15) * beat);
+    knot.current.rotation.y = Math.sin(t * 0.7 + id) * 0.08;
+  });
+  return (
+    <group position={[p0.x + ox, 0, p0.y + oz]}>
+      <group ref={knot}>
+        {roots.map((r, i) => (
+          <mesh key={i} position={[Math.cos(r.a) * 0.18, 0.22, Math.sin(r.a) * 0.18]} rotation={[Math.sin(r.a) * r.tilt, 0, -Math.cos(r.a) * r.tilt]} material={rootBark} castShadow>
+            <cylinderGeometry args={[0.05, 0.11, r.len, 6]} />
+          </mesh>
+        ))}
+        <mesh position={[0, 0.4, 0]} scale={[0.32, 0.42, 0.32]} material={rootBark} castShadow>
+          <dodecahedronGeometry args={[1, 0]} />
+        </mesh>
+        <mesh ref={core} position={[0, 0.5, -0.22]} material={corruptCore}>
+          <sphereGeometry args={[0.12, 12, 10]} />
+        </mesh>
+      </group>
+      <group ref={sprout} visible={false}>
+        <mesh position={[0, 0.15, 0]} material={sapling}>
+          <cylinderGeometry args={[0.025, 0.035, 0.3, 6]} />
+        </mesh>
+        {[-1, 1].map((s) => (
+          <mesh key={s} position={[s * 0.09, 0.3, 0]} rotation={[0, 0, -s * 0.6]} scale={[1, 0.25, 0.55]} material={sapling}>
+            <sphereGeometry args={[0.12, 10, 8]} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  );
+}
+
+/** Bramble: a thorny bush in place of a crate; cut, it sprouts back while a corrupted root lives. */
+function Bramble({ id }: { id: number }) {
+  const { controller, ox, oz } = useGame();
+  const get = useProp(id);
+  const p0 = get()!;
+  const bush = useRef<THREE.Group>(null!);
+  const grow = useRef({ shown: 1, target: 1 });
+  const lumps = useMemo(() => Array.from({ length: 5 }, (_, i) => ({ x: Math.cos(i * 1.3) * 0.18, y: 0.3 + (i % 2) * 0.16, z: Math.sin(i * 1.3) * 0.18, s: 0.22 + (i % 3) * 0.05 })), []);
+  useFrame((_, dt) => {
+    const p = get();
+    if (!p) return;
+    const isBlock = getCell(controller.state.grid, p.x, p.y) === Cell.Block;
+    const g = grow.current;
+    g.target = isBlock ? 1 : 0;
+    g.shown += (g.target - g.shown) * Math.min(1, dt * (g.target ? 3 : 12));
+    bush.current.visible = g.shown > 0.02;
+    bush.current.scale.setScalar(Math.max(0.0001, g.shown));
+  });
+  return (
+    <group position={[p0.x + ox, 0, p0.y + oz]}>
+      <group ref={bush}>
+        {lumps.map((l, i) => (
+          <mesh key={i} position={[l.x, l.y, l.z]} scale={l.s} material={thorn} castShadow>
+            <icosahedronGeometry args={[1, 0]} />
+          </mesh>
+        ))}
+        {Array.from({ length: 10 }, (_, i) => (
+          <mesh key={i} position={[Math.cos(i * 2.4) * 0.34, 0.25 + (i % 3) * 0.14, Math.sin(i * 2.4) * 0.34]} rotation={[Math.sin(i * 2.4) * 1.2, 0, -Math.cos(i * 2.4) * 1.2]} material={thornTip}>
+            <coneGeometry args={[0.03, 0.16, 4]} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  );
+}
+
+/** Dry grass: straw tufts that flare up when a blast reaches them, then leave black ash. */
+function Grass({ id }: { id: number }) {
+  const { ox, oz } = useGame();
+  const get = useProp(id);
+  const p0 = get()!;
+  const tufts = useRef<THREE.Group>(null!);
+  const fire = useRef<THREE.Group>(null!);
+  const scorch = useRef<THREE.Mesh>(null!);
+  const blades = useMemo(() => Array.from({ length: 9 }, (_, i) => ({ x: ((i % 3) - 1) * 0.26 + Math.sin(i * 3.1) * 0.06, z: (Math.floor(i / 3) - 1) * 0.26 + Math.cos(i * 2.3) * 0.06, h: 0.22 + (i % 4) * 0.05, r: i * 0.7 })), []);
+  useFrame(({ clock }) => {
+    const p = get();
+    if (!p) return;
+    const t = clock.elapsedTime;
+    tufts.current.visible = p.state === 'dry';
+    fire.current.visible = p.state === 'burning';
+    scorch.current.visible = p.state !== 'dry';
+    if (p.state === 'dry') tufts.current.rotation.z = Math.sin(t * 1.5 + id) * 0.05;
+    if (p.state === 'burning') fire.current.children.forEach((f, i) => (f.scale.y = 0.7 + 0.5 * Math.abs(Math.sin(t * 14 + i * 1.7))));
+  });
+  return (
+    <group position={[p0.x + ox, 0, p0.y + oz]}>
+      <group ref={tufts}>
+        {blades.map((b, i) => (
+          <mesh key={i} position={[b.x, b.h / 2, b.z]} rotation={[0, b.r, 0.15]} material={straw}>
+            <coneGeometry args={[0.07, b.h, 4]} />
+          </mesh>
+        ))}
+      </group>
+      <group ref={fire} visible={false}>
+        {blades.slice(0, 5).map((b, i) => (
+          <mesh key={i} position={[b.x, 0.22, b.z]} material={fireMat}>
+            <coneGeometry args={[0.13, 0.5, 6, 1, true]} />
+          </mesh>
+        ))}
+      </group>
+      <mesh ref={scorch} position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]} material={ash} visible={false}>
+        <circleGeometry args={[0.45, 12]} />
+      </mesh>
     </group>
   );
 }

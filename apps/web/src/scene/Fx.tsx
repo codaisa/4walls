@@ -280,6 +280,41 @@ export function Fx() {
             fx.shake = Math.min(1, fx.shake + 0.35);
             break;
           }
+          case 'sealCracked':
+          case 'sealBroken':
+          case 'sealResisted': {
+            const big = e.type === 'sealBroken';
+            const n = e.type === 'sealResisted' ? 6 : big ? 46 : 18;
+            for (let i = 0; i < n; i++)
+              solids.spawn({
+                x: e.x + ox, y: 0.6, z: e.y + oz,
+                vx: rnd(-3, 3), vy: rnd(2, big ? 6 : 4), vz: rnd(-3, 3),
+                life: rnd(0.6, 1.2), size: rnd(0.04, big ? 0.12 : 0.08), color: i % 3 ? '#2a1a3a' : '#c47aff',
+                gravity: 12, drag: 0.4, bounce: true,
+              });
+            if (big) fx.shake = Math.min(1, fx.shake + 0.4);
+            break;
+          }
+          case 'rootHit':
+          case 'rootPurified': {
+            const cured = e.type === 'rootPurified';
+            for (let i = 0; i < (cured ? 40 : 14); i++)
+              sparks.spawn({
+                x: e.x + ox + rnd(-0.2, 0.2), y: rnd(0.3, 0.7), z: e.y + oz + rnd(-0.2, 0.2),
+                vx: rnd(-1, 1), vy: rnd(1.5, cured ? 5 : 3), vz: rnd(-1, 1),
+                life: rnd(0.5, 1.1), size: rnd(0.05, 0.1), color: cured ? (i % 2 ? '#7dff6a' : '#e6ffb0') : '#b44cff', intensity: 3, drag: 1.2,
+              });
+            break;
+          }
+          case 'grassIgnited': {
+            for (let i = 0; i < 10; i++)
+              sparks.spawn({
+                x: e.x + ox + rnd(-0.3, 0.3), y: rnd(0.1, 0.4), z: e.y + oz + rnd(-0.3, 0.3),
+                vx: rnd(-0.5, 0.5), vy: rnd(1, 2.5), vz: rnd(-0.5, 0.5),
+                life: rnd(0.4, 0.8), size: rnd(0.05, 0.09), color: '#ffb030', intensity: 3, drag: 1.5,
+              });
+            break;
+          }
           case 'brazierLit': {
             for (let i = 0; i < 30; i++)
               sparks.spawn({

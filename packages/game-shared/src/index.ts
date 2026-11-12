@@ -14,6 +14,8 @@ export enum Cell {
   Cracked = 3,
   /** Lava river (Adventure): nobody walks on it, blasts fly over it, falling in is fatal. */
   Lava = 4,
+  /** Bottomless chasm (Adventure): same rules as lava, a long fall instead of a burn. */
+  Chasm = 5,
 }
 
 export type Dir = 'up' | 'down' | 'left' | 'right';

@@ -2,7 +2,7 @@ import { ADVENTURE, Cell, CHARACTER_IDS, CHARACTERS, DIR_VEC, DIRS, POWERUPS, RU
 import { cellIndex, createGrid, getCell, inBounds, setCell } from './grid';
 import { nextRandom, pickWeighted, randInt } from './rng';
 import type { AdventureState, CageState, EnemyState, GameState, GateState, Grid, PlayerState, PropState, RegionDir, RegionObjectiveKind, RegionState } from './types';
-import { bombAt, flamesAt, mineAt, newId, powerupAt } from './world';
+import { bombAt, flamesAt, isPit, mineAt, newId, powerupAt } from './world';
 
 /**
  * Endless Adventure.
@@ -44,8 +44,8 @@ const SCRIPTED: { name: string; chapter: string; biome: BiomeId; objective: Regi
   { name: 'Caldeira Rasa', chapter: 'O despertar', biome: 'volcanic', objective: 'clear' },
   { name: 'Campos de Cinza', chapter: 'A infestação', biome: 'volcanic', objective: 'key' },
   { name: 'Rio de Magma', chapter: 'A travessia', biome: 'volcanic', objective: 'lever' },
-  { name: 'Ponte de Obsidiana', chapter: 'O guardião', biome: 'transition', objective: 'key' },
-  { name: 'Bosque Chamuscado', chapter: 'A corrupção', biome: 'forest', objective: 'clear' },
+  { name: 'Ponte de Obsidiana', chapter: 'O guardião', biome: 'transition', objective: 'seals' },
+  { name: 'Bosque Chamuscado', chapter: 'A corrupção', biome: 'forest', objective: 'purify' },
 ];
 
 const NAME_PARTS: Record<BiomeId, { head: string[]; tail: string[] }> = {
@@ -66,6 +66,8 @@ const CHAPTERS: Record<RegionObjectiveKind, string[]> = {
   clear: ['A limpeza', 'O cerco', 'A emboscada', 'A infestação', 'O enxame'],
   key: ['A chave perdida', 'O cadeado', 'A busca', 'O segredo do portão', 'A relíquia'],
   lever: ['A travessia', 'A ponte levadiça', 'O rio de fogo', 'A outra margem'],
+  seals: ['O guardião', 'Os selos', 'A passagem selada', 'O abismo'],
+  purify: ['A corrupção', 'Raízes podres', 'O bosque doente', 'A cura'],
 };
 /** Biome rhythm of every arc (5 regions for now; varied arcs come with the next milestones). */
 const ARC_BIOMES: BiomeId[] = ['volcanic', 'volcanic', 'volcanic', 'transition', 'forest'];
@@ -77,7 +79,10 @@ export function regionInfo(seed: number, id: number) {
   const biome = ARC_BIOMES[id % ARC_BIOMES.length];
   // A lava river cuts some regions in two (never in the forest): cross it and pull the lever.
   const roll = nextRandom(r);
-  const objective: RegionObjectiveKind = biome !== 'forest' && roll < 0.22 ? 'lever' : roll < 0.55 ? 'key' : 'clear';
+  const special = nextRandom(r) < 0.4;
+  // Transition regions may be an obsidian causeway with seals; forests may be corrupted.
+  const objective: RegionObjectiveKind =
+    biome === 'transition' && special ? 'seals' : biome === 'forest' && special ? 'purify' : biome !== 'forest' && roll < 0.22 ? 'lever' : roll < 0.55 ? 'key' : 'clear';
   const parts = NAME_PARTS[biome];
   const name = `${parts.head[randInt(r, parts.head.length)]} ${parts.tail[randInt(r, parts.tail.length)]}`;
   const chapter = CHAPTERS[objective][randInt(r, CHAPTERS[objective].length)];
@@ -102,32 +107,38 @@ export function difficulty(depth: number) {
 
 /** Map mechanics of a region: shape, Fagulhas, ash vents, the braziers side mission. */
 export interface RegionMods {
-  shape: 'island' | 'plaza' | 'river';
+  shape: 'island' | 'plaza' | 'river' | 'causeway';
   sparks: number;
   vents: number;
   braziers: boolean;
+  /** Dry grass patches (forest): they catch fire and spread it. */
+  grass: number;
 }
 
 export function regionMods(seed: number, id: number): RegionMods {
   const enemies = difficulty(id).enemies;
-  const scripted: (RegionMods | undefined)[] = [
+  const scripted: (Omit<RegionMods, 'grass'> | undefined)[] = [
     { shape: 'island', sparks: 0, vents: 0, braziers: false }, // O despertar: just the basics
     { shape: 'plaza', sparks: 2, vents: 2, braziers: true }, // A infestação: everything new at once
     { shape: 'island', sparks: 2, vents: 1, braziers: false },
     { shape: 'plaza', sparks: 2, vents: 1, braziers: true },
     { shape: 'island', sparks: 1, vents: 0, braziers: false },
   ];
-  const river = regionInfo(seed, id).objective === 'lever';
-  if (scripted[id]) return { ...scripted[id]!, ...(river ? { shape: 'river' as const, braziers: false } : {}), sparks: Math.min(scripted[id]!.sparks, enemies - 1) };
+  const info = regionInfo(seed, id);
+  const river = info.objective === 'lever';
+  const shapeFor = info.objective === 'seals' ? ('causeway' as const) : river ? ('river' as const) : null;
+  const grass = info.biome === 'forest' ? 2 + (id > 8 ? 1 : 0) : 0;
+  if (scripted[id]) return { ...scripted[id]!, ...(shapeFor ? { shape: shapeFor, braziers: false } : {}), grass, sparks: Math.min(scripted[id]!.sparks, enemies - 1) };
   const r = subRng(seed, id, 5);
   const biome = regionInfo(seed, id).biome;
   const shapeRoll = nextRandom(r);
   return {
-    shape: river ? 'river' : shapeRoll < 0.35 ? 'plaza' : 'island',
+    shape: shapeFor ?? (shapeRoll < 0.35 ? 'plaza' : 'island'),
     // Fagulhas take a growing share of the Magmitos as the journey goes on.
     sparks: Math.min(enemies - 1, Math.floor(enemies * Math.min(0.5, 0.15 + 0.03 * (id - 5)))),
     vents: biome === 'forest' ? 0 : nextRandom(r) < 0.55 ? 1 + randInt(r, 2) : 0,
-    braziers: !river && nextRandom(r) < 0.4,
+    braziers: !shapeFor && info.objective !== 'purify' && nextRandom(r) < 0.4,
+    grass,
   };
 }
 
@@ -307,6 +318,40 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
     return { vertical, band, nearBank, farBank, mainLine, fragileLine, platformLine, cellsOf, landing, leverSpot, islet, along, crossings };
   }
 
+  // 2c. Obsidian causeway: a walkway three cells wide along the paths, a few side pockets, and a
+  // bottomless chasm everywhere else on the island.
+  const pockets: Pt[] = [];
+  if (mods.shape === 'causeway') {
+    const path = [...corridor].map((i) => ({ x: ox + (i % CW), y: oy + Math.floor(i / CW) }));
+    const closeTo = (a: Pt | null, x: number, y: number, d: number) => !!a && Math.abs(a.x - x) + Math.abs(a.y - y) <= d;
+    const along = path.filter((c) => !closeTo(exit, c.x, c.y, 3) && !closeTo(entry, c.x, c.y, 3) && !(c.x === center.x && c.y === center.y));
+    for (let tries = 0; tries < 40 && pockets.length < 3 && along.length; tries++) {
+      const c = along[randInt(r, along.length)];
+      // Sideways from the path (the path runs along a row or a column).
+      const horizontalPath = corridor.has(at(c.x + 1, c.y)) || corridor.has(at(c.x - 1, c.y));
+      const side = nextRandom(r) < 0.5 ? -1 : 1;
+      const pc = horizontalPath ? { x: c.x, y: c.y + 3 * side } : { x: c.x + 3 * side, y: c.y };
+      if (pc.x <= ox + 1 || pc.y <= oy + 1 || pc.x >= ox + CW - 2 || pc.y >= oy + CH - 2) continue;
+      if (!island[at(pc.x, pc.y)] || pockets.some((q) => Math.abs(q.x - pc.x) + Math.abs(q.y - pc.y) < 4)) continue;
+      pockets.push(pc);
+    }
+    const nearPath = (x: number, y: number) => {
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (corridor.has(at(x + dx, y + dy)) && inChunk(x + dx, y + dy)) return true;
+      return false;
+    };
+    const inPocket = (x: number, y: number) => pockets.some((q) => Math.abs(q.x - x) <= 1 && Math.abs(q.y - y) <= 1) || pockets.some((q) => (q.x === x && Math.abs(q.y - y) <= 2) || (q.y === y && Math.abs(q.x - x) <= 2));
+    for (let y = oy; y < oy + CH; y++)
+      for (let x = ox; x < ox + CW; x++) {
+        if (!island[at(x, y)] || nearPath(x, y)) continue;
+        if (inPocket(x, y)) {
+          set(x, y, Cell.Floor);
+          continue;
+        }
+        set(x, y, Cell.Chasm);
+      }
+    for (const q of pockets) corridor.add(at(q.x, q.y));
+  }
+
   // 3. The first region has a safe spawn pocket in the middle.
   const spawns: Pt[] = id === 0 ? [center, { x: center.x + 2, y: center.y }, { x: center.x - 2, y: center.y }, { x: center.x, y: center.y + 2 }] : [];
   for (const sp of spawns) {
@@ -335,7 +380,7 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
       const ny = c.y + DIR_VEC[d].y;
       if (!inChunk(nx, ny) || get(nx, ny) === Cell.Wall || dist.has(at(nx, ny))) continue;
       // Lava only where a bridge or the platform crosses it.
-      if (get(nx, ny) === Cell.Lava && !riverPlan?.crossings.has(at(nx, ny))) continue;
+      if (isPit(get(nx, ny) as Cell) && !riverPlan?.crossings.has(at(nx, ny))) continue;
       dist.set(at(nx, ny), dist.get(at(c.x, c.y))! + 1);
       queue.push({ x: nx, y: ny });
     }
@@ -343,7 +388,7 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
   const reachable = (x: number, y: number) => dist.has(at(x, y));
   const candidates = (pred: (x: number, y: number) => boolean) => {
     const out: Pt[] = [];
-    for (let y = oy; y < oy + CH; y++) for (let x = ox; x < ox + CW; x++) if (reachable(x, y) && !reserved(x, y) && get(x, y) !== Cell.Lava && pred(x, y)) out.push({ x, y });
+    for (let y = oy; y < oy + CH; y++) for (let x = ox; x < ox + CW; x++) if (reachable(x, y) && !reserved(x, y) && !isPit(get(x, y) as Cell) && pred(x, y)) out.push({ x, y });
     return out;
   };
   const taken: Pt[] = [];
@@ -502,6 +547,78 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
     }
   }
 
+  // Pillar-like props (seals, roots) may never cut the island in two.
+  const reachableAll = () => {
+    const seen = new Set<number>([at(start.x, start.y)]);
+    const q: Pt[] = [start];
+    while (q.length) {
+      const c = q.shift()!;
+      for (const d of DIRS) {
+        const nx = c.x + DIR_VEC[d].x;
+        const ny = c.y + DIR_VEC[d].y;
+        const cell = get(nx, ny);
+        if (!inChunk(nx, ny) || cell === Cell.Wall || isPit(cell as Cell) || seen.has(at(nx, ny))) continue;
+        seen.add(at(nx, ny));
+        q.push({ x: nx, y: ny });
+      }
+    }
+    return seen.size;
+  };
+  const placePillars = (n: number, minDist: number, spots: Pt[]) => {
+    const picked: Pt[] = [];
+    let base = reachableAll();
+    for (let tries = 0; tries < 80 && picked.length < n && spots.length; tries++) {
+      const c = spots[randInt(r, spots.length)];
+      if (!picked.every((q) => Math.abs(q.x - c.x) + Math.abs(q.y - c.y) >= minDist)) continue;
+      const before = get(c.x, c.y);
+      set(c.x, c.y, Cell.Wall);
+      if (reachableAll() !== base - 1) {
+        set(c.x, c.y, before as Cell);
+        continue;
+      }
+      base -= 1;
+      picked.push(c);
+      taken.push(c);
+    }
+    return picked;
+  };
+
+  // 10b. Obsidian seals (objective): one in each causeway pocket, the rest wherever they fit.
+  if (info.objective === 'seals') {
+    const seals: Pt[] = [];
+    for (const q of pockets) {
+      set(q.x, q.y, Cell.Wall);
+      taken.push(q);
+      seals.push(q);
+    }
+    if (seals.length < 3) seals.push(...placePillars(3 - seals.length, 4, candidates((x, y) => get(x, y) === Cell.Floor && free(x, y))));
+    for (const c of seals) props.push({ id: propId(), kind: 'seal', region: id, x: c.x, y: c.y, state: 'intact', hp: 3 });
+  }
+
+  // 10c. Corrupted roots (objective) and the brambles they keep regrowing.
+  if (info.objective === 'purify') {
+    const roots = placePillars(3, 5, candidates((x, y) => get(x, y) === Cell.Floor && free(x, y) && !near(start, x, y, 4)));
+    for (const c of roots) props.push({ id: propId(), kind: 'root', region: id, x: c.x, y: c.y, state: 'intact', hp: 3 });
+    for (let y = oy; y < oy + CH; y++)
+      for (let x = ox; x < ox + CW; x++)
+        if (get(x, y) === Cell.Block && nextRandom(r) < 0.45 && free(x, y)) props.push({ id: propId(), kind: 'bramble', region: id, x, y, state: 'grown' });
+  }
+
+  // 10d. Dry grass patches: walkable tufts that catch fire from a blast and spread it.
+  for (let g = 0; g < mods.grass; g++) {
+    const seeds = candidates((x, y) => get(x, y) === Cell.Floor && free(x, y) && !near(start, x, y, 3));
+    if (!seeds.length) break;
+    const patch: Pt[] = [seeds[randInt(r, seeds.length)]];
+    for (let k = 0; k < 12 && patch.length < 5; k++) {
+      const from = patch[randInt(r, patch.length)];
+      const d = DIRS[randInt(r, 4)];
+      const c = { x: from.x + DIR_VEC[d].x, y: from.y + DIR_VEC[d].y };
+      if (get(c.x, c.y) !== Cell.Floor || reserved(c.x, c.y) || !free(c.x, c.y) || patch.some((q) => q.x === c.x && q.y === c.y)) continue;
+      patch.push(c);
+    }
+    for (const c of patch) props.push({ id: propId(), kind: 'grass', region: id, x: c.x, y: c.y, state: 'dry' });
+  }
+
   // 11. Where Magmitos may start: open floor, away from the arrival point, gates, cage and props.
   const enemySpots = candidates((x, y) => get(x, y) === Cell.Floor && !near(start, x, y, 5) && free(x, y));
   for (let i = enemySpots.length - 1; i > 0; i--) {
@@ -516,7 +633,12 @@ function regionBlueprint(seed: number, adv: AdventureState, id: number): Bluepri
     biome: info.biome,
     cx,
     cy,
-    objective: { kind: info.objective, progress: 0, goal: info.objective === 'clear' ? diff.enemies : 1, done: false },
+    objective: {
+      kind: info.objective,
+      progress: 0,
+      goal: info.objective === 'clear' ? diff.enemies : info.objective === 'seals' ? props.filter((p) => p.kind === 'seal').length : info.objective === 'purify' ? props.filter((p) => p.kind === 'root').length : 1,
+      done: false,
+    },
     unlocked: id === 0,
     cleared: false,
     entry,
@@ -692,6 +814,7 @@ export function updateAdventure(s: GameState) {
   if (!adv) return;
   if (s.tick % 3 === 0) revealAround(s);
   updateRiver(s);
+  updateObsidianAndForest(s);
   updateLavaFalls(s);
   updateCages(s);
   updateProps(s);
@@ -708,6 +831,8 @@ function updateObjectives(s: GameState) {
     if (o.kind === 'clear') progress = Math.max(0, o.goal - s.enemies.filter((e) => e.alive && e.regionId === r.id).length);
     else if (o.kind === 'key') progress = adv.props.some((p) => p.kind === 'key' && p.region === r.id && p.state === 'used') ? 1 : 0;
     else if (o.kind === 'lever') progress = adv.props.some((p) => p.kind === 'lever' && p.region === r.id && p.state === 'on') ? 1 : 0;
+    else if (o.kind === 'seals') progress = adv.props.filter((p) => p.kind === 'seal' && p.region === r.id && p.state === 'broken').length;
+    else if (o.kind === 'purify') progress = adv.props.filter((p) => p.kind === 'root' && p.region === r.id && p.state === 'broken').length;
     if (progress !== o.progress) {
       o.progress = progress;
       s.events.push({ type: 'objectiveProgress', region: r.id, progress, goal: o.goal });
@@ -882,9 +1007,101 @@ function updateRiver(s: GameState) {
   }
 }
 
+// ───────────────────────────── seals, roots, brambles, grass ─────────────────────────────
+
+const BRAMBLE_REGROW = 600; // ticks
+const GRASS_SPREAD = 21; // ticks between a burning tuft and its neighbours
+const GRASS_BURN = 50; // ticks a tuft burns
+
+/** Fresh blast flames (this tick, from real bombs) touching a pillar-like prop from any side. */
+const blastIdsAround = (s: GameState, x: number, y: number) => {
+  const ids = new Set<number>();
+  for (const d of DIRS) for (const f of flamesAt(s, x + DIR_VEC[d].x, y + DIR_VEC[d].y)) if (f.bornTick === s.tick && f.bombId >= 0) ids.add(f.bombId);
+  return ids;
+};
+
+function updateObsidianAndForest(s: GameState) {
+  const adv = s.adventure!;
+  for (const pr of adv.props) {
+    if (pr.kind === 'seal' && pr.state === 'intact') {
+      const ids = blastIdsAround(s, pr.x, pr.y);
+      if (!ids.size) continue;
+      // Obsidian only gives way to a chain: two or more bombs going off together.
+      if (ids.size < 2) {
+        s.events.push({ type: 'sealResisted', propId: pr.id, x: pr.x, y: pr.y });
+        continue;
+      }
+      pr.hp = (pr.hp ?? 3) - 1;
+      pr.tick = s.tick;
+      if (pr.hp > 0) {
+        s.events.push({ type: 'sealCracked', propId: pr.id, x: pr.x, y: pr.y, hp: pr.hp });
+        continue;
+      }
+      pr.state = 'broken';
+      setCell(s.grid, pr.x, pr.y, Cell.Floor);
+      const left = adv.props.filter((q) => q.kind === 'seal' && q.region === pr.region && q.state === 'intact').length;
+      s.events.push({ type: 'sealBroken', propId: pr.id, x: pr.x, y: pr.y, left });
+    } else if (pr.kind === 'root' && pr.state === 'intact') {
+      if (!blastIdsAround(s, pr.x, pr.y).size) continue;
+      pr.hp = (pr.hp ?? 3) - 1;
+      pr.tick = s.tick;
+      if (pr.hp > 0) {
+        s.events.push({ type: 'rootHit', propId: pr.id, x: pr.x, y: pr.y, hp: pr.hp });
+        continue;
+      }
+      pr.state = 'broken';
+      setCell(s.grid, pr.x, pr.y, Cell.Floor);
+      const left = adv.props.filter((q) => q.kind === 'root' && q.region === pr.region && q.state === 'intact').length;
+      s.events.push({ type: 'rootPurified', propId: pr.id, x: pr.x, y: pr.y, left });
+    } else if (pr.kind === 'bramble') {
+      const cell = getCell(s.grid, pr.x, pr.y);
+      if (pr.state === 'grown') {
+        if (cell === Cell.Block) continue;
+        pr.state = 'cut';
+        pr.tick = s.tick;
+        continue;
+      }
+      // Brambles grow back while a corrupted root of the region still lives.
+      if (s.tick - pr.tick < BRAMBLE_REGROW || cell !== Cell.Floor) continue;
+      if (!adv.props.some((q) => q.kind === 'root' && q.region === pr.region && q.state === 'intact')) continue;
+      const busy =
+        s.players.some((p) => p.alive && Math.abs(p.x - pr.x) + Math.abs(p.y - pr.y) < 1.6) ||
+        s.enemies.some((e) => e.alive && Math.abs(e.x - pr.x) + Math.abs(e.y - pr.y) < 1) ||
+        !!bombAt(s, pr.x, pr.y) ||
+        !!powerupAt(s, pr.x, pr.y) ||
+        !!mineAt(s, pr.x, pr.y) ||
+        flamesAt(s, pr.x, pr.y).length > 0;
+      if (busy) continue;
+      setCell(s.grid, pr.x, pr.y, Cell.Block);
+      pr.state = 'grown';
+      pr.tick = s.tick;
+      s.events.push({ type: 'brambleRegrow', propId: pr.id, x: pr.x, y: pr.y });
+    } else if (pr.kind === 'grass') {
+      if (pr.state === 'dry') {
+        if (!flamesAt(s, pr.x, pr.y).length) continue;
+        igniteGrass(s, pr);
+      } else if (pr.state === 'burning') {
+        const age = s.tick - pr.tick;
+        if (age === GRASS_SPREAD)
+          for (const q of adv.props)
+            if (q.kind === 'grass' && q.state === 'dry' && Math.abs(q.x - pr.x) + Math.abs(q.y - pr.y) === 1) igniteGrass(s, q);
+        if (age >= GRASS_BURN) pr.state = 'burnt';
+      }
+    }
+  }
+}
+
+function igniteGrass(s: GameState, g: PropState) {
+  g.state = 'burning';
+  g.tick = s.tick;
+  // The burning tuft is a flame of its own: deadly, and it sets bombs off.
+  s.flames.push({ x: g.x, y: g.y, part: 'center', dir: null, bombId: -2, ownerId: '', bornTick: s.tick, untilTick: s.tick + GRASS_BURN, kind: 'normal' });
+  s.events.push({ type: 'grassIgnited', propId: g.id, x: g.x, y: g.y });
+}
+
 /** Whatever stands on lava (not jumping over it) is lost: players, Magmitos, bombs, power-ups. */
 function updateLavaFalls(s: GameState) {
-  const lava = (x: number, y: number) => getCell(s.grid, Math.round(x), Math.round(y)) === Cell.Lava;
+  const lava = (x: number, y: number) => isPit(getCell(s.grid, Math.round(x), Math.round(y)));
   for (const p of s.players) {
     if (!p.alive || airborne(p) || !lava(p.x, p.y)) continue;
     // A fall ignores shields: nothing to stand on.

@@ -92,6 +92,8 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
       break;
     case 'regionCleared':
       sfx.victory();
+      // The end of the first arc: a hint of what waits deeper (the first big boss, later).
+      if (e.region === 4) hud.set({ banner: { text: 'ALGO DESPERTA NAS PROFUNDEZAS…', key: tick + 11 } });
       break;
     case 'gateOpened':
       sfx.go();
@@ -135,6 +137,29 @@ export function presentEvent(e: GameEvent, tick: number, onResultShown: () => vo
       break;
     case 'geyserErupt':
       sfx.geyser();
+      break;
+    case 'sealResisted':
+      sfx.clink();
+      break;
+    case 'sealCracked':
+      sfx.crack();
+      break;
+    case 'sealBroken':
+      sfx.shatter();
+      hud.set({ banner: { text: e.left ? `SELO QUEBRADO! FALTAM ${e.left}` : 'OS SELOS CAÍRAM!', key: tick + 9 } });
+      break;
+    case 'rootHit':
+      sfx.rootHit();
+      break;
+    case 'rootPurified':
+      sfx.purify();
+      hud.set({ banner: { text: e.left ? `RAIZ PURIFICADA! FALTAM ${e.left}` : 'O BOSQUE FOI CURADO!', key: tick + 10 } });
+      break;
+    case 'brambleRegrow':
+      sfx.rustle();
+      break;
+    case 'grassIgnited':
+      sfx.ignite();
       break;
     case 'leverPulled':
       sfx.lever();

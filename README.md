@@ -123,6 +123,9 @@ Limites desta versão:
     - **Pulo (Y):** salta 1 casa de lava; uma **ilhota secreta** com baú raro só se alcança assim.
     - **Ponte levadiça:** baixa quando se explode a **alavanca** da outra margem; isso também cumpre o objetivo e abre o portão.
     - **Gêiseres** nas margens borbulham em vermelho e jorram lava como uma chama (matam e detonam bombas).
+  - **Ponte de Obsidiana** (região 4, "O guardião", e regiões de transição sorteadas): uma passarela estreita sobre um **abismo** (cair é fatal; pula-se 1 casa) com **3 Selos de Obsidiana**. Uma bomba sozinha só faz "plim": os selos racham apenas com **explosões em cadeia** (2+ bombas encostadas explodindo juntas), 3 vezes cada.
+  - **Bosque Chamuscado** (região 5, "A corrupção", e florestas sorteadas): **3 Raízes Corrompidas** (3 explosões cada) para purificar. Enquanto alguma vive, os **espinheiros** cortados **voltam a crescer** em 10 s. Purificada, a raiz vira um brotinho. Ao terminar a região 5: "Algo desperta nas profundezas…".
+  - **Capim seco** (florestas): pega fogo com uma explosão e o fogo pula de tufo em tufo; mata quem estiver em cima e detona bombas.
   - **Praças:** algumas regiões têm canteiros em volta do centro, criando rotas alternativas e voltas para fugir.
   - **Dicas de tutorial:** na primeira vez de cada coisa (bomba, fuga, power-up, cela, muro rachado, chave, Fagulha, braseiro, cinza, mapa) aparece uma dica curta, uma vez por aparelho, com os botões do controle em uso.
   - **Segredos e baús:** muros rachados com veios brilhantes escondem um baú raro; também há baús comuns. Abrem ao encostar ou com uma explosão.

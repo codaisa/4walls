@@ -1,6 +1,6 @@
 import { ADVENTURE, Cell, DIR_VEC, DIRS } from '@4walls/shared';
 import { describe, expect, it } from 'vitest';
-import { cellIndex, createGame, difficulty, geyserPhase, getCell, inBounds, platformPos, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
+import { cellIndex, createGame, difficulty, geyserPhase, spawnBomb, getCell, inBounds, platformPos, regionAt, regionInfo, regionMods, setCell, step, syncAdventureWindow, type GameState } from '../src';
 
 const make = (seed = 11, players = 1) => {
   const s = createGame({
@@ -21,6 +21,8 @@ function complete(s: GameState, id: number) {
   const r = region(s, id);
   if (r.objective.kind === 'clear') {
     for (const e of s.enemies) if (e.regionId === id) e.alive = false;
+  } else if (r.objective.kind === 'seals' || r.objective.kind === 'purify') {
+    for (const p of s.adventure!.props) if (p.region === id && (p.kind === 'seal' || p.kind === 'root')) p.state = 'broken';
   } else if (r.objective.kind === 'lever') {
     const lever = s.adventure!.props.find((p) => p.kind === 'lever' && p.region === id)!;
     const side = DIRS.map((d) => ({ x: lever.x + DIR_VEC[d].x, y: lever.y + DIR_VEC[d].y })).find((c) => getCell(s.grid, c.x, c.y) === Cell.Floor)!;
@@ -60,7 +62,7 @@ function reach(s: GameState, from: { x: number; y: number }) {
       if (!inBounds(s.grid, x, y)) continue;
       const i = cellIndex(s.grid, x, y);
       const cell = getCell(s.grid, x, y);
-      if (seen.has(i) || cell === Cell.Wall || (cell === Cell.Lava && !crossing.has(i))) continue;
+      if (seen.has(i) || cell === Cell.Wall || ((cell === Cell.Lava || cell === Cell.Chasm) && !crossing.has(i))) continue;
       seen.add(i);
       q.push({ x, y });
     }
@@ -97,7 +99,7 @@ describe('endless adventure: world', () => {
     expect(regionInfo(7, 1).objective).toBe('key');
     const later = Array.from({ length: 40 }, (_, i) => regionInfo(7, 5 + i));
     expect(new Set(later.map((r) => r.name)).size).toBeGreaterThan(15);
-    expect(new Set(later.map((r) => r.objective))).toEqual(new Set(['clear', 'key', 'lever']));
+    expect(new Set(later.map((r) => r.objective))).toEqual(new Set(['clear', 'key', 'lever', 'seals', 'purify']));
     expect(regionInfo(7, 12)).toEqual(regionInfo(7, 12));
   });
 
@@ -175,7 +177,7 @@ describe('endless adventure: the journey', () => {
         const gateNeighbor = DIRS.map((d) => ({ x: g.x + DIR_VEC[d].x, y: g.y + DIR_VEC[d].y })).some((c) => inBounds(s.grid, c.x, c.y) && seen.has(cellIndex(s.grid, c.x, c.y)) && regionAt(s, c.x, c.y) === id);
         expect(gateNeighbor, `seed ${seed} region ${id}: exit`).toBe(true);
         const isletOf = (pp: { x: number; y: number }) => DIRS.filter((d) => getCell(s.grid, pp.x + DIR_VEC[d].x, pp.y + DIR_VEC[d].y) === Cell.Lava).length >= 2;
-        for (const p of s.adventure!.props.filter((pp) => pp.region === id && !['brazier', 'lever', 'bridge', 'platform'].includes(pp.kind) && !isletOf(pp))) {
+        for (const p of s.adventure!.props.filter((pp) => pp.region === id && !['brazier', 'lever', 'bridge', 'platform', 'seal', 'root', 'bramble', 'grass'].includes(pp.kind) && !isletOf(pp))) {
           // Secret chests sit behind a cracked wall: open it for the check.
           for (const d of DIRS) {
             const x = p.x + DIR_VEC[d].x;
@@ -185,7 +187,7 @@ describe('endless adventure: the journey', () => {
           expect(reach(s, start).has(cellIndex(s.grid, p.x, p.y)), `seed ${seed} region ${id}: ${p.kind}`).toBe(true);
         }
         // Braziers and levers stand like pillars: one of their sides must be reachable.
-        for (const b of s.adventure!.props.filter((pp) => pp.region === id && (pp.kind === 'brazier' || pp.kind === 'lever'))) {
+        for (const b of s.adventure!.props.filter((pp) => pp.region === id && ['brazier', 'lever', 'seal', 'root'].includes(pp.kind))) {
           const side = DIRS.some((d) => {
             const x = b.x + DIR_VEC[d].x;
             const y = b.y + DIR_VEC[d].y;
@@ -461,5 +463,140 @@ describe('endless adventure: M3 lava river', () => {
     for (let i = 0; i < 40; i++) step(s, {});
     expect(p.alive).toBe(true);
     expect([Math.round(p.x), Math.round(p.y)]).toEqual([lavaCell.x + DIR_VEC[dir].x, lavaCell.y + DIR_VEC[dir].y]);
+  });
+});
+
+describe('endless adventure: M4 obsidian and forest', () => {
+  /** Walk the group to region `target` (completing everything before it). */
+  const reach = (target: number, seed = 3, players = 2) => {
+    const s = make(seed, players);
+    for (let id = 0; id < target; id++) {
+      complete(s, id);
+      walkThrough(s, id);
+    }
+    s.enemies = [];
+    return s;
+  };
+  const props = (s: GameState, region: number, kind: string) => s.adventure!.props.filter((p) => p.region === region && p.kind === kind);
+  const openSides = (s: GameState, c: { x: number; y: number }) =>
+    DIRS.map((d) => ({ x: c.x + DIR_VEC[d].x, y: c.y + DIR_VEC[d].y })).filter((q) => getCell(s.grid, q.x, q.y) === Cell.Floor);
+
+  it('"O guardião": an obsidian causeway over a chasm, with three seals', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const s = reach(3, seed, 1);
+      expect(region(s, 3).objective.kind).toBe('seals');
+      expect(props(s, 3, 'seal')).toHaveLength(3);
+      let chasm = 0;
+      const r = region(s, 3);
+      for (let y = r.cy * 14; y < r.cy * 14 + 14; y++) for (let x = r.cx * 16; x < r.cx * 16 + 16; x++) if (getCell(s.grid, x, y) === Cell.Chasm) chasm++;
+      expect(chasm, `seed ${seed}`).toBeGreaterThan(15);
+    }
+  });
+
+  it('seals shrug off a single bomb and only crack under chain explosions', () => {
+    const s = reach(3);
+    const seal = props(s, 3, 'seal')[0];
+    const sides = openSides(s, seal);
+    expect(sides.length).toBeGreaterThan(0);
+    // One bomb next to it: nothing.
+    for (const p of s.players) p.invulnUntil = 1e9;
+    const lone = spawnBomb(s, { ownerId: 'p1', x: sides[0].x, y: sides[0].y, range: 1 });
+    lone.detonateTick = s.tick + 1;
+    let resisted = false;
+    for (let i = 0; i < 3; i++) {
+      step(s, {});
+      resisted ||= s.events.some((e) => e.type === 'sealResisted');
+    }
+    expect(resisted).toBe(true);
+    expect(seal.hp).toBe(3);
+    // Two bombs side by side going off together (a chain): one crack per chain.
+    for (let hit = 1; hit <= 3; hit++) {
+      const a = sides[0];
+      const v = { x: a.x - seal.x, y: a.y - seal.y };
+      const b = { x: a.x + v.x, y: a.y + v.y };
+      s.flames = [];
+      if (getCell(s.grid, b.x, b.y) !== Cell.Floor) setCell(s.grid, b.x, b.y, Cell.Floor);
+      spawnBomb(s, { ownerId: 'p1', x: b.x, y: b.y, range: 2 });
+      spawnBomb(s, { ownerId: 'p1', x: a.x, y: a.y, range: 1 }).detonateTick = s.tick + 1;
+      for (const p of s.players) p.invulnUntil = 1e9;
+      step(s, {});
+      expect(seal.hp).toBe(3 - hit);
+      for (let i = 0; i < 40; i++) step(s, {});
+    }
+    expect(seal.state).toBe('broken');
+    expect(getCell(s.grid, seal.x, seal.y)).toBe(Cell.Floor);
+  });
+
+  it('"A corrupção": three corrupted roots; brambles grow back until the last root is purified', () => {
+    const s = reach(4);
+    expect(region(s, 4).objective.kind).toBe('purify');
+    const roots = props(s, 4, 'root');
+    expect(roots).toHaveLength(3);
+    const bramble = props(s, 4, 'bramble')[0];
+    expect(bramble).toBeTruthy();
+    for (const p of s.players) {
+      p.x = p.px = roots[0].x;
+      p.y = p.py = roots[0].y; // out of the way (inside the root cell; positions only matter for regrowth)
+      p.invulnUntil = 1e9;
+    }
+    // Cut the bramble: it grows back while roots live.
+    setCell(s.grid, bramble.x, bramble.y, Cell.Floor);
+    for (let i = 0; i < 620; i++) step(s, {});
+    expect(getCell(s.grid, bramble.x, bramble.y)).toBe(Cell.Block);
+    // A root takes three blasts.
+    const root = roots[0];
+    const side = openSides(s, root)[0] ?? DIRS.map((d) => ({ x: root.x + DIR_VEC[d].x, y: root.y + DIR_VEC[d].y })).find((q) => getCell(s.grid, q.x, q.y) !== Cell.Wall)!;
+    for (let hit = 0; hit < 3; hit++) {
+      s.flames.push({ x: side.x, y: side.y, part: 'center', dir: null, bombId: 900 + hit, ownerId: 'p1', bornTick: s.tick + 1, untilTick: s.tick + 20, kind: 'normal' });
+      step(s, {});
+    }
+    expect(root.state).toBe('broken');
+    // Purify the others: brambles stay cut for good.
+    for (const r of roots) r.state = 'broken';
+    setCell(s.grid, bramble.x, bramble.y, Cell.Floor);
+    bramble.state = 'cut';
+    bramble.tick = s.tick;
+    for (let i = 0; i < 700; i++) step(s, {});
+    expect(getCell(s.grid, bramble.x, bramble.y)).toBe(Cell.Floor);
+  });
+
+  it('dry grass catches fire, spreads tuft to tuft, kills, and burns out', () => {
+    const s = reach(4);
+    const tufts = props(s, 4, 'grass');
+    expect(tufts.length).toBeGreaterThanOrEqual(2);
+    const a = tufts.find((t) => tufts.some((u) => Math.abs(u.x - t.x) + Math.abs(u.y - t.y) === 1))!;
+    const b = tufts.find((u) => Math.abs(u.x - a.x) + Math.abs(u.y - a.y) === 1)!;
+    const victim = s.players[1];
+    victim.x = victim.px = b.x;
+    victim.y = victim.py = b.y;
+    s.players[0].invulnUntil = 1e9;
+    s.flames.push({ x: a.x, y: a.y, part: 'center', dir: null, bombId: 77, ownerId: 'p1', bornTick: s.tick, untilTick: s.tick + 10, kind: 'normal' });
+    step(s, {});
+    expect(a.state).toBe('burning');
+    for (let i = 0; i < 25; i++) step(s, {});
+    expect(b.state).toBe('burning');
+    expect(victim.alive).toBe(false);
+    for (let i = 0; i < 80; i++) step(s, {});
+    expect(a.state).toBe('burnt');
+  });
+
+  it('falling into the chasm is fatal (a jump still clears one cell)', () => {
+    const s = reach(3);
+    const r = region(s, 3);
+    let pit: { x: number; y: number } | null = null;
+    for (let y = r.cy * 14; y < r.cy * 14 + 14 && !pit; y++)
+      for (let x = r.cx * 16; x < r.cx * 16 + 16 && !pit; x++) if (getCell(s.grid, x, y) === Cell.Chasm && openSides(s, { x, y }).length) pit = { x, y };
+    const bank = openSides(s, pit!)[0];
+    const p = s.players[0];
+    p.x = p.px = bank.x;
+    p.y = p.py = bank.y;
+    const dir = DIRS.find((d) => bank.x + DIR_VEC[d].x === pit!.x && bank.y + DIR_VEC[d].y === pit!.y)!;
+    for (let i = 0; i < 30; i++) step(s, { p1: { move: dir, bomb: false, ability: false } });
+    expect(p.alive).toBe(true); // can't walk in
+    setCell(s.grid, pit!.x, pit!.y, Cell.Chasm);
+    p.x = p.px = pit!.x;
+    p.y = p.py = pit!.y; // dropped in (e.g. pushed)
+    step(s, {});
+    expect(p.alive).toBe(false);
   });
 });
