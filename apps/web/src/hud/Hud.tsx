@@ -35,7 +35,7 @@ export function Hud({ onResume, onRestart, onExit, exitLabel, mode, resultNote, 
       {/* Top bar */}
       <div className={`flex items-start justify-between gap-3 [@media(max-height:500px)]:gap-2 ${TOUCH ? 'pr-14' : ''}`}>
         <div className="flex flex-wrap gap-2">
-          {players.map((p) => (
+          {(TOUCH ? ownPlayers(players) : players).map((p) => (
             <PlayerCard key={p.id} p={p} />
           ))}
         </div>
@@ -233,6 +233,17 @@ function PauseCampEnd({ onEnd, onBank, onResume }: { onEnd: () => void; onBank?:
   );
 }
 
+/**
+ * Phones: only the card of whoever plays on this device (four cards would cover the screen).
+ * The touch player first, then this device's online players, else the first one.
+ */
+function ownPlayers(players: HudPlayer[]): HudPlayer[] {
+  const touch = players.filter((p) => p.device.includes('Toque'));
+  if (touch.length) return touch;
+  const mine = players.filter((p) => p.device.includes('você'));
+  return mine.length ? mine : players.slice(0, 1);
+}
+
 function PlayerCard({ p }: { p: HudPlayer }) {
   const c = SLOT_COLORS[p.colorIndex % SLOT_COLORS.length];
   return (
@@ -417,6 +428,28 @@ function AdventurePanel() {
       Magmitos: {a.progress}
     </>
   );
+  // Phones: one small line (objective + coins) plus the urgent countdowns; the rest is on the map.
+  if (TOUCH)
+    return (
+      <div className="hud-panel px-2.5 py-0.5 text-center" data-testid="adventure-panel">
+        <div className="flex items-center justify-center gap-2 text-xs font-bold" data-testid="adventure-objective">
+          {objective}
+          <span key={a.coins} className="coin-bump inline-block text-amber-200" data-testid="expedition-coins">
+            🪙 {a.coins}
+          </span>
+        </div>
+        {a.fallIn !== null && (
+          <div className="animate-pulse text-[10px] font-black uppercase text-amber-200" data-testid="falling-back">
+            🏕️ Acampamento em {a.fallIn}s
+          </div>
+        )}
+        {a.closingIn !== null && (
+          <div className="animate-pulse text-[10px] font-black uppercase text-red-300" data-testid="gate-closing">
+            ⛓ Portão fecha em {a.closingIn}s
+          </div>
+        )}
+      </div>
+    );
   return (
     <div className="hud-panel min-w-56 px-4 py-1.5 text-center [@media(max-height:500px)]:min-w-40 [@media(max-height:500px)]:px-3 [@media(max-height:500px)]:py-0.5" data-testid="adventure-panel">
       <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">

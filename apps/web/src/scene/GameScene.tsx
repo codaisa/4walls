@@ -36,6 +36,34 @@ function GameLoop() {
   return null;
 }
 
+/**
+ * Phones in "controller only" mode: the screen is black, so stop drawing the 3D scene (the GPU
+ * goes idle) and keep only the game loop running on its own 60 Hz timer. Input then goes out on
+ * the very next tick instead of waiting for a slow 3D frame — that was the touch delay.
+ */
+function PadModeLoop() {
+  const { controller } = useGame();
+  const padMode = useSettings((s) => s.padMode);
+  const setFrameloop = useThree((st) => st.setFrameloop);
+  useEffect(() => {
+    if (!padMode) return;
+    setFrameloop('never');
+    let last = performance.now();
+    let raf = 0;
+    const loop = (now: number) => {
+      controller.update(Math.min((now - last) / 1000, 0.25));
+      last = now;
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(raf);
+      setFrameloop('always');
+    };
+  }, [padMode, controller, setFrameloop]);
+  return null;
+}
+
 /** FPS readout (settings → "Mostrar FPS"): measured inside the render loop, drawn in HTML. */
 function FpsProbe({ out, post }: { out: React.RefObject<HTMLDivElement | null>; post: boolean }) {
   const gl = useThree((st) => st.gl);
@@ -180,6 +208,7 @@ export function GameScene({ controller }: { controller: MatchView }) {
         <color attach="background" args={[theme.background]} />
         <fog attach="fog" args={[theme.background, theme.fog[0], theme.fog[1]]} />
         <GameLoop />
+        <PadModeLoop />
         <HitStop />
         <LightPool count={gfx.lights} />
         <ShaderWarmUp />
@@ -252,9 +281,12 @@ function HitStop() {
     const off = controller.on((e) => {
       if (e.type !== 'bossDefeated') return;
       window.setTimeout(() => {
+        if (useSettings.getState().padMode) return; // the scene is not drawn in controller mode
         setFrameloop('never');
         window.clearTimeout(timer);
-        timer = window.setTimeout(() => setFrameloop('always'), 240);
+        timer = window.setTimeout(() => {
+          if (!useSettings.getState().padMode) setFrameloop('always');
+        }, 240);
       }, 30);
     });
     return () => {
