@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Dir } from '@4walls/shared';
 import { inputManager } from '../input/instance';
 import { isTouchDevice, type TouchButton } from '../input/InputManager';
+import { useSettings } from '../store/useSettings';
 
 /** Stick travel (px) at which the knob is fully deflected, and the dead zone as a fraction of it. */
 const STICK_RADIUS = 56;
@@ -39,6 +40,9 @@ const vibrate = (ms: number) => {
  * On-screen gamepad for phones and tablets: a floating analog stick on the left half (it appears
  * under the thumb) and ABXY + pause on the right. Feeds the "touch" input device, so touch players
  * join lobbies and online rooms exactly like a keyboard or controller.
+ *
+ * "Controller only" (padMode): the screen goes black and the pad sits centered, for couch play
+ * where everyone watches the TV and the phone is just a gamepad. The toggle is remembered.
  */
 export function TouchControls({ showPause = true }: { showPause?: boolean }) {
   const [enabled] = useState(isTouchDevice);
@@ -47,6 +51,7 @@ export function TouchControls({ showPause = true }: { showPause?: boolean }) {
   /** Where the thumb first landed (a ref: moves can arrive before React re-renders). */
   const origin = useRef({ x: 0, y: 0 });
   const [pressed, setPressed] = useState<Set<TouchButton>>(new Set());
+  const padMode = useSettings((s) => s.padMode);
 
   // Release the stick if the component goes away mid-touch.
   useEffect(() => () => inputManager.touchDir(null), []);
@@ -83,10 +88,15 @@ export function TouchControls({ showPause = true }: { showPause?: boolean }) {
     });
 
   return (
-    <div className="hud-safe pointer-events-none z-20 select-none" data-testid="touch-controls" style={{ touchAction: 'none' }}>
+    <div
+      className={padMode ? 'fixed inset-0 z-[60] select-none bg-black' : 'hud-safe pointer-events-none z-20 select-none'}
+      data-testid="touch-controls"
+      data-pad-mode={padMode || undefined}
+      style={padMode ? { touchAction: 'none', padding: 'env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)' } : { touchAction: 'none' }}
+    >
       {/* Stick zone: the whole left half; the stick spawns where the thumb lands. */}
       <div
-        className="pointer-events-auto absolute bottom-0 left-0 top-1/4 w-1/2"
+        className={`pointer-events-auto absolute bottom-0 left-0 w-1/2 ${padMode ? 'top-0' : 'top-1/4'}`}
         style={{ touchAction: 'none' }}
         onPointerDown={(e) => {
           if (stickId.current !== null) return;
@@ -122,14 +132,19 @@ export function TouchControls({ showPause = true }: { showPause?: boolean }) {
             />
           </div>
         ) : (
-          <div className="absolute bottom-2 left-4 flex h-28 w-28 items-center justify-center rounded-full border-2 border-dashed border-white/25 text-[10px] font-bold uppercase tracking-wider text-white/45">
+          <div
+            className={`absolute flex items-center justify-center rounded-full border-2 border-dashed border-white/25 text-[10px] font-bold uppercase tracking-wider text-white/45 ${padMode ? 'left-1/2 top-1/2 h-36 w-36 -translate-x-1/2 -translate-y-1/2' : 'bottom-2 left-4 h-28 w-28'}`}
+          >
             Mover
           </div>
         )}
       </div>
 
       {/* Face buttons. */}
-      <div className="pointer-events-auto absolute bottom-0 right-0 h-44 w-44" style={{ touchAction: 'none' }}>
+      <div
+        className={`pointer-events-auto absolute h-44 w-44 ${padMode ? 'right-[25%] top-1/2 -translate-y-1/2 translate-x-1/2 scale-125' : 'bottom-0 right-0'}`}
+        style={{ touchAction: 'none' }}
+      >
         {FACE.map((b) => (
           <button
             key={b.id}
@@ -147,12 +162,36 @@ export function TouchControls({ showPause = true }: { showPause?: boolean }) {
         ))}
       </div>
 
+      {/* Toggle "controller only": black screen + centered pad (everyone watches the TV). */}
+      <button
+        aria-label={padMode ? 'Mostrar o jogo' : 'Modo controle'}
+        data-testid="pad-mode-toggle"
+        onPointerDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          vibrate(12);
+          useSettings.getState().set({ padMode: !padMode });
+        }}
+        onContextMenu={(e) => e.preventDefault()}
+        className={`pointer-events-auto absolute top-0 z-30 flex h-11 items-center justify-center gap-1.5 rounded-full border-2 border-white/60 bg-black/45 px-3 text-white ${padMode ? 'left-1/2 mt-2 -translate-x-1/2 text-sm font-bold' : `${showPause ? 'right-14' : 'right-0'} w-11 px-0 text-xl`}`}
+        style={{ touchAction: 'none' }}
+      >
+        {padMode ? (
+          <>
+            <span className="text-lg">📺</span> Mostrar o jogo
+          </>
+        ) : (
+          '🎮'
+        )}
+      </button>
+      {padMode && <div className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-[11px] font-bold uppercase tracking-widest text-white/35">Modo controle · olhe para a TV</div>}
+
       {showPause && (
         <button
           aria-label="Pausa"
           onPointerDown={press('pause')}
           onPointerUp={release('pause')}
-          className="pointer-events-auto absolute right-0 top-0 z-30 flex h-11 w-11 items-center justify-center rounded-full border-2 border-white/60 bg-black/45 text-lg text-white"
+          className={`pointer-events-auto absolute right-0 top-0 z-30 flex h-11 w-11 ${padMode ? 'mr-3 mt-2' : ''} items-center justify-center rounded-full border-2 border-white/60 bg-black/45 text-lg text-white`}
           style={{ touchAction: 'none' }}
         >
           ❚❚

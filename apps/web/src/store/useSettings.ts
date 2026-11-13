@@ -13,10 +13,12 @@ export interface Settings {
   showFps: boolean;
   camera: CameraMode;
   volumes: Record<Bus, number>;
+  /** Phones: "controller only" — black screen with just the pad (everyone watches the TV). */
+  padMode: boolean;
 }
 
 const KEY = '4walls.settings';
-const DEFAULTS: Settings = { quality: 'auto', shake: true, showFps: false, camera: 'auto', volumes: { music: 0.5, sfx: 0.8, ui: 0.7 } };
+const DEFAULTS: Settings = { quality: 'auto', shake: true, showFps: false, camera: 'auto', volumes: { music: 0.5, sfx: 0.8, ui: 0.7 }, padMode: false };
 
 function load(): Settings {
   try {
@@ -33,6 +35,7 @@ function load(): Settings {
         sfx: vol(raw.volumes?.sfx, DEFAULTS.volumes.sfx),
         ui: vol(raw.volumes?.ui, DEFAULTS.volumes.ui),
       },
+      padMode: raw.padMode === true,
     };
   } catch {
     return DEFAULTS;
@@ -48,9 +51,9 @@ export const useSettings = create<SettingsState>((set, get) => ({
   ...load(),
   set: (p) => {
     set(p);
-    const { quality, shake, showFps, camera, volumes } = get();
+    const { quality, shake, showFps, camera, volumes, padMode } = get();
     try {
-      localStorage.setItem(KEY, JSON.stringify({ quality, shake, showFps, camera, volumes }));
+      localStorage.setItem(KEY, JSON.stringify({ quality, shake, showFps, camera, volumes, padMode }));
     } catch {
       /* private mode: settings last for this session */
     }
