@@ -7,6 +7,7 @@ import { isTouchDevice } from '../input/InputManager';
 /** Phones/tablets: on-screen pad present (layout leaves room for it). */
 const TOUCH = isTouchDevice();
 import { sfx } from '../audio/Sfx';
+import { useSettings } from '../store/useSettings';
 
 interface HudProps {
   onResume: () => void;
@@ -91,6 +92,7 @@ export function Hud({ onResume, onRestart, onExit, exitLabel, mode, resultNote, 
           </MenuButton>
           {onRestart && mode !== 'adventure' && <MenuButton onClick={onRestart}>Reiniciar</MenuButton>}
           {onEndExpedition && <PauseCampEnd onEnd={onEndExpedition} onBank={onBankCoins} onResume={onResume} />}
+          {TOUCH && <PadModeButton onResume={onResume} />}
           <MenuButton onClick={onExit}>{exitLabel}</MenuButton>
           <AudioToggles />
           {!TOUCH && <ControlsToggle />}
@@ -648,5 +650,23 @@ export function MenuButton({ children, onClick, primary, disabled }: { children:
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * Phones: "controller only" — black screen with just the centered pad, for couch play where
+ * everyone watches the TV. Picking it switches the mode and resumes right away.
+ */
+function PadModeButton({ onResume }: { onResume: () => void }) {
+  const padMode = useSettings((s) => s.padMode);
+  return (
+    <MenuButton
+      onClick={() => {
+        useSettings.getState().set({ padMode: !padMode });
+        onResume();
+      }}
+    >
+      {padMode ? '📺 Mostrar o jogo' : '🎮 Só controle (jogar pela TV)'}
+    </MenuButton>
   );
 }

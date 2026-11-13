@@ -42,7 +42,8 @@ const vibrate = (ms: number) => {
  * join lobbies and online rooms exactly like a keyboard or controller.
  *
  * "Controller only" (padMode): the screen goes black and the pad sits centered, for couch play
- * where everyone watches the TV and the phone is just a gamepad. The toggle is remembered.
+ * where everyone watches the TV and the phone is just a gamepad. Toggled from the pause menu;
+ * the choice is remembered.
  */
 export function TouchControls({ showPause = true }: { showPause?: boolean }) {
   const [enabled] = useState(isTouchDevice);
@@ -162,29 +163,7 @@ export function TouchControls({ showPause = true }: { showPause?: boolean }) {
         ))}
       </div>
 
-      {/* Toggle "controller only": black screen + centered pad (everyone watches the TV). */}
-      <button
-        aria-label={padMode ? 'Mostrar o jogo' : 'Modo controle'}
-        data-testid="pad-mode-toggle"
-        onPointerDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          vibrate(12);
-          useSettings.getState().set({ padMode: !padMode });
-        }}
-        onContextMenu={(e) => e.preventDefault()}
-        className={`pointer-events-auto absolute top-0 z-30 flex h-11 items-center justify-center gap-1.5 rounded-full border-2 border-white/60 bg-black/45 px-3 text-white ${padMode ? 'left-1/2 mt-2 -translate-x-1/2 text-sm font-bold' : `${showPause ? 'right-14' : 'right-0'} w-11 px-0 text-xl`}`}
-        style={{ touchAction: 'none' }}
-      >
-        {padMode ? (
-          <>
-            <span className="text-lg">📺</span> Mostrar o jogo
-          </>
-        ) : (
-          '🎮'
-        )}
-      </button>
-      {padMode && <div className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-[11px] font-bold uppercase tracking-widest text-white/35">Modo controle · olhe para a TV</div>}
+      {padMode && <div className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-[11px] font-bold uppercase tracking-widest text-white/35">Modo controle · olhe para a TV · ❚❚ para mostrar o jogo</div>}
 
       {showPause && (
         <button
